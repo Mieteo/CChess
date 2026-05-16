@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="vi"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Giải Đấu - CChess</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Courier+Prime:ital,wght@0,400;0,700;1,400;1,700&amp;family=Noto+Serif:ital,wght@0,100..900;1,100..900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-tertiary-container": "#8bb6be",
+                        "surface-container-lowest": "#110d0b",
+                        "surface-tint": "#efbc97",
+                        "surface-variant": "#393431",
+                        "teal-success": "#4A7C59",
+                        "tertiary": "#a3ced6",
+                        "wood-dark": "#5C3A1E",
+                        "inverse-surface": "#eae1dc",
+                        "secondary": "#ecbf7e",
+                        "secondary-fixed-dim": "#ecbf7e",
+                        "tertiary-fixed-dim": "#a3ced6",
+                        "background": "#161310",
+                        "tertiary-fixed": "#beeaf3",
+                        "primary-container": "#5c3a1e",
+                        "on-tertiary-fixed": "#001f24",
+                        "on-primary-fixed": "#2f1500",
+                        "error-container": "#93000a",
+                        "ivory-panel": "#F5E6C8",
+                        "ink-black": "#2C1810",
+                        "surface": "#161310",
+                        "deep-navy-black": "#1A3A5C",
+                        "inverse-primary": "#7c5638",
+                        "on-tertiary": "#03363d",
+                        "error": "#ffb4ab",
+                        "primary-fixed-dim": "#efbc97",
+                        "on-primary-fixed-variant": "#623f22",
+                        "vermilion-red": "#8B0000",
+                        "surface-container-high": "#2e2926",
+                        "surface-bright": "#3d3835",
+                        "primary-fixed": "#ffdcc4",
+                        "on-error-container": "#ffdad6",
+                        "surface-container": "#231f1c",
+                        "on-secondary-fixed-variant": "#5f410a",
+                        "on-primary": "#48290e",
+                        "on-background": "#eae1dc",
+                        "on-surface": "#eae1dc",
+                        "accent-gold": "#C8960C",
+                        "surface-dim": "#161310",
+                        "secondary-container": "#5f410a",
+                        "outline": "#9d8e84",
+                        "parchment-tan": "#7D5A3C",
+                        "outline-variant": "#50443d",
+                        "on-error": "#690005",
+                        "tertiary-container": "#1c484f",
+                        "on-secondary-container": "#d9ae6e",
+                        "shadow-brown": "#5C3A1E33",
+                        "on-primary-container": "#d5a481",
+                        "wood-light": "#D4A96A",
+                        "secondary-fixed": "#ffddb0",
+                        "on-secondary-fixed": "#291800",
+                        "surface-container-low": "#1f1b18",
+                        "on-tertiary-fixed-variant": "#214d54",
+                        "on-secondary": "#442b00",
+                        "inverse-on-surface": "#342f2c",
+                        "surface-container-highest": "#393431",
+                        "on-surface-variant": "#d4c3b9",
+                        "primary": "#efbc97",
+                        "charcoal-dark": "#3A2010"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "base": "16px",
+                        "lg": "24px",
+                        "xs": "4px",
+                        "md": "12px",
+                        "xl": "32px",
+                        "sm": "8px",
+                        "xxl": "48px"
+                    },
+                    "fontFamily": {
+                        "mono-timer": ["Courier Prime"],
+                        "button-text": ["Noto Serif"],
+                        "heading-md": ["Noto Serif"],
+                        "title-lg": ["Noto Serif"],
+                        "display-calligraphy": ["Noto Serif"],
+                        "caption-sm": ["Noto Serif"],
+                        "body-md": ["Noto Serif"]
+                    },
+                    "fontSize": {
+                        "mono-timer": ["18px", { "lineHeight": "24px", "fontWeight": "700" }],
+                        "button-text": ["16px", { "lineHeight": "20px", "letterSpacing": "0.5px", "fontWeight": "600" }],
+                        "heading-md": ["18px", { "lineHeight": "24px", "fontWeight": "600" }],
+                        "title-lg": ["24px", { "lineHeight": "32px", "fontWeight": "600" }],
+                        "display-calligraphy": ["32px", { "lineHeight": "40px", "fontWeight": "700" }],
+                        "caption-sm": ["12px", { "lineHeight": "16px", "fontWeight": "400" }],
+                        "body-md": ["14px", { "lineHeight": "20px", "fontWeight": "400" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body { background-color: #161310; }
+        .hide-scrollbar::-webkit-scrollbar { display: none; }
+        .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="text-on-surface font-body-md bg-background pb-xxl">
+<!-- TopAppBar -->
+<header class="flex justify-between items-center w-full px-base py-sm z-50 bg-wood-dark dark:bg-surface-container docked full-width top-0 bg-gradient-to-b from-wood-dark to-charcoal-dark shadow-brown shadow-md sticky top-0">
+<button class="text-parchment-tan hover:opacity-80 transition-opacity">
+<span class="material-symbols-outlined" data-icon="menu">menu</span>
+</button>
+<h1 class="text-title-lg font-display-calligraphy text-accent-gold font-bold">Giải Đấu</h1>
+<button class="text-parchment-tan hover:opacity-80 transition-opacity rounded-full overflow-hidden w-8 h-8 ring-2 ring-outline-variant">
+<img alt="Avatar" class="w-full h-full object-cover" data-alt="A small circular avatar portrait of an Asian man with short dark hair, set against a dark background, in a moody lighting style fitting for a classic board game app profile picture." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCgYS3EtOn5e74eESSd28Pmna7Wu3O8CVjawyADX0-A7ba1JbQJ297uGAeKecc3Ly3GOwhg4PBlJqOzjm3jhyVmUBQd_09z8JywxsuEq1tkmsBzPHaI9UGHqjw4FYM1drCXzQkokUCB4tgY5wjKgeNYqgnPTdIJw0Avabp2F5uPD7OCs46ujb14S6XOwkQrnzVQruv8U_5lfj1Prn9LO24V_XYyY1sUIydlk8ukJwYH2qwUuJ2tDQ63jpKmNzjKIz4--gtv2_65-rVJ"/>
+</button>
+</header>
+<main class="px-base py-md flex flex-col gap-lg pb-24">
+<!-- Search & Filter -->
+<div class="flex gap-sm">
+<div class="flex-1 bg-surface-container-highest border border-outline-variant rounded-lg flex items-center px-md py-sm">
+<span class="material-symbols-outlined text-outline mr-sm" data-icon="search">search</span>
+<input class="bg-transparent border-none text-on-surface focus:ring-0 p-0 w-full font-body-md text-body-md placeholder:text-outline-variant" placeholder="Tìm kiếm giải đấu..." type="text"/>
+</div>
+<button class="bg-surface-container-highest border border-outline-variant rounded-lg px-md flex items-center justify-center hover:bg-surface-bright transition-colors">
+<span class="material-symbols-outlined text-parchment-tan" data-icon="tune">tune</span>
+</button>
+</div>
+<!-- Featured Tournament Banner -->
+<div class="relative w-full rounded-xl overflow-hidden shadow-brown shadow-lg border border-accent-gold/50 bg-wood-dark">
+<div class="absolute inset-0 bg-gradient-to-t from-charcoal-dark via-charcoal-dark/80 to-transparent z-10"></div>
+<div class="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1529699211952-734e80c4d42b?w=800&amp;q=80')] bg-cover bg-center opacity-40 mix-blend-overlay" data-alt="A close-up abstract view of an ancient wooden chessboard with intricately carved pieces. The lighting is cinematic, with warm gold and deep brown tones highlighting the texture of the wood, creating a sense of epic competition in an ancient eastern setting."></div>
+<div class="relative z-20 p-base flex flex-col justify-end h-48">
+<div class="inline-flex items-center gap-xs bg-vermilion-red/90 text-on-error rounded-full px-sm py-[2px] w-max mb-sm border border-vermilion-red">
+<span class="material-symbols-outlined text-[14px]" data-icon="sensors">sensors</span>
+<span class="font-caption-sm text-caption-sm font-bold tracking-wider">ĐANG DIỄN RA</span>
+</div>
+<h2 class="font-title-lg text-title-lg text-accent-gold mb-xs">Giải Vô Địch CChess Toàn Quốc</h2>
+<div class="flex justify-between items-end mt-auto">
+<div>
+<p class="font-caption-sm text-caption-sm text-parchment-tan">Tổng giải thưởng</p>
+<p class="font-heading-md text-heading-md text-ivory-panel">100,000,000đ</p>
+</div>
+<button class="bg-gradient-to-r from-accent-gold to-wood-light text-ink-black font-button-text text-button-text px-lg py-sm rounded-full shadow-md shadow-brown hover:opacity-90 transition-opacity active:scale-95">
+                        Theo dõi
+                    </button>
+</div>
+</div>
+</div>
+<!-- Categories -->
+<div class="flex overflow-x-auto hide-scrollbar gap-sm pb-xs">
+<button class="whitespace-nowrap px-md py-sm rounded-full bg-accent-gold text-ink-black font-button-text text-body-md border border-accent-gold">Tất cả</button>
+<button class="whitespace-nowrap px-md py-sm rounded-full bg-surface-container-high text-on-surface font-body-md text-body-md border border-outline-variant">Chuyên nghiệp</button>
+<button class="whitespace-nowrap px-md py-sm rounded-full bg-surface-container-high text-on-surface font-body-md text-body-md border border-outline-variant">Phong trào</button>
+<button class="whitespace-nowrap px-md py-sm rounded-full bg-surface-container-high text-on-surface font-body-md text-body-md border border-outline-variant">Sắp tới</button>
+<button class="whitespace-nowrap px-md py-sm rounded-full bg-surface-container-high text-on-surface font-body-md text-body-md border border-outline-variant opacity-50">Đã kết thúc</button>
+</div>
+<!-- Tournament List -->
+<div class="flex flex-col gap-md">
+<!-- Card 1 -->
+<div class="bg-surface-container-low border border-outline-variant rounded-lg p-md flex gap-md shadow-brown shadow-md">
+<div class="w-20 h-20 rounded bg-surface-container-high flex-shrink-0 flex items-center justify-center border border-outline-variant/50">
+<span class="material-symbols-outlined text-accent-gold text-4xl" data-icon="emoji_events">emoji_events</span>
+</div>
+<div class="flex-1 flex flex-col justify-between">
+<div>
+<div class="flex justify-between items-start">
+<h3 class="font-heading-md text-heading-md text-inverse-surface leading-tight">Kỳ Vương Tranh Bá</h3>
+<span class="bg-teal-success/20 text-teal-success font-caption-sm text-caption-sm px-xs py-[2px] rounded border border-teal-success/30 whitespace-nowrap ml-sm">Mở đăng ký</span>
+</div>
+<p class="font-caption-sm text-caption-sm text-parchment-tan mt-xs flex items-center gap-xs">
+<span class="material-symbols-outlined text-[14px]" data-icon="calendar_today">calendar_today</span> 20/12/2024
+                        </p>
+</div>
+<div class="flex justify-between items-center mt-sm">
+<span class="font-button-text text-body-md text-accent-gold font-bold">5,000,000đ</span>
+<button class="text-accent-gold border border-accent-gold px-sm py-[2px] rounded font-caption-sm text-caption-sm hover:bg-accent-gold/10 transition-colors">Tham gia</button>
+</div>
+</div>
+</div>
+<!-- Card 2 -->
+<div class="bg-surface-container-low border border-outline-variant rounded-lg p-md flex gap-md shadow-brown shadow-md">
+<div class="w-20 h-20 rounded bg-surface-container-high flex-shrink-0 flex items-center justify-center border border-outline-variant/50 relative overflow-hidden">
+<span class="material-symbols-outlined text-parchment-tan text-4xl z-10" data-icon="swords">swords</span>
+<div class="absolute inset-0 bg-gradient-to-br from-transparent to-wood-dark/40 z-0"></div>
+</div>
+<div class="flex-1 flex flex-col justify-between">
+<div>
+<div class="flex justify-between items-start">
+<h3 class="font-heading-md text-heading-md text-inverse-surface leading-tight">Thập Tam Thái Bảo</h3>
+<span class="bg-wood-light/20 text-wood-light font-caption-sm text-caption-sm px-xs py-[2px] rounded border border-wood-light/30 whitespace-nowrap ml-sm">Vòng loại</span>
+</div>
+<p class="font-caption-sm text-caption-sm text-parchment-tan mt-xs flex items-center gap-xs">
+<span class="material-symbols-outlined text-[14px]" data-icon="group">group</span> 128/256 kỳ thủ
+                        </p>
+</div>
+<div class="flex justify-between items-center mt-sm">
+<span class="font-button-text text-body-md text-accent-gold font-bold">2,000,000đ</span>
+<button class="text-outline-variant font-caption-sm text-caption-sm flex items-center" disabled="">Đang thi đấu <span class="material-symbols-outlined text-[16px] ml-xs" data-icon="lock">lock</span></button>
+</div>
+</div>
+</div>
+<!-- Card 3 -->
+<div class="bg-surface-container-low border border-outline-variant rounded-lg p-md flex gap-md shadow-brown shadow-md opacity-80 hover:opacity-100 transition-opacity">
+<div class="w-20 h-20 rounded bg-surface-container-high flex-shrink-0 flex items-center justify-center border border-outline-variant/50">
+<span class="material-symbols-outlined text-outline text-4xl" data-icon="handshake">handshake</span>
+</div>
+<div class="flex-1 flex flex-col justify-between">
+<div>
+<div class="flex justify-between items-start">
+<h3 class="font-heading-md text-heading-md text-inverse-surface leading-tight">Giao Hữu Cuối Tuần</h3>
+<span class="bg-surface-variant text-outline font-caption-sm text-caption-sm px-xs py-[2px] rounded border border-outline-variant whitespace-nowrap ml-sm">Sắp diễn ra</span>
+</div>
+<p class="font-caption-sm text-caption-sm text-parchment-tan mt-xs flex items-center gap-xs">
+<span class="material-symbols-outlined text-[14px]" data-icon="schedule">schedule</span> T7, Chủ Nhật
+                        </p>
+</div>
+<div class="flex justify-between items-center mt-sm">
+<span class="font-button-text text-body-md text-secondary font-bold">500 Xu</span>
+<span class="font-caption-sm text-caption-sm text-teal-success">Miễn phí</span>
+</div>
+</div>
+</div>
+</div>
+</main>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-base py-md bg-wood-dark dark:bg-surface-container-low shadow-brown shadow-lg md:hidden">
+<div class="flex flex-col items-center justify-center text-parchment-tan opacity-70 hover:text-wood-light transition-all cursor-pointer">
+<span class="material-symbols-outlined" data-icon="home">home</span>
+<span class="font-button-text text-caption-sm mt-xs">Trang Chủ</span>
+</div>
+<div class="flex flex-col items-center justify-center text-parchment-tan opacity-70 hover:text-wood-light transition-all cursor-pointer">
+<span class="material-symbols-outlined" data-icon="menu_book">menu_book</span>
+<span class="font-button-text text-caption-sm mt-xs">Học Tập</span>
+</div>
+<div class="flex flex-col items-center justify-center text-accent-gold transform -translate-y-1 transition-all duration-300 cursor-pointer">
+<span class="material-symbols-outlined" data-icon="sports_esports" style="font-variation-settings: 'FILL' 1;">sports_esports</span>
+<span class="font-button-text text-caption-sm mt-xs font-bold">Đối Đầu</span>
+</div>
+<div class="flex flex-col items-center justify-center text-parchment-tan opacity-70 hover:text-wood-light transition-all cursor-pointer">
+<span class="material-symbols-outlined" data-icon="person">person</span>
+<span class="font-button-text text-caption-sm mt-xs">Hồ Sơ</span>
+</div>
+</nav>
+</body></html>

@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="vi"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>CChess - Đánh Cờ</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Courier+Prime:ital,wght@0,400;0,700;1,400;1,700&amp;family=Noto+Serif:ital,wght@0,400;0,600;0,700;1,400;1,600;1,700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<style>
+        .material-symbols-outlined {
+            font-family: 'Material Symbols Outlined';
+            font-weight: normal;
+            font-style: normal;
+            font-size: 24px;
+            line-height: 1;
+            letter-spacing: normal;
+            text-transform: none;
+            display: inline-block;
+            white-space: nowrap;
+            word-wrap: normal;
+            direction: ltr;
+            -webkit-font-feature-settings: 'liga';
+            -webkit-font-smoothing: antialiased;
+        }
+    </style>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "primary-fixed": "#ffdcc4",
+                    "inverse-on-surface": "#342f2c",
+                    "surface": "#161310",
+                    "secondary-fixed-dim": "#ecbf7e",
+                    "surface-container-lowest": "#110d0b",
+                    "shadow-brown": "#5C3A1E33",
+                    "vermilion-red": "#8B0000",
+                    "tertiary-fixed": "#beeaf3",
+                    "outline-variant": "#50443d",
+                    "error-container": "#93000a",
+                    "primary-container": "#5c3a1e",
+                    "ivory-panel": "#F5E6C8",
+                    "secondary": "#ecbf7e",
+                    "background": "#161310",
+                    "on-tertiary-container": "#8bb6be",
+                    "on-secondary": "#442b00",
+                    "wood-light": "#D4A96A",
+                    "on-surface-variant": "#d4c3b9",
+                    "surface-bright": "#3d3835",
+                    "on-tertiary-fixed-variant": "#214d54",
+                    "inverse-surface": "#eae1dc",
+                    "on-primary-container": "#d5a481",
+                    "tertiary-container": "#1c484f",
+                    "inverse-primary": "#7c5638",
+                    "deep-navy-black": "#1A3A5C",
+                    "on-primary-fixed-variant": "#623f22",
+                    "on-tertiary-fixed": "#001f24",
+                    "wood-dark": "#5C3A1E",
+                    "teal-success": "#4A7C59",
+                    "surface-container-high": "#2e2926",
+                    "on-secondary-fixed-variant": "#5f410a",
+                    "parchment-tan": "#7D5A3C",
+                    "primary": "#efbc97",
+                    "surface-container-highest": "#393431",
+                    "error": "#ffb4ab",
+                    "on-error": "#690005",
+                    "surface-variant": "#393431",
+                    "tertiary": "#a3ced6",
+                    "accent-gold": "#C8960C",
+                    "tertiary-fixed-dim": "#a3ced6",
+                    "primary-fixed-dim": "#efbc97",
+                    "charcoal-dark": "#3A2010",
+                    "secondary-fixed": "#ffddb0",
+                    "on-background": "#eae1dc",
+                    "outline": "#9d8e84",
+                    "on-primary": "#48290e",
+                    "on-surface": "#eae1dc",
+                    "surface-tint": "#efbc97",
+                    "surface-container": "#231f1c",
+                    "surface-dim": "#161310",
+                    "on-secondary-fixed": "#291800",
+                    "on-error-container": "#ffdad6",
+                    "ink-black": "#2C1810",
+                    "secondary-container": "#5f410a",
+                    "surface-container-low": "#1f1b18",
+                    "on-primary-fixed": "#2f1500",
+                    "on-secondary-container": "#d9ae6e",
+                    "on-tertiary": "#03363d"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "xxl": "48px",
+                    "md": "12px",
+                    "xl": "32px",
+                    "base": "16px",
+                    "xs": "4px",
+                    "sm": "8px",
+                    "lg": "24px"
+            },
+            "fontFamily": {
+                    "mono-timer": [
+                            "Courier Prime"
+                    ],
+                    "display-calligraphy": [
+                            "Noto Serif"
+                    ],
+                    "title-lg": [
+                            "Noto Serif"
+                    ],
+                    "body-md": [
+                            "Noto Serif"
+                    ],
+                    "caption-sm": [
+                            "Noto Serif"
+                    ],
+                    "heading-md": [
+                            "Noto Serif"
+                    ],
+                    "button-text": [
+                            "Noto Serif"
+                    ]
+            },
+            "fontSize": {
+                    "mono-timer": [
+                            "18px",
+                            {
+                                    "lineHeight": "24px",
+                                    "fontWeight": "700"
+                            }
+                    ],
+                    "display-calligraphy": [
+                            "32px",
+                            {
+                                    "lineHeight": "40px",
+                                    "fontWeight": "700"
+                            }
+                    ],
+                    "title-lg": [
+                            "24px",
+                            {
+                                    "lineHeight": "32px",
+                                    "fontWeight": "600"
+                            }
+                    ],
+                    "body-md": [
+                            "14px",
+                            {
+                                    "lineHeight": "20px",
+                                    "fontWeight": "400"
+                            }
+                    ],
+                    "caption-sm": [
+                            "12px",
+                            {
+                                    "lineHeight": "16px",
+                                    "fontWeight": "400"
+                            }
+                    ],
+                    "heading-md": [
+                            "18px",
+                            {
+                                    "lineHeight": "24px",
+                                    "fontWeight": "600"
+                            }
+                    ],
+                    "button-text": [
+                            "16px",
+                            {
+                                    "lineHeight": "20px",
+                                    "letterSpacing": "0.5px",
+                                    "fontWeight": "600"
+                            }
+                    ]
+            }
+    },
+        },
+      }
+    </script>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background text-on-background font-body-md h-screen flex flex-col overflow-hidden">
+<!-- Top AppBar -->
+<header class="docked full-width top-0 border-b border-outline-variant shadow-brown bg-gradient-to-b from-wood-dark to-charcoal-dark dark:from-surface-container-highest dark:to-surface flex justify-between items-center w-full px-base py-sm">
+<div class="flex items-center gap-sm">
+<div class="w-8 h-8 rounded-full overflow-hidden border border-outline">
+<img alt="Avatar" class="w-full h-full object-cover" data-alt="A macro shot of a weathered, antique wooden Go board set in a dimly lit, atmospheric study. Soft, warm directional lighting highlights the rich texture of the wood grain and casts subtle shadows, invoking a sense of quiet contemplation and ancient strategy in a luxurious, dark-mode East Asian aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCyghHa6E4QtCtUC8uYgX2POB4PJDNdyVkthJ6DIMgEzPFTmAh6QmddjwvMpJUnMIXnsI8zBnt1j_JzReMv8FwbaurGmjxR7a5ORBXmx14uOjbAhntSPvoeS7_1Yvbt9Y4YPG0gOzxucb6HcG3kZPn8sW66OrgZ5gejGSPdbeynkcbJ-OThZCLkHrzKDesw6YqTND4XagZFip-kOtfhHyV_RsMttl-4v8FR90CxhwKxoQF_kh0MQxFid8fcjz6PuSqmzcwMPXks-fZA"/>
+</div>
+<h1 class="font-display-calligraphy text-display-calligraphy text-accent-gold dark:text-secondary">Kỳ Vương Việt</h1>
+</div>
+<button class="text-primary dark:text-primary-fixed-dim hover:opacity-80 transition-opacity">
+<span class="material-symbols-outlined">settings</span>
+</button>
+</header>
+<!-- Main Game Area -->
+<main class="flex-1 flex flex-col justify-between items-center px-base py-md relative overflow-hidden bg-[url('https://images.unsplash.com/photo-1578301978693-85fa9c026f19?auto=format&amp;fit=crop&amp;w=1000&amp;q=80')] bg-cover bg-center before:content-[''] before:absolute before:inset-0 before:bg-ink-black/80" data-alt="A textured, dark parchment or aged paper background with subtle ink washes. The aesthetic is inspired by traditional East Asian calligraphy and watercolor painting, featuring deep espresso browns and charcoal blacks fading into soft sepia tones. The mood is calm, historical, and deeply atmospheric, providing a rich, tactile surface for high-contrast elements.">
+<!-- Opponent Info -->
+<div class="w-full max-w-md bg-ivory-panel/10 backdrop-blur-sm rounded-lg border border-outline-variant p-sm flex items-center justify-between shadow-brown relative z-10">
+<div class="flex items-center gap-md">
+<div class="w-10 h-10 rounded-full overflow-hidden border-2 border-deep-navy-black">
+<img alt="Opponent" class="w-full h-full object-cover" data-alt="Close-up portrait of an older, wise-looking Asian man with a serious expression. Warm, moody lighting in a dark room highlights his features. He wears traditional dark silk clothing. The overall tone is intense, respectful, and slightly mysterious, fitting a master strategist in a dark-mode, high-end chess environment." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCWHLJWMrNdMk8OY0Zan5HiQ8ESw6csEu-VpjsNJ3NTPvysMKd7bC3SkrxkWQEopwG_Ce3K-wA2D79OW_9PEhbP44ne-5CRtp-rr5EH82ns6cof_f-uF319SVvTtcOZgmnvh7dBTOrwvAD2TjYviLqSDP4ih-ABhUgeO_YDCOH_Qhvns7im0GdNaRa6YWnwIbMurAhzQl9NWDurG8xXPiDp-27NAogHQL5XVzHuLWANV0py_EvADSmI113LNEFpq_bIRz5GlNAiT_vN"/>
+</div>
+<div>
+<div class="font-heading-md text-on-surface">Độc Cô Cầu Bại</div>
+<div class="flex items-center gap-xs text-secondary">
+<span class="material-symbols-outlined text-[16px]">military_tech</span>
+<span class="font-caption-sm text-caption-sm">Kiện Tướng</span>
+</div>
+</div>
+</div>
+<div class="bg-surface-container-high rounded-DEFAULT px-md py-xs border border-deep-navy-black">
+<span class="font-mono-timer text-mono-timer text-primary">15:00</span>
+</div>
+</div>
+<!-- Chess Board -->
+<div class="relative w-full max-w-[360px] aspect-[9/10] bg-wood-light border-4 border-wood-dark shadow-[inset_0_0_20px_rgba(92,58,30,0.5)] z-10 p-[10px] rounded-DEFAULT">
+<!-- Board Grid -->
+<div class="w-full h-full border-2 border-wood-dark relative grid grid-cols-8 grid-rows-9">
+<!-- Vertical lines -->
+<div class="col-start-1 col-span-8 row-start-1 row-span-4 border-b-2 border-wood-dark grid grid-cols-8">
+<div class="border-r border-wood-dark"></div><div class="border-r border-wood-dark"></div><div class="border-r border-wood-dark"></div><div class="border-r border-wood-dark"></div><div class="border-r border-wood-dark"></div><div class="border-r border-wood-dark"></div><div class="border-r border-wood-dark"></div><div></div>
+</div>
+<!-- River -->
+<div class="col-start-1 col-span-8 row-start-5 row-span-1 flex items-center justify-around font-display-calligraphy text-[24px] text-wood-dark/60 italic px-xl border-b-2 border-wood-dark">
+<span>楚河</span> <!-- Chu River -->
+<span>漢界</span> <!-- Han Border -->
+</div>
+<!-- Vertical lines bottom -->
+<div class="col-start-1 col-span-8 row-start-6 row-span-4 grid grid-cols-8">
+<div class="border-r border-wood-dark"></div><div class="border-r border-wood-dark"></div><div class="border-r border-wood-dark"></div><div class="border-r border-wood-dark"></div><div class="border-r border-wood-dark"></div><div class="border-r border-wood-dark"></div><div class="border-r border-wood-dark"></div><div></div>
+</div>
+<!-- Palaces (Crosses) -->
+<!-- Top Palace -->
+<div class="absolute top-0 left-[37.5%] w-[25%] h-[22.2%] pointer-events-none">
+<svg height="100%" preserveaspectratio="none" viewbox="0 0 100 100" width="100%">
+<line stroke="#5C3A1E" stroke-width="2" x1="0" x2="100" y1="0" y2="100"></line>
+<line stroke="#5C3A1E" stroke-width="2" x1="100" x2="0" y1="0" y2="100"></line>
+</svg>
+</div>
+<!-- Bottom Palace -->
+<div class="absolute bottom-0 left-[37.5%] w-[25%] h-[22.2%] pointer-events-none">
+<svg height="100%" preserveaspectratio="none" viewbox="0 0 100 100" width="100%">
+<line stroke="#5C3A1E" stroke-width="2" x1="0" x2="100" y1="0" y2="100"></line>
+<line stroke="#5C3A1E" stroke-width="2" x1="100" x2="0" y1="0" y2="100"></line>
+</svg>
+</div>
+<!-- Pieces (Sample positioning) -->
+<!-- Red selected piece -->
+<div class="absolute bottom-[22.2%] left-[50%] w-[11%] aspect-square -translate-x-1/2 translate-y-1/2 flex items-center justify-center">
+<div class="w-full h-full rounded-full bg-gradient-to-br from-ivory-panel to-[#D4B886] border-2 border-vermilion-red shadow-[0_4px_8px_rgba(0,0,0,0.5)] flex items-center justify-center font-title-lg text-title-lg text-vermilion-red relative scale-110 shadow-[0_0_15px_#C8960C]">
+<span class="relative z-10">帥</span>
+<div class="absolute inset-0 rounded-full border border-white/30"></div>
+</div>
+</div>
+<!-- Black piece -->
+<div class="absolute top-[11.1%] left-[25%] w-[11%] aspect-square -translate-x-1/2 -translate-y-1/2 flex items-center justify-center">
+<div class="w-full h-full rounded-full bg-gradient-to-br from-ivory-panel to-[#D4B886] border-2 border-deep-navy-black shadow-[0_4px_8px_rgba(0,0,0,0.5)] flex items-center justify-center font-title-lg text-title-lg text-deep-navy-black relative">
+<span class="relative z-10">馬</span>
+<div class="absolute inset-0 rounded-full border border-white/30"></div>
+</div>
+</div>
+</div>
+</div>
+<!-- Player Info -->
+<div class="w-full max-w-md bg-ivory-panel/10 backdrop-blur-sm rounded-lg border border-outline-variant p-sm flex items-center justify-between shadow-brown relative z-10">
+<div class="bg-surface-container-highest rounded-DEFAULT px-md py-xs border border-vermilion-red shadow-[0_0_10px_rgba(139,0,0,0.3)]">
+<span class="font-mono-timer text-mono-timer text-accent-gold">08:42</span>
+</div>
+<div class="flex items-center gap-md text-right">
+<div>
+<div class="font-heading-md text-on-surface">Người Chơi</div>
+<div class="flex items-center gap-xs justify-end text-secondary">
+<span class="font-caption-sm text-caption-sm">Cao Thủ</span>
+<span class="material-symbols-outlined text-[16px]">military_tech</span>
+</div>
+</div>
+<div class="w-10 h-10 rounded-full overflow-hidden border-2 border-vermilion-red">
+<img alt="Player Avatar" class="w-full h-full object-cover" data-alt="Close-up portrait of a young Asian man looking intensely concentrated. Warm, cinematic lighting against a dark background highlights his facial features. The image conveys focus, intelligence, and modern sophistication, fitting a high-level competitive gaming profile in a dark, luxurious setting." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCcJpyG4LpodeeJhKToJjkvbqz5BrirIeLVWgPVH5q6GLPo44FlqSI_fYmv0eolCmkrY7JRa3adKqiuDEI2EMDLrango_rExTOmhwEiwukIZfu0C7e4BnYvfSadFiSbEgXrQp_6fcBD_UZw3wHZ4vu0g93UPDRajk_4Hg4Wrf7YV8em3-H1IrxRKln43f90MHhlzt39G96vWnUkV-QSF61oUFQB5PksoZNAp6Ck9Y84iyPThBtEnOEdT4WuhQKRgsrKRKi29mOmsC75"/>
+</div>
+</div>
+</div>
+</main>
+<!-- Game Action Bar -->
+<div class="bg-surface-container border-t border-outline-variant px-base py-sm flex justify-around items-center z-20">
+<button class="flex flex-col items-center gap-xs text-on-surface-variant hover:text-primary transition-colors">
+<div class="w-10 h-10 rounded-full bg-surface-container-high flex items-center justify-center border border-outline-variant shadow-brown">
+<span class="material-symbols-outlined">exit_to_app</span>
+</div>
+<span class="font-caption-sm text-caption-sm">Thoát</span>
+</button>
+<button class="flex flex-col items-center gap-xs text-on-surface-variant hover:text-primary transition-colors">
+<div class="w-10 h-10 rounded-full bg-surface-container-high flex items-center justify-center border border-outline-variant shadow-brown">
+<span class="material-symbols-outlined">handshake</span>
+</div>
+<span class="font-caption-sm text-caption-sm">Hòa</span>
+</button>
+<button class="flex flex-col items-center gap-xs text-on-surface-variant hover:text-error transition-colors">
+<div class="w-10 h-10 rounded-full bg-surface-container-high flex items-center justify-center border border-outline-variant shadow-brown">
+<span class="material-symbols-outlined">flag</span>
+</div>
+<span class="font-caption-sm text-caption-sm">Xin Thua</span>
+</button>
+<button class="flex flex-col items-center gap-xs text-on-surface-variant hover:text-primary transition-colors">
+<div class="w-10 h-10 rounded-full bg-surface-container-high flex items-center justify-center border border-outline-variant shadow-brown">
+<span class="material-symbols-outlined">settings</span>
+</div>
+<span class="font-caption-sm text-caption-sm">Cài Đặt</span>
+</button>
+</div>
+</body></html>

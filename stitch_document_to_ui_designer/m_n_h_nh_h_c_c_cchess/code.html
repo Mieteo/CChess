@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="vi"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Học Cờ - Kỳ Vương Việt</title>
+<!-- Google Fonts: Noto Serif -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Courier+Prime:ital,wght@0,400;0,700;1,400;1,700&amp;family=Noto+Serif:ital,wght@0,100..900;1,100..900&amp;display=swap" rel="stylesheet"/>
+<!-- Material Symbols Outlined -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<!-- Tailwind Theme Config -->
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-primary-fixed-variant": "#623f22",
+                        "on-tertiary-fixed": "#001f24",
+                        "inverse-surface": "#eae1dc",
+                        "surface-container-lowest": "#110d0b",
+                        "wood-dark": "#5C3A1E",
+                        "surface": "#161310",
+                        "on-surface-variant": "#d4c3b9",
+                        "error": "#ffb4ab",
+                        "ivory-panel": "#F5E6C8",
+                        "primary-container": "#5c3a1e",
+                        "on-secondary": "#442b00",
+                        "charcoal-dark": "#3A2010",
+                        "teal-success": "#4A7C59",
+                        "primary-fixed-dim": "#efbc97",
+                        "primary": "#efbc97",
+                        "wood-light": "#D4A96A",
+                        "surface-variant": "#393431",
+                        "error-container": "#93000a",
+                        "inverse-on-surface": "#342f2c",
+                        "surface-container": "#231f1c",
+                        "secondary": "#ecbf7e",
+                        "surface-bright": "#3d3835",
+                        "on-secondary-container": "#d9ae6e",
+                        "on-tertiary": "#03363d",
+                        "surface-tint": "#efbc97",
+                        "secondary-container": "#5f410a",
+                        "tertiary-fixed": "#beeaf3",
+                        "on-primary": "#48290e",
+                        "accent-gold": "#C8960C",
+                        "secondary-fixed-dim": "#ecbf7e",
+                        "surface-container-low": "#1f1b18",
+                        "tertiary-fixed-dim": "#a3ced6",
+                        "deep-navy-black": "#1A3A5C",
+                        "outline-variant": "#50443d",
+                        "tertiary-container": "#1c484f",
+                        "parchment-tan": "#7D5A3C",
+                        "background": "#161310",
+                        "on-tertiary-container": "#8bb6be",
+                        "surface-dim": "#161310",
+                        "on-background": "#eae1dc",
+                        "on-tertiary-fixed-variant": "#214d54",
+                        "ink-black": "#2C1810",
+                        "surface-container-highest": "#393431",
+                        "inverse-primary": "#7c5638",
+                        "surface-container-high": "#2e2926",
+                        "outline": "#9d8e84",
+                        "on-primary-fixed": "#2f1500",
+                        "on-surface": "#eae1dc",
+                        "on-error-container": "#ffdad6",
+                        "shadow-brown": "#5C3A1E33",
+                        "on-secondary-fixed": "#291800",
+                        "on-secondary-fixed-variant": "#5f410a",
+                        "primary-fixed": "#ffdcc4",
+                        "on-primary-container": "#d5a481",
+                        "secondary-fixed": "#ffddb0",
+                        "tertiary": "#a3ced6",
+                        "vermilion-red": "#8B0000",
+                        "on-error": "#690005"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "xl": "32px",
+                        "xxl": "48px",
+                        "lg": "24px",
+                        "base": "16px",
+                        "sm": "8px",
+                        "xs": "4px",
+                        "md": "12px"
+                    },
+                    "fontFamily": {
+                        "mono-timer": ["Courier Prime"],
+                        "caption-sm": ["Noto Serif"],
+                        "heading-md": ["Noto Serif"],
+                        "body-md": ["Noto Serif"],
+                        "display-calligraphy": ["Noto Serif"],
+                        "title-lg": ["Noto Serif"],
+                        "button-text": ["Noto Serif"]
+                    },
+                    "fontSize": {
+                        "mono-timer": ["18px", {"lineHeight": "24px", "fontWeight": "700"}],
+                        "caption-sm": ["12px", {"lineHeight": "16px", "fontWeight": "400"}],
+                        "heading-md": ["18px", {"lineHeight": "24px", "fontWeight": "600"}],
+                        "body-md": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                        "display-calligraphy": ["32px", {"lineHeight": "40px", "fontWeight": "700"}],
+                        "title-lg": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+                        "button-text": ["16px", {"lineHeight": "20px", "letterSpacing": "0.5px", "fontWeight": "600"}]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background text-on-background font-body-md text-body-md pb-xxl antialiased overflow-x-hidden">
+<!-- Shared Component: TopAppBar -->
+<header class="sticky top-0 z-40 bg-gradient-to-b from-wood-dark to-charcoal-dark dark:from-surface-container-highest dark:to-surface border-b border-outline-variant shadow-brown flex justify-between items-center w-full px-base py-sm">
+<div class="w-10 h-10 rounded-full border-2 border-accent-gold overflow-hidden shrink-0">
+<div class="w-full h-full bg-wood-light flex items-center justify-center">
+<span class="material-symbols-outlined text-wood-dark" data-icon="person">person</span>
+</div>
+</div>
+<h1 class="font-display-calligraphy text-display-calligraphy text-accent-gold dark:text-secondary truncate px-md">Kỳ Vương Việt</h1>
+<button class="text-primary dark:text-primary-fixed-dim hover:opacity-80 transition-opacity p-xs">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+</button>
+</header>
+<main class="px-base py-lg space-y-lg max-w-2xl mx-auto">
+<!-- Page Header & Progress -->
+<section class="space-y-sm">
+<div class="flex items-end justify-between">
+<div>
+<h2 class="font-title-lg text-title-lg text-secondary">Học Cờ</h2>
+<p class="text-on-surface-variant font-caption-sm text-caption-sm mt-xs">Nâng cao trình độ mỗi ngày</p>
+</div>
+<div class="w-10 h-10 rounded-full bg-surface-container-high border border-outline-variant flex items-center justify-center shadow-brown">
+<span class="material-symbols-outlined text-accent-gold">lightbulb</span>
+</div>
+</div>
+<div class="mt-md pt-sm">
+<div class="bg-surface-container-highest rounded-full h-2 w-full overflow-hidden shadow-inner">
+<div class="bg-gradient-to-r from-wood-light to-accent-gold h-full w-2/3 rounded-full relative">
+<div class="absolute inset-0 bg-white/20"></div>
+</div>
+</div>
+<p class="text-right text-accent-gold font-caption-sm text-caption-sm mt-xs">Nhiệm vụ học hôm nay: 2/3 hoàn thành</p>
+</div>
+</section>
+<!-- Daily Challenge Banner -->
+<section class="relative bg-gradient-to-br from-ink-black to-wood-dark rounded-xl p-base border border-outline-variant shadow-brown overflow-hidden">
+<div class="absolute inset-0 opacity-10 bg-[url('https://images.unsplash.com/photo-1615800098779-1be32e60cca3?auto=format&amp;fit=crop&amp;q=80')] bg-cover bg-center mix-blend-overlay" data-alt="A delicate, ancient Chinese ink-wash painting style background texture. Soft gradients of dark grey and sepia suggest misty mountains and flowing rivers on aged parchment paper. The aesthetic is extremely subtle, elegant, and deeply rooted in traditional East Asian artistry, providing a quiet, moody backdrop without distracting from foreground elements."></div>
+<div class="relative z-10 flex flex-col items-start space-y-sm">
+<div class="inline-flex items-center space-x-2 bg-vermilion-red/20 border border-vermilion-red/50 px-2 py-1 rounded-full text-error">
+<span class="material-symbols-outlined text-[16px]">local_fire_department</span>
+<span class="font-caption-sm text-caption-sm font-bold uppercase tracking-wider">Nóng hổi</span>
+</div>
+<h3 class="font-title-lg text-title-lg text-on-surface">Tàn Cục Thách Đấu Hôm Nay</h3>
+<p class="text-on-surface-variant font-caption-sm text-caption-sm font-mono-timer text-mono-timer flex items-center">
+<span class="material-symbols-outlined text-[16px] mr-1">timer</span>
+                    Kết thúc sau: 05:42:10
+                </p>
+<button class="mt-md bg-gradient-to-r from-vermilion-red to-[#5c0000] text-white px-lg py-sm rounded-full font-button-text text-button-text shadow-brown hover:scale-95 transition-transform">
+                    Thử Ngay
+                </button>
+</div>
+</section>
+<!-- Section Grid (Bento Style) -->
+<section class="grid grid-cols-2 gap-md">
+<!-- Item 1: Khóa Học Vỡ Lòng -->
+<button class="bg-surface-container border border-outline-variant rounded-xl p-base flex flex-col items-center justify-center space-y-sm shadow-brown hover:bg-surface-container-high transition-colors relative group">
+<div class="w-12 h-12 rounded-full bg-teal-success/10 border border-teal-success/30 flex items-center justify-center text-teal-success group-hover:scale-110 transition-transform">
+<span class="material-symbols-outlined text-[24px]">menu_book</span>
+</div>
+<span class="font-heading-md text-heading-md text-on-surface text-center">Khóa Học<br/>Vỡ Lòng</span>
+</button>
+<!-- Item 2: Bài Tập Tàn Cục -->
+<button class="bg-surface-container border border-outline-variant rounded-xl p-base flex flex-col items-center justify-center space-y-sm shadow-brown hover:bg-surface-container-high transition-colors relative group">
+<div class="w-12 h-12 rounded-full bg-vermilion-red/10 border border-vermilion-red/30 flex items-center justify-center text-error group-hover:scale-110 transition-transform">
+<span class="material-symbols-outlined text-[24px]">fort</span>
+</div>
+<span class="font-heading-md text-heading-md text-on-surface text-center">Bài Tập<br/>Tàn Cục</span>
+</button>
+<!-- Item 3: Kỳ Phổ & Phục Bàn -->
+<button class="bg-surface-container border border-outline-variant rounded-xl p-base flex flex-col items-center justify-center space-y-sm shadow-brown hover:bg-surface-container-high transition-colors relative group col-span-2 sm:col-span-1">
+<div class="w-12 h-12 rounded-full bg-accent-gold/10 border border-accent-gold/30 flex items-center justify-center text-accent-gold group-hover:scale-110 transition-transform">
+<span class="material-symbols-outlined text-[24px]">history_edu</span>
+</div>
+<span class="font-heading-md text-heading-md text-on-surface text-center">Kỳ Phổ &amp;<br/>Phục Bàn</span>
+</button>
+<!-- Item 4: AI Tư Vấn -->
+<button class="bg-surface-container border border-accent-gold/50 rounded-xl p-base flex flex-col items-center justify-center space-y-sm shadow-brown hover:bg-surface-container-high transition-colors relative group col-span-2 sm:col-span-1 overflow-hidden">
+<div class="absolute top-0 right-0 bg-accent-gold text-surface-container-lowest font-caption-sm text-caption-sm font-bold px-2 py-1 rounded-bl-lg">VIP</div>
+<div class="w-12 h-12 rounded-full bg-[#8A2BE2]/10 border border-[#8A2BE2]/30 flex items-center justify-center text-[#d8b4fe] group-hover:scale-110 transition-transform">
+<span class="material-symbols-outlined text-[24px]">smart_toy</span>
+</div>
+<span class="font-heading-md text-heading-md text-on-surface text-center">AI Tư Vấn</span>
+</button>
+<!-- Item 5: Khai Cuộc Đại Sư -->
+<button class="bg-surface-container border border-outline-variant rounded-xl p-base flex flex-col items-center justify-center space-y-sm shadow-brown hover:bg-surface-container-high transition-colors relative group">
+<div class="w-12 h-12 rounded-full bg-[#f97316]/10 border border-[#f97316]/30 flex items-center justify-center text-[#fdba74] group-hover:scale-110 transition-transform">
+<span class="material-symbols-outlined text-[24px]">map</span>
+</div>
+<span class="font-heading-md text-heading-md text-on-surface text-center">Khai Cuộc<br/>Đại Sư</span>
+</button>
+<!-- Item 6: Chụp Nhận Diện Cờ -->
+<button class="bg-surface-container border border-vermilion-red/50 rounded-xl p-base flex flex-col items-center justify-center space-y-sm shadow-brown hover:bg-surface-container-high transition-colors relative group overflow-hidden">
+<div class="absolute top-0 right-0 bg-vermilion-red text-white font-caption-sm text-caption-sm font-bold px-2 py-1 rounded-bl-lg animate-pulse">HOT</div>
+<div class="w-12 h-12 rounded-full bg-surface-container-highest border border-outline-variant flex items-center justify-center text-on-surface group-hover:scale-110 transition-transform">
+<span class="material-symbols-outlined text-[24px]">photo_camera</span>
+</div>
+<span class="font-heading-md text-heading-md text-on-surface text-center">Chụp Nhận<br/>Diện Cờ</span>
+</button>
+</section>
+<!-- Recent Activity -->
+<section class="space-y-sm pt-md">
+<h3 class="font-heading-md text-heading-md text-secondary border-b border-outline-variant pb-xs">Hoạt Động Gần Đây</h3>
+<div class="space-y-xs">
+<!-- Activity Item -->
+<div class="flex items-center justify-between p-sm rounded-lg bg-surface-container-highest border border-outline-variant/50">
+<div class="flex items-center space-x-sm">
+<span class="material-symbols-outlined text-teal-success text-[20px]">check_circle</span>
+<span class="font-body-md text-body-md text-on-surface">Bài 12: Pháo Đầu Mã Đội</span>
+</div>
+<span class="font-caption-sm text-caption-sm text-on-surface-variant">Hôm qua</span>
+</div>
+<!-- Activity Item -->
+<div class="flex items-center justify-between p-sm rounded-lg bg-surface-container-highest border border-outline-variant/50">
+<div class="flex items-center space-x-sm">
+<span class="material-symbols-outlined text-teal-success text-[20px]">check_circle</span>
+<span class="font-body-md text-body-md text-on-surface">Tàn Cục: Đơn Xe Trảo Pháo</span>
+</div>
+<span class="font-caption-sm text-caption-sm text-on-surface-variant">2 ngày trước</span>
+</div>
+<!-- Activity Item -->
+<div class="flex items-center justify-between p-sm rounded-lg bg-surface-container-highest border border-outline-variant/50">
+<div class="flex items-center space-x-sm">
+<span class="material-symbols-outlined text-error text-[20px]">cancel</span>
+<span class="font-body-md text-body-md text-on-surface opacity-80">Bài 13: Bình Phong Mã</span>
+</div>
+<span class="font-caption-sm text-caption-sm text-on-surface-variant">3 ngày trước</span>
+</div>
+</div>
+</section>
+</main>
+<!-- Shared Component: BottomNavBar -->
+<nav class="fixed bottom-0 left-0 w-full z-50 flex justify-around items-center h-16 pb-safe bg-wood-dark dark:bg-surface-container-lowest border-t border-outline-variant shadow-brown">
+<!-- Tab 1: Trang chủ (Inactive) -->
+<button class="flex flex-col items-center justify-center text-parchment-tan w-1/4 h-full hover:text-primary-fixed transition-colors">
+<span class="material-symbols-outlined text-[24px]" data-icon="fort">fort</span>
+<span class="font-caption-sm text-caption-sm mt-xs">Trang chủ</span>
+</button>
+<!-- Tab 2: Học tập (ACTIVE) -->
+<button class="flex flex-col items-center justify-center text-accent-gold transform -translate-y-1 transition-transform duration-300 w-1/4 h-full relative">
+<!-- Active Glow Indicator -->
+<div class="absolute -top-1 w-8 h-1 bg-accent-gold rounded-full shadow-[0_0_8px_rgba(200,150,12,0.8)]"></div>
+<span class="material-symbols-outlined text-[24px]" data-icon="menu_book" style="font-variation-settings: 'FILL' 1;">menu_book</span>
+<span class="font-caption-sm text-caption-sm mt-xs font-bold">Học tập</span>
+</button>
+<!-- Tab 3: Xếp hạng (Inactive) -->
+<button class="flex flex-col items-center justify-center text-parchment-tan w-1/4 h-full hover:text-primary-fixed transition-colors">
+<span class="material-symbols-outlined text-[24px]" data-icon="military_tech">military_tech</span>
+<span class="font-caption-sm text-caption-sm mt-xs">Xếp hạng</span>
+</button>
+<!-- Tab 4: Cá nhân (Inactive) -->
+<button class="flex flex-col items-center justify-center text-parchment-tan w-1/4 h-full hover:text-primary-fixed transition-colors">
+<span class="material-symbols-outlined text-[24px]" data-icon="person">person</span>
+<span class="font-caption-sm text-caption-sm mt-xs">Cá nhân</span>
+</button>
+</nav>
+</body></html>

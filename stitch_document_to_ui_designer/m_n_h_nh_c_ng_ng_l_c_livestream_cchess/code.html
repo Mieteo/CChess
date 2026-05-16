@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="vi"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>CChess - Cộng Đồng</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Courier+Prime:ital,wght@0,400;0,700;1,400;1,700&amp;family=Noto+Serif:ital,wght@0,100..900;1,100..900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "wood-dark": "#5C3A1E",
+                        "surface-container-highest": "#393431",
+                        "on-tertiary-fixed": "#001f24",
+                        "shadow-brown": "#5C3A1E33",
+                        "on-primary-fixed-variant": "#623f22",
+                        "on-background": "#eae1dc",
+                        "secondary-fixed-dim": "#ecbf7e",
+                        "on-secondary": "#442b00",
+                        "accent-gold": "#C8960C",
+                        "inverse-primary": "#7c5638",
+                        "primary-container": "#5c3a1e",
+                        "on-surface": "#eae1dc",
+                        "tertiary-container": "#1c484f",
+                        "surface-tint": "#efbc97",
+                        "surface-container-high": "#2e2926",
+                        "on-error-container": "#ffdad6",
+                        "outline-variant": "#50443d",
+                        "on-secondary-fixed": "#291800",
+                        "ink-black": "#2C1810",
+                        "surface-bright": "#3d3835",
+                        "on-tertiary-fixed-variant": "#214d54",
+                        "on-tertiary-container": "#8bb6be",
+                        "inverse-on-surface": "#342f2c",
+                        "deep-navy-black": "#1A3A5C",
+                        "secondary-fixed": "#ffddb0",
+                        "on-secondary-container": "#d9ae6e",
+                        "primary-fixed": "#ffdcc4",
+                        "on-primary": "#48290e",
+                        "secondary-container": "#5f410a",
+                        "ivory-panel": "#F5E6C8",
+                        "secondary": "#ecbf7e",
+                        "primary": "#efbc97",
+                        "surface-container-low": "#1f1b18",
+                        "charcoal-dark": "#3A2010",
+                        "on-primary-container": "#d5a481",
+                        "tertiary-fixed-dim": "#a3ced6",
+                        "tertiary": "#a3ced6",
+                        "teal-success": "#4A7C59",
+                        "on-secondary-fixed-variant": "#5f410a",
+                        "error-container": "#93000a",
+                        "surface-variant": "#393431",
+                        "vermilion-red": "#8B0000",
+                        "background": "#161310",
+                        "surface-container-lowest": "#110d0b",
+                        "wood-light": "#D4A96A",
+                        "on-error": "#690005",
+                        "outline": "#9d8e84",
+                        "primary-fixed-dim": "#efbc97",
+                        "parchment-tan": "#7D5A3C",
+                        "surface-container": "#231f1c",
+                        "inverse-surface": "#eae1dc",
+                        "surface-dim": "#161310",
+                        "surface": "#161310",
+                        "error": "#ffb4ab",
+                        "on-surface-variant": "#d4c3b9",
+                        "tertiary-fixed": "#beeaf3",
+                        "on-primary-fixed": "#2f1500",
+                        "on-tertiary": "#03363d"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "xs": "4px",
+                        "md": "12px",
+                        "sm": "8px",
+                        "xl": "32px",
+                        "lg": "24px",
+                        "base": "16px",
+                        "xxl": "48px"
+                    },
+                    "fontFamily": {
+                        "title-lg": ["Noto Serif"],
+                        "heading-md": ["Noto Serif"],
+                        "caption-sm": ["Noto Serif"],
+                        "button-text": ["Noto Serif"],
+                        "display-calligraphy": ["Noto Serif"],
+                        "mono-timer": ["Courier Prime"],
+                        "body-md": ["Noto Serif"]
+                    },
+                    "fontSize": {
+                        "title-lg": ["24px", { "lineHeight": "32px", "fontWeight": "600" }],
+                        "heading-md": ["18px", { "lineHeight": "24px", "fontWeight": "600" }],
+                        "caption-sm": ["12px", { "lineHeight": "16px", "fontWeight": "400" }],
+                        "button-text": ["16px", { "lineHeight": "20px", "letterSpacing": "0.5px", "fontWeight": "600" }],
+                        "display-calligraphy": ["32px", { "lineHeight": "40px", "fontWeight": "700" }],
+                        "mono-timer": ["18px", { "lineHeight": "24px", "fontWeight": "700" }],
+                        "body-md": ["14px", { "lineHeight": "20px", "fontWeight": "400" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .bg-ink-wash {
+            background-image: radial-gradient(circle at 50% 50%, rgba(44, 24, 16, 0.8) 0%, rgba(22, 19, 16, 1) 100%);
+        }
+        .hide-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .hide-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+</head>
+<body class="bg-background text-on-surface font-body-md min-h-screen flex flex-col pb-xxl">
+<!-- TopAppBar -->
+<header class="bg-wood-dark dark:bg-surface-container docked full-width top-0 bg-gradient-to-b from-wood-dark to-charcoal-dark shadow-brown shadow-md flex justify-between items-center w-full px-base py-sm z-50 sticky">
+<button aria-label="Menu" class="text-primary dark:text-primary-fixed hover:opacity-80 transition-opacity Active: scale-95 transition-transform duration-200">
+<span class="material-symbols-outlined text-[24px]">menu</span>
+</button>
+<h1 class="font-display-calligraphy text-display-calligraphy text-accent-gold text-center absolute left-1/2 -translate-x-1/2 m-0 p-0">Cộng Đồng</h1>
+<div class="w-8 h-8 rounded-full bg-wood-light border-2 border-accent-gold overflow-hidden flex items-center justify-center hover:opacity-80 transition-opacity Active: scale-95 transition-transform duration-200">
+<img alt="Player Profile Avatar" class="w-full h-full object-cover" data-alt="A small circular profile avatar featuring a high-quality portrait of a distinguished older gentleman with a neat beard, viewed from the chest up. The lighting is soft and dramatic, creating a classic, timeless feel that aligns with the premium Eastern aesthetics of the app. The background is a muted, out-of-focus studio setting, allowing the subject's face to be clearly visible and easily recognizable within the small UI element." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDFHZuGKX2dRhU3q8OjpkAa1gS7xgXrDnawjY9MwfsbG3zsagBY5UXGhnlyGXTQuSeSUi4VCdAqUmlnM6HgLUMTIqksXRxGuX28NOJs96pmyMsqKqy89QxDNGBe-Cln4nySe6tQtbP05NQEUoWMaxoA7W1e3I9bQxrWDiIlJaEC7hU0IG2QlVhoN1sDlSu-oXiNwwtcm_bxplLUckoqeQ9BHO_TOkElgsnYf3aaeCDAsS6PQ4b_alQnGeajK-oLbNdaYkFw3ymasHF9"/>
+</div>
+</header>
+<main class="flex-1 flex flex-col gap-lg px-base py-lg bg-ink-wash pb-24">
+<!-- Quick Access Row -->
+<section class="flex justify-between items-center w-full max-w-md mx-auto">
+<div class="flex flex-col items-center gap-xs cursor-pointer hover:opacity-80 transition-opacity">
+<div class="w-14 h-14 rounded-full bg-gradient-to-br from-wood-dark to-charcoal-dark border border-outline-variant flex items-center justify-center shadow-md shadow-brown">
+<span class="material-symbols-outlined text-primary text-[28px]" style="font-variation-settings: 'FILL' 1;">group</span>
+</div>
+<span class="font-caption-sm text-caption-sm text-parchment-tan">Bạn Bè</span>
+</div>
+<div class="flex flex-col items-center gap-xs cursor-pointer hover:opacity-80 transition-opacity">
+<div class="w-14 h-14 rounded-full bg-gradient-to-br from-wood-dark to-charcoal-dark border border-outline-variant flex items-center justify-center shadow-md shadow-brown">
+<span class="material-symbols-outlined text-accent-gold text-[28px]" style="font-variation-settings: 'FILL' 1;">leaderboard</span>
+</div>
+<span class="font-caption-sm text-caption-sm text-parchment-tan">Bảng XH</span>
+</div>
+<div class="flex flex-col items-center gap-xs cursor-pointer hover:opacity-80 transition-opacity">
+<div class="w-14 h-14 rounded-full bg-gradient-to-br from-wood-dark to-charcoal-dark border border-outline-variant flex items-center justify-center shadow-md shadow-brown">
+<span class="material-symbols-outlined text-tertiary text-[28px]" style="font-variation-settings: 'FILL' 1;">apartment</span>
+</div>
+<span class="font-caption-sm text-caption-sm text-parchment-tan">Kỳ Xã</span>
+</div>
+<div class="flex flex-col items-center gap-xs cursor-pointer hover:opacity-80 transition-opacity">
+<div class="w-14 h-14 rounded-full bg-gradient-to-br from-wood-dark to-charcoal-dark border border-outline-variant flex items-center justify-center shadow-md shadow-brown">
+<span class="material-symbols-outlined text-secondary text-[28px]" style="font-variation-settings: 'FILL' 1;">emoji_events</span>
+</div>
+<span class="font-caption-sm text-caption-sm text-parchment-tan">Giải Đấu</span>
+</div>
+</section>
+<!-- Featured Section -->
+<section class="grid grid-cols-1 md:grid-cols-2 gap-base">
+<!-- Tàn Cục Thách Đấu -->
+<div class="bg-ivory-panel rounded-xl shadow-brown shadow-md p-md flex flex-row items-center gap-base relative overflow-hidden">
+<div class="absolute right-0 bottom-0 opacity-10 pointer-events-none">
+<span class="material-symbols-outlined text-[100px] text-wood-dark">extension</span>
+</div>
+<div class="w-20 h-20 bg-wood-light rounded-lg border-2 border-wood-dark flex items-center justify-center relative shadow-sm overflow-hidden flex-shrink-0">
+<div class="grid grid-cols-3 grid-rows-3 w-full h-full opacity-50 border-r border-b border-wood-dark">
+<div class="border-t border-l border-wood-dark"></div><div class="border-t border-l border-wood-dark"></div><div class="border-t border-l border-wood-dark"></div>
+<div class="border-t border-l border-wood-dark"></div><div class="border-t border-l border-wood-dark"></div><div class="border-t border-l border-wood-dark"></div>
+<div class="border-t border-l border-wood-dark"></div><div class="border-t border-l border-wood-dark"></div><div class="border-t border-l border-wood-dark"></div>
+</div>
+<div class="absolute w-6 h-6 rounded-full bg-vermilion-red border border-wood-dark shadow-sm top-2 left-2 flex justify-center items-center"><span class="font-title-lg text-[10px] text-ivory-panel leading-none mt-[2px]">帥</span></div>
+<div class="absolute w-6 h-6 rounded-full bg-ink-black border border-wood-dark shadow-sm bottom-2 right-2 flex justify-center items-center"><span class="font-title-lg text-[10px] text-ivory-panel leading-none mt-[2px]">將</span></div>
+</div>
+<div class="flex-1 z-10">
+<h3 class="font-heading-md text-heading-md text-wood-dark mb-1">Tàn Cục Thách Đấu</h3>
+<p class="font-caption-sm text-caption-sm text-parchment-tan">Bài số 1042 • Đang mở</p>
+<div class="mt-2 flex items-center gap-2">
+<span class="material-symbols-outlined text-vermilion-red text-[16px]">local_fire_department</span>
+<span class="font-caption-sm text-caption-sm text-wood-dark font-semibold">1,245 người đã thử</span>
+</div>
+</div>
+<button class="z-10 bg-gradient-to-b from-wood-dark to-charcoal-dark text-accent-gold font-button-text text-caption-sm py-1 px-3 rounded-full hover:opacity-90 active:scale-95 transition-all shadow-sm border border-outline-variant">Giải</button>
+</div>
+<!-- Ván Đấu Nổi Bật -->
+<div class="bg-gradient-to-br from-surface-container-high to-surface-container-lowest rounded-xl shadow-brown shadow-md p-md border border-outline-variant flex flex-col justify-between relative overflow-hidden">
+<div class="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1518659139265-2dc2112be3e3?ixlib=rb-4.0.3&amp;ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&amp;auto=format&amp;fit=crop&amp;w=800&amp;q=80')] bg-cover bg-center opacity-10" data-alt="A textured, moody ink-wash painting style abstract background. Subtle swirling shapes in deep charcoal and muted brown tones evoke a sense of ancient mystery and high-stakes strategy, typical of classic Asian art, creating a subtle backdrop for a prominent UI card without distracting from the text."></div>
+<div class="flex items-center gap-2 mb-3 z-10">
+<span class="material-symbols-outlined text-accent-gold text-[18px]">visibility</span>
+<h3 class="font-heading-md text-heading-md text-on-surface">Ván Đấu Nổi Bật</h3>
+<span class="ml-auto bg-vermilion-red text-ivory-panel text-[10px] px-2 py-0.5 rounded-sm font-bold tracking-wider uppercase">Live</span>
+</div>
+<div class="flex items-center justify-between z-10 w-full mb-2">
+<div class="flex flex-col items-center">
+<img alt="Player 1" class="w-12 h-12 rounded-full border-2 border-vermilion-red object-cover" data-alt="A square, close-up portrait avatar of a young, intense-looking man with dark hair, lit professionally against a simple grey background. The image is cropped tightly to the face to serve as a user profile picture in a high-end UI design, evoking a serious and competitive mood." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDoUdhAe-psz1mzjIpBAzPCrpvr90sgHJb4vBaCWXmfIVX46CrbO2kecoLL-_tkZH_YpRS3p4M92KzEswA_6KiX54HJpWazCGrZZTE-37nNwBOeYo0-l6HZsd9ygDoU1RAeCSC2sR8KhVHhuCq5jwOYaXnhuAX4EK4sUbzvcDSKlhGkUJtl0Q51rOC-KavhCW2tfJnHEOFxZ5wLybIrJ7MQ_2E6-vEJnROhMCltvXrKELvo2qcZbWh0SOx2a7FNtfFk7TgfS0kXV5mg"/>
+<span class="font-body-md text-caption-sm text-on-surface mt-1 truncate w-16 text-center">Trần Lê</span>
+<span class="font-mono-timer text-caption-sm text-parchment-tan">ELO 2150</span>
+</div>
+<div class="flex flex-col items-center justify-center">
+<span class="font-display-calligraphy text-heading-md text-accent-gold italic">VS</span>
+<span class="font-caption-sm text-[10px] text-outline mt-1">Nước 42</span>
+</div>
+<div class="flex flex-col items-center">
+<img alt="Player 2" class="w-12 h-12 rounded-full border-2 border-ink-black object-cover" data-alt="A square, close-up portrait avatar of a confident woman with short dark hair, warmly lit against a soft, blurred background. The image serves as a clean, professional user profile picture for an elegant app interface, emphasizing approachability yet focused intensity suitable for a strategy game player." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBsXGPnkkPMcJ3JV6G4ORUxooaLA7XuIxMS-wSqbIxQr8LjYGVt292uXVhhDUHLN-pjRncLbtcethgVPg68Aj_2rh_aehAm7tVn6FRp5-5YPsNSD-gaKqdlL96tw6YdntWioZFr8CG8kbkarkyBh_CX211GW1dg7xHMD7c7BSvJwAzKXhGP_slX9Z349nAv3F9E1vm9ZCE7uH4GWO6VkVt3QL6bU_2j1YM4fdjKvjPKwUitMumxgt9jU0GQOH6GKBxcT1-4ZUyCKLjU"/>
+<span class="font-body-md text-caption-sm text-on-surface mt-1 truncate w-16 text-center">Mai Anh</span>
+<span class="font-mono-timer text-caption-sm text-parchment-tan">ELO 2180</span>
+</div>
+</div>
+<button class="z-10 w-full bg-wood-dark hover:bg-wood-light text-on-surface font-button-text text-body-md py-2 rounded-lg border border-accent-gold transition-colors flex items-center justify-center gap-2">
+<span class="material-symbols-outlined text-[18px]">play_arrow</span>
+                    Xem Ngay
+                </button>
+</div>
+</section><section class="mt-2">
+<div class="flex justify-between items-end mb-sm">
+<h2 class="font-title-lg text-title-lg text-on-surface border-l-4 border-accent-gold pl-2 leading-none">Livestream</h2>
+<a class="font-button-text text-caption-sm text-accent-gold hover:text-wood-light transition-colors" href="#">Xem tất cả</a>
+</div>
+<div class="flex overflow-x-auto gap-2 mb-sm hide-scrollbar">
+<button class="whitespace-nowrap px-4 py-1.5 rounded-full bg-accent-gold text-ink-black font-button-text text-caption-sm border border-accent-gold shadow-sm">Tất cả</button>
+<button class="whitespace-nowrap px-4 py-1.5 rounded-full bg-[#5C3A1E88] text-ivory-panel font-button-text text-caption-sm border border-accent-gold/50 hover:bg-wood-dark transition-colors">Kỳ Thủ</button>
+<button class="whitespace-nowrap px-4 py-1.5 rounded-full bg-[#5C3A1E88] text-ivory-panel font-button-text text-caption-sm border border-accent-gold/50 hover:bg-wood-dark transition-colors">Kỳ Sư</button>
+<button class="whitespace-nowrap px-4 py-1.5 rounded-full bg-[#5C3A1E88] text-ivory-panel font-button-text text-caption-sm border border-accent-gold/50 hover:bg-wood-dark transition-colors">Đại Sư</button>
+<button class="whitespace-nowrap px-4 py-1.5 rounded-full bg-[#5C3A1E88] text-ivory-panel font-button-text text-caption-sm border border-accent-gold/50 hover:bg-wood-dark transition-colors">Quốc Tế Đại Sư</button>
+</div>
+<div class="flex overflow-x-auto gap-4 pb-2 hide-scrollbar snap-x">
+<!-- Livestream Card 1 -->
+<div class="snap-start flex-shrink-0 w-64 bg-ivory-panel rounded-xl shadow-brown shadow-md overflow-hidden flex flex-col border border-outline-variant/30">
+<div class="h-36 w-full bg-wood-dark overflow-hidden relative">
+<img alt="Live Match 1" class="w-full h-full object-cover opacity-90" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDFHZuGKX2dRhU3q8OjpkAa1gS7xgXrDnawjY9MwfsbG3zsagBY5UXGhnlyGXTQuSeSUi4VCdAqUmlnM6HgLUMTIqksXRxGuX28NOJs96pmyMsqKqy89QxDNGBe-Cln4nySe6tQtbP05NQEUoWMaxoA7W1e3I9bQxrWDiIlJaEC7hU0IG2QlVhoN1sDlSu-oXiNwwtcm_bxplLUckoqeQ9BHO_TOkElgsnYf3aaeCDAsS6PQ4b_alQnGeajK-oLbNdaYkFw3ymasHF9"/>
+<div class="absolute top-2 left-2 bg-vermilion-red text-white text-[10px] px-2 py-0.5 rounded-sm font-bold uppercase tracking-wider flex items-center gap-1">
+<span class="w-1.5 h-1.5 bg-white rounded-full animate-pulse"></span> LIVE
+        </div>
+<div class="absolute bottom-2 right-2 bg-black/60 backdrop-blur-sm text-white text-[10px] px-2 py-1 rounded-md flex items-center gap-1">
+<span class="material-symbols-outlined text-[12px]">visibility</span> 1.2k
+        </div>
+</div>
+<div class="p-3 flex items-center gap-3">
+<img alt="Streamer" class="w-8 h-8 rounded-full border border-wood-dark object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDLYAKFws9qdjsgzWMyjJFCbweqm6D6449Yp3sPahomWoR-gxhOqYp-G4AgiX64Ihbcb0mf3Q5B1FxQc8e9Wi1kQ0F_cojSPRn304wWrYEkCMDYP1d8ui0wCXcF6Ah9ADzQMXARSFwFsewLhSb1tErmGwRYLNaTduxaX6NbPmKe05MysVBYbIUO3yAMpGzdbsUJ4aSZIFuNqkin4BSPSFGAtu0boSBU5YBLaEmzDI5AGvkFrvtFEtvnIXlqIgt-UseL0QI7pZcQZYnH"/>
+<div class="flex flex-col overflow-hidden">
+<h3 class="font-heading-md text-body-md text-wood-dark font-bold truncate">Đại Sư Tùng Lâm</h3>
+<p class="font-caption-sm text-caption-sm text-parchment-tan truncate">Phân tích cạm bẫy khai cuộc</p>
+</div>
+</div>
+</div>
+<!-- Livestream Card 2 -->
+<div class="snap-start flex-shrink-0 w-64 bg-ivory-panel rounded-xl shadow-brown shadow-md overflow-hidden flex flex-col border border-outline-variant/30">
+<div class="h-36 w-full bg-wood-dark overflow-hidden relative">
+<img alt="Live Match 2" class="w-full h-full object-cover opacity-90" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDoUdhAe-psz1mzjIpBAzPCrpvr90sgHJb4vBaCWXmfIVX46CrbO2kecoLL-_tkZH_YpRS3p4M92KzEswA_6KiX54HJpWazCGrZZTE-37nNwBOeYo0-l6HZsd9ygDoU1RAeCSC2sR8KhVHhuCq5jwOYaXnhuAX4EK4sUbzvcDSKlhGkUJtl0Q51rOC-KavhCW2tfJnHEOFxZ5wLybIrJ7MQ_2E6-vEJnROhMCltvXrKELvo2qcZbWh0SOx2a7FNtfFk7TgfS0kXV5mg"/>
+<div class="absolute top-2 left-2 bg-vermilion-red text-white text-[10px] px-2 py-0.5 rounded-sm font-bold uppercase tracking-wider flex items-center gap-1">
+<span class="w-1.5 h-1.5 bg-white rounded-full animate-pulse"></span> LIVE
+        </div>
+<div class="absolute bottom-2 right-2 bg-black/60 backdrop-blur-sm text-white text-[10px] px-2 py-1 rounded-md flex items-center gap-1">
+<span class="material-symbols-outlined text-[12px]">visibility</span> 850
+        </div>
+</div>
+<div class="p-3 flex items-center gap-3">
+<img alt="Streamer" class="w-8 h-8 rounded-full border border-wood-dark object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAVD9RiXxLVFPnpYF-k2Xr6W9OJy1HIictom5cbSz1JudTiinYZjDNWN0sHyksbK3CKb4DGHBYL5vBA47gU1Yg7gVKnQ3vCmOrhjOlirMFkVAQBgPuccQop8_i-jj_SAazOpYE2gAkh4_OZvo_zQr-uybEyqi3I3SqitJiuavWDmIK6l9ArVzE4hE-lB5MDmRrY5sUbRYkJUd5pwnvNUEtFcmLWooy9H2QZuiFpwtcdPj3774l3t5h2hCL7fs2gwHRL4mA2TctD9s2W"/>
+<div class="flex flex-col overflow-hidden">
+<h3 class="font-heading-md text-body-md text-wood-dark font-bold truncate">Kỳ Thủ Vương Nhất</h3>
+<p class="font-caption-sm text-caption-sm text-parchment-tan truncate">Leo rank thần tốc đêm nay</p>
+</div>
+</div>
+</div>
+</div>
+</section><section class="mt-2">
+<div class="flex justify-between items-end mb-sm">
+<h2 class="font-title-lg text-title-lg text-on-surface border-l-4 border-accent-gold pl-2 leading-none">Tin tức</h2>
+<a class="font-button-text text-caption-sm text-accent-gold hover:text-wood-light transition-colors" href="#">Xem tất cả</a>
+</div>
+<div class="flex overflow-x-auto gap-4 pb-2 hide-scrollbar snap-x">
+<!-- News Card 1 -->
+<div class="snap-start flex-shrink-0 w-64 bg-ivory-panel rounded-xl shadow-brown shadow-md overflow-hidden flex flex-col border border-outline-variant/30">
+<div class="h-32 w-full bg-wood-dark overflow-hidden">
+<img alt="Giải đấu News" class="w-full h-full object-cover opacity-90" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAcol0qV6vhXy9cPs1DtsbKQy4L5nyj-09pBak_aIXKdf70bwDhrUVsmQupP4n4pXw8_FL0XUwSgPxho4ch0NSEE5ypvNwU66JKJ7cECkdvhf3AP53NVdlCPl2w_8RQE0tA_6cGidBaXkD359-dH2FxO8zMi6JnmDiZmLT1RWtFP44wCjPzILOqqxG_pz3Cv5-Kq1ejvmW7FYBsCeEZaRCrA7NJNJPV85LoGjtOxe5IFabxn1AIRahdPhX4X03BEQyrsUCJcvhqnenQ"/>
+</div>
+<div class="p-3 flex flex-col gap-1">
+<h3 class="font-heading-md text-body-md text-wood-dark font-bold line-clamp-2 leading-tight">Giải đấu Thiên Thần Tự Do sắp khởi tranh</h3>
+<span class="font-caption-sm text-caption-sm text-parchment-tan mt-1 flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]">schedule</span> 2 giờ trước
+                </span>
+</div>
+</div>
+<!-- News Card 2 -->
+<div class="snap-start flex-shrink-0 w-64 bg-ivory-panel rounded-xl shadow-brown shadow-md overflow-hidden flex flex-col border border-outline-variant/30">
+<div class="h-32 w-full bg-wood-dark overflow-hidden">
+<img alt="Update News" class="w-full h-full object-cover opacity-90" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBqME7t7oRPn90rNbiEkC-veL9D-6fyspJWxyiyNSPFxgIk9EoIjCO0y-Oy3HwsOnzCzWuSpx7xh7Ql1nzLDu67wE6nWrekcN-IqobTXA0iAe9R1GpJ74dxpznG9dIZcXvVe2MXAVQuqzhmEKndX-qfldNYpy4vp4VTuRR_YTngKEHSPF9NTJc4zDDrTAKFtO5zCjQOENMdAAVeoDgFeNju2EsKn93WeruHvTlyJAJlRFXqeAt3L-JopX04kVR0KIV5xONOfoGl-sUw"/>
+</div>
+<div class="p-3 flex flex-col gap-1">
+<h3 class="font-heading-md text-body-md text-wood-dark font-bold line-clamp-2 leading-tight">Cập nhật phiên bản mới 1.2: Tối ưu trải nghiệm</h3>
+<span class="font-caption-sm text-caption-sm text-parchment-tan mt-1 flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]">schedule</span> 5 giờ trước
+                </span>
+</div>
+</div>
+<!-- News Card 3 -->
+<div class="snap-start flex-shrink-0 w-64 bg-ivory-panel rounded-xl shadow-brown shadow-md overflow-hidden flex flex-col border border-outline-variant/30">
+<div class="h-32 w-full bg-wood-dark overflow-hidden">
+<img alt="Community News" class="w-full h-full object-cover opacity-90" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBDi-Un9BrVH9Btlr5bbCi3IkRxBbHNbIYS-FMZDZ_mDZzlnaNOGPypWtvcinmEbPKZ04mw1mmKQoy0fxX00anEmAcKHT4nU_2w4kaUvBtuL2Wkia6f6QdUt-l_TbsQP-wte_uDJ5hkP9zbXq7tIIju9wRVwsx_OIclVdo8KLwU4YM_cHGjezymLaEwkxUVh4EWzoEUiqwNDekag6PWC1b7ew0lEqaXJhp6NcbAS4hUy37Ra4919IZPxUv5Fp6TueX1Chvn2TvKv-Bc"/>
+</div>
+<div class="p-3 flex flex-col gap-1">
+<h3 class="font-heading-md text-body-md text-wood-dark font-bold line-clamp-2 leading-tight">Phỏng vấn kỳ thủ Lão Tử về bí quyết thắng trận</h3>
+<span class="font-caption-sm text-caption-sm text-parchment-tan mt-1 flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]">schedule</span> 1 ngày trước
+                </span>
+</div>
+</div>
+</div>
+</section>
+<!-- Leaderboard Preview -->
+<section class="mt-2">
+<div class="flex justify-between items-end mb-sm">
+<h2 class="font-title-lg text-title-lg text-on-surface border-l-4 border-accent-gold pl-2 leading-none">Bảng Xếp Hạng</h2>
+<a class="font-button-text text-caption-sm text-accent-gold hover:text-wood-light transition-colors" href="#">Xem tất cả</a>
+</div>
+<div class="bg-surface-container-high rounded-xl border border-outline-variant shadow-md p-2 flex flex-col gap-1">
+<!-- Top 1 -->
+<div class="flex items-center gap-sm p-2 bg-gradient-to-r from-wood-dark/40 to-transparent rounded-lg relative overflow-hidden">
+<div class="w-6 text-center font-display-calligraphy text-title-lg text-accent-gold drop-shadow-md z-10">1</div>
+<img alt="Top 1 Avatar" class="w-10 h-10 rounded-full border-2 border-accent-gold z-10 object-cover" data-alt="A small, circular avatar portrait of an older, distinguished Asian man with grey hair, conveying a sense of mastery and wisdom. The lighting is soft and professional, suitable for a top-ranking player in a strategy game app, set against a dark, neutral background." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDLYAKFws9qdjsgzWMyjJFCbweqm6D6449Yp3sPahomWoR-gxhOqYp-G4AgiX64Ihbcb0mf3Q5B1FxQc8e9Wi1kQ0F_cojSPRn304wWrYEkCMDYP1d8ui0wCXcF6Ah9ADzQMXARSFwFsewLhSb1tErmGwRYLNaTduxaX6NbPmKe05MysVBYbIUO3yAMpGzdbsUJ4aSZIFuNqkin4BSPSFGAtu0boSBU5YBLaEmzDI5AGvkFrvtFEtvnIXlqIgt-UseL0QI7pZcQZYnH"/>
+<div class="flex-1 z-10">
+<div class="font-body-md text-body-md text-on-surface font-semibold flex items-center gap-1">Lão Tử <span class="material-symbols-outlined text-[14px] text-accent-gold" style="font-variation-settings: 'FILL' 1;">verified</span></div>
+<div class="font-caption-sm text-caption-sm text-parchment-tan">Hà Nội • Kiện Tướng</div>
+</div>
+<div class="font-mono-timer text-body-md text-accent-gold font-bold z-10">2850</div>
+</div>
+<!-- Top 2 -->
+<div class="flex items-center gap-sm p-2 rounded-lg border-b border-surface-container-highest">
+<div class="w-6 text-center font-display-calligraphy text-heading-md text-surface-tint">2</div>
+<img alt="Top 2 Avatar" class="w-10 h-10 rounded-full border-2 border-outline z-10 object-cover" data-alt="A circular avatar of a middle-aged man with short hair and glasses, looking thoughtful and intelligent. The portrait is sharply focused with balanced lighting, ideal for representing a highly skilled competitor in a sophisticated gaming interface." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAVD9RiXxLVFPnpYF-k2Xr6W9OJy1HIictom5cbSz1JudTiinYZjDNWN0sHyksbK3CKb4DGHBYL5vBA47gU1Yg7gVKnQ3vCmOrhjOlirMFkVAQBgPuccQop8_i-jj_SAazOpYE2gAkh4_OZvo_zQr-uybEyqi3I3SqitJiuavWDmIK6l9ArVzE4hE-lB5MDmRrY5sUbRYkJUd5pwnvNUEtFcmLWooy9H2QZuiFpwtcdPj3774l3t5h2hCL7fs2gwHRL4mA2TctD9s2W"/>
+<div class="flex-1 z-10">
+<div class="font-body-md text-body-md text-on-surface">Vương Nhất</div>
+</div>
+<div class="font-mono-timer text-body-md text-on-surface z-10">2780</div>
+</div>
+<!-- Top 3 -->
+<div class="flex items-center gap-sm p-2 rounded-lg">
+<div class="w-6 text-center font-display-calligraphy text-heading-md text-outline">3</div>
+<img alt="Top 3 Avatar" class="w-10 h-10 rounded-full border-2 border-outline-variant z-10 object-cover" data-alt="A circular profile picture showing a young woman looking directly at the camera with a calm, focused expression. The lighting highlights her features naturally against an indistinct background, providing a clean, high-quality user icon for a modern app design." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDI48JXLfNX4-Fj5yXUSRxTmSoTVcNEDvDWyWDrmAYzrnrjAVifX6oAnLS1IeHNO-36_2ieyXWeAiwkHSJEgakRVDmUQgq2DNmKiA5CbMIredHSCTR4zNd4BliUDJDzEUD2fL-1emcO_GQp6WCrpp6WYc_Dkq-l0nP-VUgV-bCVx5OiLKfQwah7yPBv0z3o2vwZ_EXR-sMlmdTU0numDFbJXRG4tpApR4gAnHQG1wBTJrgLpDWRnDCEu93RSkaJgg5E9asn59wUIK_y"/>
+<div class="flex-1 z-10">
+<div class="font-body-md text-body-md text-on-surface">Tiểu Đồng</div>
+</div>
+<div class="font-mono-timer text-body-md text-on-surface z-10">2745</div>
+</div>
+</div>
+</section>
+<!-- Nearby Players -->
+<section class="mt-2">
+<h2 class="font-title-lg text-title-lg text-on-surface border-l-4 border-wood-light pl-2 leading-none mb-sm">Kỳ thủ gần bạn</h2>
+<div class="flex overflow-x-auto gap-4 pb-4 hide-scrollbar snap-x">
+<!-- Player Card 1 -->
+<div class="snap-start flex-shrink-0 w-32 bg-surface-container-high rounded-lg p-3 flex flex-col items-center border border-outline-variant shadow-sm relative overflow-hidden group">
+<div class="absolute top-1 right-1 flex items-center gap-0.5 bg-background/80 rounded px-1">
+<span class="material-symbols-outlined text-[10px] text-teal-success">location_on</span>
+<span class="font-caption-sm text-[10px] text-on-surface">2km</span>
+</div>
+<img alt="Nearby Player" class="w-14 h-14 rounded-full border border-wood-light object-cover mb-2" data-alt="A small circular avatar of a young man with a casual, friendly smile outdoors, used as a 'nearby player' indicator in a mobile UI." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDWmXUP09dCzYcuM_ztDY6cR-7hXpRRoD8_cadVyvRqTLM-48FNqI1UleoTH4yalZpg514omVJQd935-KK7jDaSdhs7Bou4Q_wWzqERwFseb-EjdSB3V6UVOiq5_i3x6NK509FKOdgoxR2Xdxo5HBqs_t8z8FvBdlXk0Fhtjil2Ab90kmrdYyieYrfx8OiWWYESnm9oPXYREPnk50N5tmW6iMVRoVar45CedtRaT1EoQ6C8-g2tpPudWhUKOJ8h8Iu-NbbxUgxfBLXy"/>
+<span class="font-body-md text-caption-sm text-on-surface font-semibold truncate w-full text-center">Tuấn Dũng</span>
+<span class="font-caption-sm text-[10px] text-parchment-tan mb-3">ELO 1500</span>
+<button class="w-full bg-gradient-to-r from-wood-dark to-primary-container hover:from-accent-gold hover:to-wood-light text-ivory-panel font-button-text text-[12px] py-1 rounded transition-colors shadow flex items-center justify-center gap-1">
+<span class="material-symbols-outlined text-[14px]">person_add</span> Kết bạn
+                     </button>
+</div>
+<!-- Player Card 2 -->
+<div class="snap-start flex-shrink-0 w-32 bg-surface-container-high rounded-lg p-3 flex flex-col items-center border border-outline-variant shadow-sm relative overflow-hidden group">
+<div class="absolute top-1 right-1 flex items-center gap-0.5 bg-background/80 rounded px-1">
+<span class="material-symbols-outlined text-[10px] text-teal-success">location_on</span>
+<span class="font-caption-sm text-[10px] text-on-surface">5km</span>
+</div>
+<img alt="Nearby Player" class="w-14 h-14 rounded-full border border-wood-light object-cover mb-2" data-alt="A small circular profile image of a young woman with long hair looking confidently, serving as a social contact suggestion in an application interface." src="https://lh3.googleusercontent.com/aida-public/AB6AXuC9mqRjwE4GTEp5SFFz3K1OH03jkLvaJqJ9gi1JriaiY9UYeBpgMAdceDrfxNfcFoQhg9HreDRBDkGnqdYgaeWeBgxNWx2Qj6q0k29Z65LSO2bbK8Gm4f2WXH4HG4CUH_kzQy614VLYcQ5o-1qVqCVbBuoaxgCLMVN5eEF-7bUbPjp0xKlDYGeY3ppms8A9MWD54gqMwQ9dkpKPTRlxsj83lUfy5wd3Phg3jqBjGKBcAqn4OOfuLkh9msaT9giRmCBC8zK_ydMTlbpY"/>
+<span class="font-body-md text-caption-sm text-on-surface font-semibold truncate w-full text-center">Lan Phương</span>
+<span class="font-caption-sm text-[10px] text-parchment-tan mb-3">ELO 1820</span>
+<button class="w-full bg-gradient-to-r from-wood-dark to-primary-container hover:from-accent-gold hover:to-wood-light text-ivory-panel font-button-text text-[12px] py-1 rounded transition-colors shadow flex items-center justify-center gap-1">
+<span class="material-symbols-outlined text-[14px]">person_add</span> Kết bạn
+                     </button>
+</div>
+<!-- Player Card 3 -->
+<div class="snap-start flex-shrink-0 w-32 bg-surface-container-high rounded-lg p-3 flex flex-col items-center border border-outline-variant shadow-sm relative overflow-hidden group">
+<div class="absolute top-1 right-1 flex items-center gap-0.5 bg-background/80 rounded px-1">
+<span class="material-symbols-outlined text-[10px] text-teal-success">location_on</span>
+<span class="font-caption-sm text-[10px] text-on-surface">8km</span>
+</div>
+<img alt="Nearby Player" class="w-14 h-14 rounded-full border border-wood-light object-cover mb-2" data-alt="A small circular avatar of an athletic-looking man in a bright setting, cropped close to the face, used for a 'discover players' feature." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAcS4j1qBK27tSVtIBROR__RO2763jaJ1tCQjZmhgM6z05ELJJrNkz-3vzcdsgLxI8Biqu_HMM06L45lGGi0X6w6lz9J_BBtX_p_L6L6Fbu5S3WTi00iMkePnnPn8kV1WZKW0JAOO8pvT4IZZrPeQObTiE_iLRPCvrbgHcm1-vWvOCxm5rOxJJGw8K7EsLxkXm1USp6ri0YJ5XlKQbBFnfSMIASbFYSQJzp9q8E6niNKy-hmcLuShpiYxPfgORypJecS9XpG-hVgLUY"/>
+<span class="font-body-md text-caption-sm text-on-surface font-semibold truncate w-full text-center">Hoàng Minh</span>
+<span class="font-caption-sm text-[10px] text-parchment-tan mb-3">ELO 1200</span>
+<button class="w-full bg-gradient-to-r from-wood-dark to-primary-container hover:from-accent-gold hover:to-wood-light text-ivory-panel font-button-text text-[12px] py-1 rounded transition-colors shadow flex items-center justify-center gap-1">
+<span class="material-symbols-outlined text-[14px]">person_add</span> Kết bạn
+                     </button>
+</div>
+</div>
+</section>
+</main>
+<!-- BottomNavBar -->
+<nav class="bg-wood-dark dark:bg-surface-container-low fixed bottom-0 w-full z-50 bg-wood-dark shadow-brown shadow-lg fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-base py-md md:hidden">
+<a class="flex flex-col items-center justify-center text-parchment-tan opacity-70 hover:text-wood-light" href="#">
+<span class="material-symbols-outlined text-[24px]">home</span>
+<span class="font-button-text text-caption-sm mt-1">Trang Chủ</span>
+</a>
+<a class="flex flex-col items-center justify-center text-parchment-tan opacity-70 hover:text-wood-light" href="#">
+<span class="material-symbols-outlined text-[24px]">menu_book</span>
+<span class="font-button-text text-caption-sm mt-1">Học Tập</span>
+</a>
+<a class="flex flex-col items-center justify-center text-parchment-tan opacity-70 hover:text-wood-light" href="#">
+<span class="material-symbols-outlined text-[24px]">sports_esports</span>
+<span class="font-button-text text-caption-sm mt-1">Đối Đầu</span>
+</a>
+<a class="flex flex-col items-center justify-center text-accent-gold transform -translate-y-1 transition-all duration-300 Active: scale-95 transition-all" href="#">
+<span class="material-symbols-outlined text-[24px]" style="font-variation-settings: 'FILL' 1;">groups</span>
+<span class="font-button-text text-caption-sm mt-1">Cộng Đồng</span>
+</a>
+<a class="flex flex-col items-center justify-center text-parchment-tan opacity-70 hover:text-wood-light" href="#">
+<span class="material-symbols-outlined text-[24px]">person</span>
+<span class="font-button-text text-caption-sm mt-1">Hồ Sơ</span>
+</a>
+</nav>
+<!-- Desktop Nav Replacement (Hidden on mobile) -->
+<div class="hidden md:flex fixed top-0 w-full z-40 justify-center gap-8 py-2 pointer-events-none mt-16">
+<span class="font-button-text text-body-md text-outline-variant italic">Navigation is contained within TopAppBar on Web</span>
+</div>
+</body></html>

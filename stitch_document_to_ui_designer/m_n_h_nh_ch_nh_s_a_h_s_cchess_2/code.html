@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="vi"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>CChess - Chỉnh sửa hồ sơ</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif:wght@400;600;700&amp;family=Courier+Prime:wght@700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-secondary-fixed": "#291800",
+                        "error-container": "#93000a",
+                        "outline": "#9d8e84",
+                        "on-surface-variant": "#d4c3b9",
+                        "surface-container-high": "#2e2926",
+                        "tertiary-container": "#1c484f",
+                        "primary-container": "#5c3a1e",
+                        "surface-container-lowest": "#110d0b",
+                        "surface-container": "#231f1c",
+                        "vermilion-red": "#8B0000",
+                        "tertiary-fixed": "#beeaf3",
+                        "inverse-primary": "#7c5638",
+                        "charcoal-dark": "#3A2010",
+                        "inverse-surface": "#eae1dc",
+                        "secondary": "#ecbf7e",
+                        "on-secondary-fixed-variant": "#5f410a",
+                        "inverse-on-surface": "#342f2c",
+                        "accent-gold": "#C8960C",
+                        "secondary-fixed-dim": "#ecbf7e",
+                        "on-tertiary": "#03363d",
+                        "background": "#161310",
+                        "ivory-panel": "#F5E6C8",
+                        "on-tertiary-container": "#8bb6be",
+                        "secondary-container": "#5f410a",
+                        "deep-navy-black": "#1A3A5C",
+                        "secondary-fixed": "#ffddb0",
+                        "primary-fixed-dim": "#efbc97",
+                        "on-secondary": "#442b00",
+                        "on-primary": "#48290e",
+                        "error": "#ffb4ab",
+                        "parchment-tan": "#7D5A3C",
+                        "on-error-container": "#ffdad6",
+                        "wood-dark": "#5C3A1E",
+                        "ink-black": "#2C1810",
+                        "on-primary-container": "#d5a481",
+                        "tertiary-fixed-dim": "#a3ced6",
+                        "shadow-brown": "#5C3A1E33",
+                        "on-background": "#eae1dc",
+                        "outline-variant": "#50443d",
+                        "surface-container-highest": "#393431",
+                        "primary-fixed": "#ffdcc4",
+                        "on-tertiary-fixed": "#001f24",
+                        "on-surface": "#eae1dc",
+                        "on-primary-fixed-variant": "#623f22",
+                        "surface-bright": "#3d3835",
+                        "on-error": "#690005",
+                        "surface-dim": "#161310",
+                        "teal-success": "#4A7C59",
+                        "on-primary-fixed": "#2f1500",
+                        "surface": "#161310",
+                        "primary": "#efbc97",
+                        "tertiary": "#a3ced6",
+                        "on-secondary-container": "#d9ae6e",
+                        "surface-container-low": "#1f1b18",
+                        "on-tertiary-fixed-variant": "#214d54",
+                        "surface-variant": "#393431",
+                        "surface-tint": "#efbc97",
+                        "wood-light": "#D4A96A"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "xxl": "48px",
+                        "sm": "8px",
+                        "md": "12px",
+                        "lg": "24px",
+                        "base": "16px",
+                        "xs": "4px",
+                        "xl": "32px"
+                    },
+                    "fontFamily": {
+                        "body-md": ["Noto Serif"],
+                        "title-lg": ["Noto Serif"],
+                        "display-calligraphy": ["Noto Serif"],
+                        "mono-timer": ["Courier Prime"],
+                        "caption-sm": ["Noto Serif"],
+                        "heading-md": ["Noto Serif"],
+                        "button-text": ["Noto Serif"]
+                    },
+                    "fontSize": {
+                        "body-md": ["14px", { "lineHeight": "20px", "fontWeight": "400" }],
+                        "title-lg": ["24px", { "lineHeight": "32px", "fontWeight": "600" }],
+                        "display-calligraphy": ["32px", { "lineHeight": "40px", "fontWeight": "700" }],
+                        "mono-timer": ["18px", { "lineHeight": "24px", "fontWeight": "700" }],
+                        "caption-sm": ["12px", { "lineHeight": "16px", "fontWeight": "400" }],
+                        "heading-md": ["18px", { "lineHeight": "24px", "fontWeight": "600" }],
+                        "button-text": ["16px", { "lineHeight": "20px", "letterSpacing": "0.5px", "fontWeight": "600" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body {
+            background-color: theme('colors.background');
+            color: theme('colors.on-background');
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+</head>
+<body class="antialiased min-h-screen flex flex-col pb-xxl">
+<!-- TopAppBar -->
+<header class="docked full-width top-0 bg-wood-dark dark:bg-surface-container shadow-brown shadow-md flex justify-between items-center w-full px-base py-sm z-50 bg-gradient-to-b from-wood-dark to-charcoal-dark border-b border-wood-light/20">
+<button class="text-parchment-tan hover:opacity-80 transition-opacity p-sm flex items-center justify-center">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">arrow_back</span>
+</button>
+<h1 class="text-title-lg font-title-lg text-accent-gold tracking-wide">Chỉnh sửa hồ sơ</h1>
+<button class="text-parchment-tan font-button-text text-button-text hover:text-accent-gold transition-colors p-sm">Lưu</button>
+</header>
+<!-- Main Content -->
+<main class="flex-1 w-full max-w-2xl mx-auto px-base py-lg flex flex-col gap-lg">
+<!-- Avatar Section -->
+<section class="flex flex-col items-center justify-center pt-md pb-lg">
+<div class="relative group cursor-pointer">
+<!-- Rank Frame & Avatar Container -->
+<div class="w-[100px] h-[100px] rounded-full p-[3px] bg-gradient-to-br from-accent-gold via-wood-light to-charcoal-dark shadow-brown shadow-lg relative overflow-hidden">
+<img alt="Player Avatar" class="w-full h-full rounded-full object-cover border-2 border-surface-container" data-alt="A macro photograph of an intricate, hand-carved wooden chess piece, depicting a highly detailed traditional Chinese general. The dark, polished wood grain is illuminated by a warm, golden spotlight from above, creating deep, dramatic shadows against a solid black background. The overall mood is serious, intellectual, and highlights the tactile, skeuomorphic aesthetic of fine craftsmanship." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBU2Ehtb72zzHmfA6EesY8SAtDWIVP0KYjmpAs19k-EWLmOB4OpCWIauuH37q77OVE22yyRKpvY4YBBXP5-oTGBPK22maUpsqDJ4It_I1oBbnFOBOkI5ZLJmNkvaD9aF24mCz6wnsaG41CAPtEgz3DHOD_MfJACoDx23c7F46EjXov2Rg8HOJSFKC9actasYrWnsHmMoBM2N8GbSmwUun4Aw1wS6LocXNpEvCxyE6Vs8M9rKeisFJQsrGERBd4Vf7ByIchjXOXznJiC"/>
+<!-- Overlay on hover -->
+<div class="absolute inset-0 rounded-full bg-ink-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+<span class="material-symbols-outlined text-ivory-panel" style="font-variation-settings: 'FILL' 1;">photo_camera</span>
+</div>
+</div>
+<!-- Edit Button below -->
+<button class="mt-sm flex items-center gap-xs text-parchment-tan hover:text-accent-gold transition-colors mx-auto">
+<span class="material-symbols-outlined text-[16px]" style="font-variation-settings: 'FILL' 0;">edit</span>
+<span class="font-caption-sm text-caption-sm">Thay đổi ảnh đại diện</span>
+</button>
+</div>
+</section>
+<!-- Input Fields Card -->
+<section class="bg-ivory-panel text-ink-black rounded-lg p-base shadow-brown shadow-md border border-wood-light/30 flex flex-col gap-base">
+<!-- Nickname -->
+<div class="flex flex-col gap-xs">
+<label class="font-button-text text-caption-sm text-wood-dark font-semibold" for="nickname">Tên kỳ thủ</label>
+<input class="bg-surface-container-lowest border border-outline/40 rounded p-sm font-body-md text-body-md text-on-background focus:border-accent-gold focus:ring-1 focus:ring-accent-gold/50 outline-none transition-all placeholder:text-outline" id="nickname" type="text" value="Thiên Hạ Đệ Nhất"/>
+</div>
+<!-- Bio -->
+<div class="flex flex-col gap-xs">
+<label class="font-button-text text-caption-sm text-wood-dark font-semibold" for="bio">Giới thiệu bản thân</label>
+<textarea class="bg-surface-container-lowest border border-outline/40 rounded p-sm font-body-md text-body-md text-on-background focus:border-accent-gold focus:ring-1 focus:ring-accent-gold/50 outline-none transition-all resize-none placeholder:text-outline" id="bio" placeholder="Nhập vài lời giới thiệu về bạn..." rows="3"></textarea>
+</div>
+<!-- Birthdate -->
+<div class="flex flex-col gap-xs">
+<label class="font-button-text text-caption-sm text-wood-dark font-semibold" for="birthdate">Ngày sinh</label>
+<div class="relative">
+<input class="w-full bg-surface-container-lowest border border-outline/40 rounded p-sm font-body-md text-body-md text-on-background focus:border-accent-gold focus:ring-1 focus:ring-accent-gold/50 outline-none transition-all" id="birthdate" type="date" value="1990-01-01"/>
+</div>
+</div>
+<!-- Region -->
+<div class="flex flex-col gap-xs">
+<label class="font-button-text text-caption-sm text-wood-dark font-semibold" for="region">Khu vực / Tỉnh thành</label>
+<select class="bg-surface-container-lowest border border-outline/40 rounded p-sm font-body-md text-body-md text-on-background focus:border-accent-gold focus:ring-1 focus:ring-accent-gold/50 outline-none transition-all appearance-none cursor-pointer" id="region">
+<option value="hn">Hà Nội</option>
+<option selected="" value="hcm">Hồ Chí Minh</option>
+<option value="dn">Đà Nẵng</option>
+</select>
+</div>
+</section>
+<!-- Account Sections -->
+<section class="flex flex-col gap-sm">
+<!-- Change Password -->
+<button class="w-full bg-surface-container border border-wood-dark/50 rounded-lg p-base flex items-center justify-between hover:bg-surface-container-highest transition-colors shadow-brown shadow-sm group">
+<div class="flex items-center gap-md">
+<div class="w-8 h-8 rounded-full bg-charcoal-dark flex items-center justify-center">
+<span class="material-symbols-outlined text-parchment-tan" style="font-variation-settings: 'FILL' 0;">lock</span>
+</div>
+<span class="font-button-text text-button-text text-on-surface">Thay đổi mật khẩu</span>
+</div>
+<span class="material-symbols-outlined text-outline group-hover:text-accent-gold transition-colors">chevron_right</span>
+</button>
+<!-- Linked Accounts -->
+<div class="w-full bg-surface-container border border-wood-dark/50 rounded-lg p-base flex flex-col gap-md shadow-brown shadow-sm">
+<div class="flex items-center gap-md mb-xs">
+<div class="w-8 h-8 rounded-full bg-charcoal-dark flex items-center justify-center">
+<span class="material-symbols-outlined text-parchment-tan" style="font-variation-settings: 'FILL' 0;">link</span>
+</div>
+<span class="font-button-text text-button-text text-on-surface">Tài khoản liên kết</span>
+</div>
+<div class="flex flex-col gap-sm pl-xl">
+<div class="flex items-center justify-between">
+<span class="font-body-md text-body-md text-on-surface-variant">Facebook</span>
+<button class="font-button-text text-caption-sm text-accent-gold px-sm py-xs border border-accent-gold/30 rounded hover:bg-accent-gold/10 transition-colors">Liên kết</button>
+</div>
+<div class="w-full h-px bg-outline-variant/30"></div>
+<div class="flex items-center justify-between">
+<span class="font-body-md text-body-md text-on-surface-variant">Google</span>
+<span class="font-caption-sm text-caption-sm text-teal-success flex items-center gap-xs">
+<span class="material-symbols-outlined text-[14px]" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+                            Đã liên kết
+                        </span>
+</div>
+</div>
+</div>
+</section>
+<!-- Save Button -->
+<div class="mt-lg">
+<button class="w-full bg-accent-gold text-ink-black font-button-text text-button-text py-md rounded-[24px] shadow-brown shadow-md hover:opacity-90 active:scale-95 transition-all duration-200 flex items-center justify-center gap-sm font-bold">
+                Lưu thay đổi
+            </button>
+</div>
+</main>
+</body></html>

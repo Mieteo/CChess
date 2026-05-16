@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="vi"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Cửa hàng Vật phẩm - Xiangqi Master</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif:ital,wght@0,400;0,600;0,700;1,400&amp;family=Courier+Prime:wght@400;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "secondary": "#ecbf7e",
+                        "on-secondary-fixed-variant": "#5f410a",
+                        "primary-fixed-dim": "#efbc97",
+                        "primary-container": "#5c3a1e",
+                        "surface": "#161310",
+                        "parchment-tan": "#7D5A3C",
+                        "vermilion-red": "#8B0000",
+                        "wood-dark": "#5C3A1E",
+                        "on-secondary-container": "#d9ae6e",
+                        "on-error": "#690005",
+                        "on-tertiary-fixed": "#001f24",
+                        "on-secondary-fixed": "#291800",
+                        "on-error-container": "#ffdad6",
+                        "surface-container-highest": "#393431",
+                        "primary-fixed": "#ffdcc4",
+                        "on-surface-variant": "#d4c3b9",
+                        "deep-navy-black": "#1A3A5C",
+                        "tertiary-container": "#1c484f",
+                        "teal-success": "#4A7C59",
+                        "surface-container-low": "#1f1b18",
+                        "inverse-primary": "#7c5638",
+                        "on-tertiary-container": "#8bb6be",
+                        "ivory-panel": "#F5E6C8",
+                        "inverse-on-surface": "#342f2c",
+                        "on-secondary": "#442b00",
+                        "wood-light": "#D4A96A",
+                        "primary": "#efbc97",
+                        "outline": "#9d8e84",
+                        "surface-container-lowest": "#110d0b",
+                        "charcoal-dark": "#3A2010",
+                        "outline-variant": "#50443d",
+                        "error": "#ffb4ab",
+                        "inverse-surface": "#eae1dc",
+                        "on-background": "#eae1dc",
+                        "surface-container": "#231f1c",
+                        "secondary-container": "#5f410a",
+                        "accent-gold": "#C8960C",
+                        "surface-container-high": "#2e2926",
+                        "background": "#161310",
+                        "shadow-brown": "#5C3A1E33",
+                        "on-tertiary": "#03363d",
+                        "on-primary-fixed": "#2f1500",
+                        "on-surface": "#eae1dc",
+                        "ink-black": "#2C1810",
+                        "tertiary": "#a3ced6",
+                        "secondary-fixed-dim": "#ecbf7e",
+                        "surface-bright": "#3d3835",
+                        "secondary-fixed": "#ffddb0",
+                        "on-tertiary-fixed-variant": "#214d54",
+                        "surface-variant": "#393431",
+                        "tertiary-fixed-dim": "#a3ced6",
+                        "on-primary-fixed-variant": "#623f22",
+                        "error-container": "#93000a",
+                        "surface-dim": "#161310",
+                        "on-primary-container": "#d5a481",
+                        "tertiary-fixed": "#beeaf3",
+                        "on-primary": "#48290e",
+                        "surface-tint": "#efbc97"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "md": "12px",
+                        "xl": "32px",
+                        "base": "16px",
+                        "lg": "24px",
+                        "sm": "8px",
+                        "xxl": "48px",
+                        "xs": "4px"
+                    },
+                    "fontFamily": {
+                        "body-md": ["Noto Serif"],
+                        "title-lg": ["Noto Serif"],
+                        "heading-md": ["Noto Serif"],
+                        "button-text": ["Noto Serif"],
+                        "mono-timer": ["Courier Prime"],
+                        "caption-sm": ["Noto Serif"],
+                        "display-calligraphy": ["Noto Serif"]
+                    },
+                    "fontSize": {
+                        "body-md": ["14px", { "lineHeight": "20px", "fontWeight": "400" }],
+                        "title-lg": ["24px", { "lineHeight": "32px", "fontWeight": "600" }],
+                        "heading-md": ["18px", { "lineHeight": "24px", "fontWeight": "600" }],
+                        "button-text": ["16px", { "lineHeight": "20px", "letterSpacing": "0.5px", "fontWeight": "600" }],
+                        "mono-timer": ["18px", { "lineHeight": "24px", "fontWeight": "700" }],
+                        "caption-sm": ["12px", { "lineHeight": "16px", "fontWeight": "400" }],
+                        "display-calligraphy": ["32px", { "lineHeight": "40px", "fontWeight": "700" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        .hide-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .hide-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-surface text-on-surface font-body-md min-h-screen flex flex-col pb-20">
+<!-- Top App Bar -->
+<header class="flex justify-between items-center w-full px-base h-16 bg-wood-dark dark:bg-surface-container-low docked full-width top-0 bg-gradient-to-b from-wood-dark to-charcoal-dark shadow-brown z-50 fixed">
+<div class="flex items-center gap-md">
+<div class="w-8 h-8 rounded-full overflow-hidden border border-accent-gold shadow-brown">
+<img alt="Master's portrait" class="w-full h-full object-cover" data-alt="A portrait of a wise, older martial arts or chess master with a white beard, wearing traditional dark robes. The lighting is moody and cinematic, emphasizing his features. He looks directly at the camera with a calm, intellectual expression. The background is a blurred study room with ancient texts." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAIe0Jb7268jsZIYyC-V8OwBcgDSlNDXjnVcEmhIUPRrweCox29GlorKWA08jKfV7HTCYN4m75tid3G12ht9GIAi3kZCyqu_1Qa2zL580MxB3Jop_k92Vhd6Xw1WhlH5QSD4pZ2wIOCnarBXlRZEgEta2b8lHmAa2K29vA4vKMxSH-3WZKIJsqNKRgqiC5aXRc5QTZ0Ngr6k5n--K8SR2bFP6vp_1M3aWx2tG62s4XKHXfYITHxnmtufovVyfghne3US020JjtgBHwC"/>
+</div>
+</div>
+<h1 class="text-display-calligraphy font-display-calligraphy text-accent-gold dark:text-primary-fixed truncate px-md flex-1 text-center">
+            Cửa hàng
+        </h1>
+<div class="flex items-center gap-sm bg-charcoal-dark rounded-full px-md py-xs shadow-brown">
+<div class="flex items-center gap-xs">
+<span class="text-accent-gold font-button-text text-button-text">1,250</span>
+<span class="material-symbols-outlined text-accent-gold text-[16px]" style="font-variation-settings: 'FILL' 1;">monetization_on</span>
+</div>
+<div class="w-px h-4 bg-outline-variant mx-xs"></div>
+<div class="flex items-center gap-xs">
+<span class="text-tertiary font-button-text text-button-text">45</span>
+<span class="material-symbols-outlined text-tertiary text-[16px]" style="font-variation-settings: 'FILL' 1;">diamond</span>
+</div>
+</div>
+</header>
+<!-- Main Content Canvas -->
+<main class="flex-1 mt-16 px-base py-lg overflow-y-auto hide-scrollbar space-y-lg">
+<!-- Tabs -->
+<nav class="flex gap-md overflow-x-auto hide-scrollbar pb-sm border-b border-outline-variant/30">
+<button class="px-lg py-sm rounded-full bg-wood-dark text-accent-gold font-button-text text-button-text border border-accent-gold shadow-brown flex-shrink-0">Quân cờ</button>
+<button class="px-lg py-sm rounded-full bg-surface-container-high text-parchment-tan font-button-text text-button-text border border-outline-variant flex-shrink-0">Bàn cờ</button>
+<button class="px-lg py-sm rounded-full bg-surface-container-high text-parchment-tan font-button-text text-button-text border border-outline-variant flex-shrink-0">Hiệu ứng</button>
+<button class="px-lg py-sm rounded-full bg-surface-container-high text-parchment-tan font-button-text text-button-text border border-outline-variant flex-shrink-0">VIP</button>
+</nav>
+<!-- HOT Promo Banner (Bento Style) -->
+<section>
+<h2 class="text-heading-md font-heading-md text-wood-light mb-md flex items-center gap-xs">
+<span class="material-symbols-outlined text-vermilion-red" style="font-variation-settings: 'FILL' 1;">local_fire_department</span>
+                Khuyến mãi HOT
+            </h2>
+<div class="flex gap-base overflow-x-auto hide-scrollbar snap-x snap-mandatory">
+<!-- Promo Item 1 -->
+<div class="snap-center shrink-0 w-[85%] md:w-[60%] lg:w-[40%] rounded-xl overflow-hidden relative shadow-brown group cursor-pointer border border-accent-gold/50">
+<div class="absolute inset-0 bg-gradient-to-r from-charcoal-dark via-wood-dark/80 to-transparent z-10"></div>
+<img alt="Promo Pack" class="w-full h-40 object-cover object-center group-hover:scale-105 transition-transform duration-500" data-alt="A beautifully crafted, ancient-looking wooden box filled with ornate Xiangqi chess pieces. The pieces are made of dark rosewood with carved golden characters. The box sits on a traditional bamboo mat, illuminated by warm, dramatic lighting that creates deep shadows. The atmosphere is luxurious and antique." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDBRSndjmvZ5agDJc5jEooMu9Woy_V1CqQiEQ-r6_ZGTVftpveU_fKlv1MXGogk5GGC-Tg_FZi76auoFiUyufuRR-2IUvO-ILjtEcou5vXZKuHgPeOoVtxpUXtpYtenGktPdUnL7VZassa7r4V22K3I0l83gfx8Gz9RoHithnuiH7WMzf-N-8dNFzBrgZga50YdTm2ofQlm5vpafwv8_xL_bfsOOQ2w_VX0Gg8A1RP1qucvOGnyG5-1bktEsig9uqZU8nkQwqGSd0Zm"/>
+<div class="absolute inset-0 z-20 p-md flex flex-col justify-between">
+<div class="flex justify-between items-start">
+<span class="bg-vermilion-red text-on-error font-caption-sm text-caption-sm px-sm py-xs rounded-sm uppercase tracking-wide">Giảm 30%</span>
+<span class="material-symbols-outlined text-accent-gold bg-charcoal-dark/50 rounded-full p-xs backdrop-blur-sm">stars</span>
+</div>
+<div>
+<h3 class="text-title-lg font-title-lg text-primary-fixed mb-xs drop-shadow-md">Gói Trưởng Lão</h3>
+<div class="flex items-center gap-sm">
+<span class="text-caption-sm font-caption-sm text-on-surface-variant line-through">1,500</span>
+<span class="text-button-text font-button-text text-accent-gold flex items-center gap-xs">
+                                    1,050 <span class="material-symbols-outlined text-[16px]" style="font-variation-settings: 'FILL' 1;">monetization_on</span>
+</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Promo Item 2 -->
+<div class="snap-center shrink-0 w-[85%] md:w-[60%] lg:w-[40%] rounded-xl overflow-hidden relative shadow-brown group cursor-pointer border border-outline-variant">
+<div class="absolute inset-0 bg-gradient-to-r from-deep-navy-black/90 via-surface-container-high/80 to-transparent z-10"></div>
+<img alt="New Effect" class="w-full h-40 object-cover object-center group-hover:scale-105 transition-transform duration-500" data-alt="A close-up abstract view of swirling dark ink in water, resembling traditional Chinese ink wash painting (Thủy Mặc). The ink forms elegant, ethereal patterns against a misty, off-white background. The lighting is soft and diffused, highlighting the delicate textures of the ink plumes. The aesthetic is calm, artistic, and deeply rooted in East Asian heritage." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCg2d61vQslbQsv02BxUgoKuxu86zgdujEYc118sF8CQ-DhIPOJ8nV30nczSCQIz-_1w47EG7IP_yyrv2NkbzLZF7SPXVRjrpXcEDbKSzVDvmPANobb3VXSSrRnvotam2FDSKDk4uS7whZkPT7JifDoq1IN9UK0LWGe6cbrCo5zASy9pymdBAC_DeJ8pwdjTWHZhy4vRlxGv9TO1mIa16zvepchAocsQcA8kp1wgc_Ss3-mNoMrg6Xogbl-SoGHZIIrTC-Am9bDOoZ6"/>
+<div class="absolute inset-0 z-20 p-md flex flex-col justify-between">
+<div class="flex justify-between items-start">
+<span class="bg-deep-navy-black border border-tertiary text-tertiary font-caption-sm text-caption-sm px-sm py-xs rounded-sm uppercase tracking-wide">Mới</span>
+</div>
+<div>
+<h3 class="text-title-lg font-title-lg text-on-surface mb-xs drop-shadow-md">Hiệu Ứng Thủy Mặc</h3>
+<span class="text-button-text font-button-text text-tertiary flex items-center gap-xs">
+                                120 <span class="material-symbols-outlined text-[16px]" style="font-variation-settings: 'FILL' 1;">diamond</span>
+</span>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Product Grid -->
+<section>
+<h2 class="text-heading-md font-heading-md text-wood-light mb-md">Quân Cờ</h2>
+<div class="grid grid-cols-2 gap-md md:gap-lg">
+<!-- Item 1: Owned -->
+<div class="bg-ivory-panel rounded-lg shadow-brown p-sm flex flex-col relative border border-outline-variant/20 group">
+<div class="absolute top-sm right-sm z-10">
+<span class="material-symbols-outlined text-teal-success bg-surface/80 rounded-full p-xs" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+</div>
+<div class="aspect-square bg-surface-container rounded-md mb-sm overflow-hidden flex items-center justify-center relative">
+<div class="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-wood-dark/40 to-transparent z-0"></div>
+<img alt="Wooden Piece" class="w-3/4 h-3/4 object-contain z-10 drop-shadow-lg group-hover:scale-110 transition-transform duration-300" data-alt="A single, highly detailed Chinese chess (Xiangqi) piece carved from polished dark rosewood. The piece has a rich, deep brown grain and features a perfectly engraved Chinese character painted in vibrant vermilion red. It rests on a plain ivory-colored parchment background. The lighting is studio-quality, creating soft highlights on the wood's polished surface." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBKHjbvCzslcU82pdYZrD2yp82cXiVylcW7cZtOhJVU3PX-IQknAhST857zfikXQlwUSbqtGBl9q5U1p13-RrRjTODSswJVmTDKpCykW-k31ZZ4mHHrZUWtxVMFNmgs3TRMwVaS2UzYNHZbXf4kqS59ELko1doH9nlvhUAYvCrb2Qq4cz1OTXnaQMxWsqAtGwq3qH4Sv6lo05zpMxXIsOFDQSOEnPE1MGz5fQWeEn1mnvP2871LhzMD7UlfpOzhpdJazFYKL07vhJYO"/>
+</div>
+<h3 class="text-body-md font-body-md text-ink-black font-semibold truncate mb-xs">Gỗ Sưa Đỏ</h3>
+<div class="mt-auto flex items-center justify-between">
+<span class="text-caption-sm font-caption-sm text-teal-success font-bold">Đã sở hữu</span>
+<button class="bg-surface-container-high text-parchment-tan border border-outline-variant px-sm py-xs rounded-full font-caption-sm text-caption-sm hover:bg-surface-variant transition-colors" disabled="">Dùng</button>
+</div>
+</div>
+<!-- Item 2: Purchasable Gold -->
+<div class="bg-ivory-panel rounded-lg shadow-brown p-sm flex flex-col relative border border-outline-variant/20 group">
+<div class="aspect-square bg-surface-container rounded-md mb-sm overflow-hidden flex items-center justify-center relative">
+<div class="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-charcoal-dark/40 to-transparent z-0"></div>
+<img alt="Ivory Piece" class="w-3/4 h-3/4 object-contain z-10 drop-shadow-lg group-hover:scale-110 transition-transform duration-300 sepia" data-alt="A single Chinese chess (Xiangqi) piece carved from aged, slightly yellowed ivory. The surface shows subtle natural cracking and patina, suggesting antiquity. The engraved Chinese character is filled with deep black ink. It sits on a plain parchment background. Studio lighting casts a gentle, warm glow on the piece." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCfxdG7SUGPP4HuxvIxDY9MfrayNjJnhcapbHYjGqAg5H21GiCZ-PMk7ddaYtIBkOj7XmNynnJkx5hazklAlaMFxkSLorScyGXU2ylAo3zbwh3hgoqE8RJ5h83dhb4SG0NqSq0DeNHWd3zVBlZBnyFMLqxXinaIOK86-lN8jpVq4RKBrancLsQ40NjbmYI5tGcgJL3TYMqI_PJXb_N5yES-8UKKiyh4IPuiLmkyfn8Oiw1_H5W8o2UafnIxtnoF7_UL-rNbH-5Jhw-6"/>
+</div>
+<h3 class="text-body-md font-body-md text-ink-black font-semibold truncate mb-xs">Ngà Voi Cổ</h3>
+<div class="mt-auto flex items-center justify-between">
+<span class="text-body-md font-body-md text-ink-black flex items-center gap-xs font-bold">
+                                800 <span class="material-symbols-outlined text-accent-gold text-[16px]" style="font-variation-settings: 'FILL' 1;">monetization_on</span>
+</span>
+<button class="bg-gradient-to-r from-wood-dark to-charcoal-dark text-accent-gold px-sm py-xs rounded-full font-caption-sm text-caption-sm font-bold shadow-sm hover:brightness-110 active:scale-95 transition-all">Mua</button>
+</div>
+</div>
+<!-- Item 3: Purchasable Diamond -->
+<div class="bg-ivory-panel rounded-lg shadow-brown p-sm flex flex-col relative border border-accent-gold/30 group">
+<div class="absolute -top-xs -right-xs z-10">
+<span class="bg-vermilion-red text-on-error font-caption-sm text-caption-sm px-xs py-0.5 rounded-sm shadow-md">Hiếm</span>
+</div>
+<div class="aspect-square bg-surface-container rounded-md mb-sm overflow-hidden flex items-center justify-center relative">
+<div class="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-deep-navy-black/40 to-transparent z-0"></div>
+<img alt="Jade Piece" class="w-3/4 h-3/4 object-contain z-10 drop-shadow-lg group-hover:scale-110 transition-transform duration-300 hue-rotate-180" data-alt="A single Chinese chess (Xiangqi) piece carved from translucent, pale green jade. The piece appears to glow slightly from within, and the engraved Chinese character is filled with molten gold. It rests on a plain parchment background. The lighting highlights the crystalline structure and smooth, polished surface of the jade." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCqPezijFY2OMqeqqDfxkQe-039moblAcd563FsxrtDx7R6hXpwtYCdvSa6lgfuF429w4qmNYU-CtHVfIj2SwVMlfr4qESC1cRspKxEClHXIvOcIkioIPGfc6kbwTsqvzttHkFei9SVPHF1IEfXyVfxHoVmj1_g4lpBGnyROm8PJKNyathrejx_NllBXOx0xRo-JZVGpadTX9vY7X8E2hoes3lV9efdG97-mo4qZJWzs4m8c5Mc7Wn5FJvZqjhjXPB9ya_r848hKJzP"/>
+</div>
+<h3 class="text-body-md font-body-md text-ink-black font-semibold truncate mb-xs">Ngọc Bích Ký</h3>
+<div class="mt-auto flex items-center justify-between">
+<span class="text-body-md font-body-md text-ink-black flex items-center gap-xs font-bold">
+                                150 <span class="material-symbols-outlined text-tertiary text-[16px]" style="font-variation-settings: 'FILL' 1;">diamond</span>
+</span>
+<button class="bg-gradient-to-r from-deep-navy-black to-charcoal-dark text-tertiary px-sm py-xs rounded-full font-caption-sm text-caption-sm font-bold shadow-sm hover:brightness-110 active:scale-95 transition-all">Mua</button>
+</div>
+</div>
+<!-- Item 4: Purchasable Gold -->
+<div class="bg-ivory-panel rounded-lg shadow-brown p-sm flex flex-col relative border border-outline-variant/20 group">
+<div class="aspect-square bg-surface-container rounded-md mb-sm overflow-hidden flex items-center justify-center relative">
+<div class="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-wood-dark/20 to-transparent z-0"></div>
+<img alt="Bamboo Piece" class="w-3/4 h-3/4 object-contain z-10 drop-shadow-lg group-hover:scale-110 transition-transform duration-300 grayscale" data-alt="A single Chinese chess (Xiangqi) piece made from smoothed, aged bamboo. The piece has a distinct vertical grain and a slightly rustic, minimalist appearance. The engraved character is filled with simple black ink. It sits on a plain parchment background. Soft, natural light emphasizes the tactile texture of the bamboo." src="https://lh3.googleusercontent.com/aida-public/AB6AXuB7nRC4QT-0PzOVBpwfjYu2l5r08aYv8CJfpsPspaOnGDdFtE3Z_HPxW_Nm9yOPTVK_rbs_ujS_zfUWPYoOgn8H4C3TKCWOujB4lu0het2lAwUI-FIePiIWdIyu7VQ01FzKCE9QGLq7ad14K1szC-eAFkwfcNEpvKnoZOWnbnD3gIKDlwMbGjLEO3wZ89xOZbAF0jAc97b_kdzYRuTWtB4WW5VfeoVZEXErxRfoGBmtzI623Km0MFZS9COoR3VoOSkQK0ro5TZFkGmO"/>
+</div>
+<h3 class="text-body-md font-body-md text-ink-black font-semibold truncate mb-xs">Trúc Lâm Phong</h3>
+<div class="mt-auto flex items-center justify-between">
+<span class="text-body-md font-body-md text-ink-black flex items-center gap-xs font-bold">
+                                450 <span class="material-symbols-outlined text-accent-gold text-[16px]" style="font-variation-settings: 'FILL' 1;">monetization_on</span>
+</span>
+<button class="bg-gradient-to-r from-wood-dark to-charcoal-dark text-accent-gold px-sm py-xs rounded-full font-caption-sm text-caption-sm font-bold shadow-sm hover:brightness-110 active:scale-95 transition-all">Mua</button>
+</div>
+</div>
+</div>
+</section>
+<!-- Bottom spacing for nav -->
+<div class="h-6"></div>
+</main>
+<!-- Bottom Nav Bar -->
+<nav class="fixed bottom-0 left-0 w-full z-50 flex justify-around items-center h-20 px-sm pb-safe bg-wood-dark dark:bg-surface-container-lowest docked full-width border-t border-outline-variant shadow-brown shadow-lg">
+<!-- Lobby: Inactive -->
+<button class="flex flex-col items-center justify-center text-parchment-tan opacity-70 hover:text-wood-light transition-all duration-200 group w-16">
+<span class="material-symbols-outlined text-[24px] group-hover:scale-110 transition-transform">grid_view</span>
+<span class="text-caption-sm font-caption-sm mt-1">Lobby</span>
+</button>
+<!-- Learning: Inactive -->
+<button class="flex flex-col items-center justify-center text-parchment-tan opacity-70 hover:text-wood-light transition-all duration-200 group w-16">
+<span class="material-symbols-outlined text-[24px] group-hover:scale-110 transition-transform">menu_book</span>
+<span class="text-caption-sm font-caption-sm mt-1">Learning</span>
+</button>
+<!-- Store: Active (Semantic Match for "Cửa hàng") -->
+<button class="flex flex-col items-center justify-center text-accent-gold font-bold transform -translate-y-1 transition-all duration-300 w-16 relative">
+<!-- Active indicator glow -->
+<div class="absolute inset-0 bg-accent-gold/10 rounded-full blur-md -z-10"></div>
+<span class="material-symbols-outlined text-[24px] scale-110" style="font-variation-settings: 'FILL' 1;">shopping_basket</span>
+<span class="text-caption-sm font-caption-sm mt-1">Store</span>
+</button>
+<!-- Profile: Inactive -->
+<button class="flex flex-col items-center justify-center text-parchment-tan opacity-70 hover:text-wood-light transition-all duration-200 group w-16">
+<span class="material-symbols-outlined text-[24px] group-hover:scale-110 transition-transform">person</span>
+<span class="text-caption-sm font-caption-sm mt-1">Profile</span>
+</button>
+</nav>
+</body></html>

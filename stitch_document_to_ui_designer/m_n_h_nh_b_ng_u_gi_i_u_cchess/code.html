@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="vi"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>CChess - Sơ đồ bảng đấu</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif:ital,wght@0,400;0,600;0,700;1,400;1,600;1,700&amp;family=Courier+Prime:ital,wght@0,400;0,700;1,400;1,700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "primary": "#efbc97",
+                      "accent-gold": "#C8960C",
+                      "surface-container-low": "#1f1b18",
+                      "on-error-container": "#ffdad6",
+                      "primary-fixed-dim": "#efbc97",
+                      "on-surface-variant": "#d4c3b9",
+                      "outline-variant": "#50443d",
+                      "on-tertiary-fixed": "#001f24",
+                      "ink-black": "#2C1810",
+                      "on-secondary-fixed": "#291800",
+                      "primary-container": "#5c3a1e",
+                      "tertiary-fixed": "#beeaf3",
+                      "tertiary-fixed-dim": "#a3ced6",
+                      "on-surface": "#eae1dc",
+                      "deep-navy-black": "#1A3A5C",
+                      "surface-container-highest": "#393431",
+                      "secondary": "#ecbf7e",
+                      "parchment-tan": "#7D5A3C",
+                      "on-primary-fixed": "#2f1500",
+                      "error": "#ffb4ab",
+                      "surface-variant": "#393431",
+                      "surface-dim": "#161310",
+                      "surface": "#161310",
+                      "on-primary-fixed-variant": "#623f22",
+                      "on-secondary-container": "#d9ae6e",
+                      "wood-dark": "#5C3A1E",
+                      "secondary-container": "#5f410a",
+                      "ivory-panel": "#F5E6C8",
+                      "on-background": "#eae1dc",
+                      "surface-container-lowest": "#110d0b",
+                      "surface-bright": "#3d3835",
+                      "on-primary-container": "#d5a481",
+                      "inverse-surface": "#eae1dc",
+                      "on-tertiary-fixed-variant": "#214d54",
+                      "on-error": "#690005",
+                      "on-secondary-fixed-variant": "#5f410a",
+                      "inverse-primary": "#7c5638",
+                      "tertiary": "#a3ced6",
+                      "outline": "#9d8e84",
+                      "secondary-fixed-dim": "#ecbf7e",
+                      "primary-fixed": "#ffdcc4",
+                      "inverse-on-surface": "#342f2c",
+                      "charcoal-dark": "#3A2010",
+                      "teal-success": "#4A7C59",
+                      "vermilion-red": "#8B0000",
+                      "on-tertiary": "#03363d",
+                      "on-tertiary-container": "#8bb6be",
+                      "wood-light": "#D4A96A",
+                      "shadow-brown": "#5C3A1E33",
+                      "on-primary": "#48290e",
+                      "surface-tint": "#efbc97",
+                      "surface-container-high": "#2e2926",
+                      "on-secondary": "#442b00",
+                      "tertiary-container": "#1c484f",
+                      "surface-container": "#231f1c",
+                      "error-container": "#93000a",
+                      "background": "#161310",
+                      "secondary-fixed": "#ffddb0"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.25rem",
+                      "lg": "0.5rem",
+                      "xl": "0.75rem",
+                      "full": "9999px"
+              },
+              "spacing": {
+                      "lg": "24px",
+                      "xl": "32px",
+                      "xxl": "48px",
+                      "sm": "8px",
+                      "md": "12px",
+                      "base": "16px",
+                      "xs": "4px"
+              },
+              "fontFamily": {
+                      "title-lg": [
+                              "Noto Serif"
+                      ],
+                      "mono-timer": [
+                              "Courier Prime"
+                      ],
+                      "body-md": [
+                              "Noto Serif"
+                      ],
+                      "heading-md": [
+                              "Noto Serif"
+                      ],
+                      "display-calligraphy": [
+                              "Noto Serif"
+                      ],
+                      "button-text": [
+                              "Noto Serif"
+                      ],
+                      "caption-sm": [
+                              "Noto Serif"
+                      ]
+              },
+              "fontSize": {
+                      "title-lg": [
+                              "24px",
+                              {
+                                      "lineHeight": "32px",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "mono-timer": [
+                              "18px",
+                              {
+                                      "lineHeight": "24px",
+                                      "fontWeight": "700"
+                              }
+                      ],
+                      "body-md": [
+                              "14px",
+                              {
+                                      "lineHeight": "20px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "heading-md": [
+                              "18px",
+                              {
+                                      "lineHeight": "24px",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "display-calligraphy": [
+                              "32px",
+                              {
+                                      "lineHeight": "40px",
+                                      "fontWeight": "700"
+                              }
+                      ],
+                      "button-text": [
+                              "16px",
+                              {
+                                      "lineHeight": "20px",
+                                      "letterSpacing": "0.5px",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "caption-sm": [
+                              "12px",
+                              {
+                                      "lineHeight": "16px",
+                                      "fontWeight": "400"
+                              }
+                      ]
+              }
+      },
+          },
+        }
+    </script>
+<style>
+        .bracket-path {
+            background-color: theme('colors.wood-dark');
+        }
+        .bracket-path.active {
+            background-color: theme('colors.accent-gold');
+            box-shadow: 0 0 8px theme('colors.accent-gold');
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background text-on-background font-body-md min-h-screen flex flex-col overflow-hidden">
+<!-- TopAppBar -->
+<header class="bg-wood-dark dark:bg-surface-container text-primary dark:text-primary-fixed shadow-brown shadow-md docked full-width top-0 bg-gradient-to-b from-wood-dark to-charcoal-dark flex justify-between items-center w-full px-base py-sm z-50">
+<button aria-label="Back" class="text-primary hover:opacity-80 transition-opacity Active: scale-95 transition-transform duration-200">
+<span class="material-symbols-outlined" data-icon="arrow_back">arrow_back</span>
+</button>
+<h1 class="font-display-calligraphy text-display-calligraphy text-accent-gold flex-1 text-center font-bold tracking-tight">Chi tiết Bảng đấu</h1>
+<div class="w-6"></div> <!-- Spacer for centering -->
+</header>
+<!-- Main Content Canvas -->
+<main class="flex-1 overflow-hidden relative flex flex-col pb-xxl pb-20"> <!-- Padding bottom for nav bar -->
+<!-- Tournament Info -->
+<section class="px-base py-md bg-surface-container-low border-b border-surface-variant flex flex-col items-center justify-center shrink-0">
+<h2 class="font-heading-md text-heading-md text-secondary mb-xs text-center">Giải Vô Địch CChess Toàn Quốc</h2>
+<div class="inline-flex items-center gap-xs px-md py-xs rounded-full bg-surface-container-high border border-outline-variant">
+<span class="material-symbols-outlined text-accent-gold text-[16px]" data-icon="trophy">emoji_events</span>
+<span class="font-caption-sm text-caption-sm text-on-surface-variant">Vòng chung kết</span>
+</div>
+</section>
+<!-- Bracket View Area (Scrollable) -->
+<div class="flex-1 overflow-auto relative p-lg custom-scrollbar">
+<div class="min-w-[1200px] h-full flex items-center justify-start gap-xxl pb-xl pt-xl relative">
+<!-- Quarter-finals Column -->
+<div class="flex flex-col justify-between h-full w-[280px] gap-xl z-10 relative">
+<h3 class="font-button-text text-button-text text-parchment-tan text-center absolute -top-8 w-full">Tứ kết</h3>
+<!-- Match 1 -->
+<div class="bg-ivory-panel rounded-lg shadow-brown shadow-md p-xs relative">
+<!-- Player 1 -->
+<div class="flex items-center gap-sm p-sm rounded border border-accent-gold bg-gradient-to-r from-surface to-surface-container-low relative overflow-hidden">
+<div class="absolute inset-0 bg-accent-gold opacity-10"></div>
+<img alt="Avatar" class="w-8 h-8 rounded-full border border-wood-dark object-cover z-10" data-alt="A detailed portrait of an elderly Asian man with a traditional aesthetic. He is illuminated by warm, directional lighting. The background features a subtle ink-wash painting style texture in deep browns and muted golds. High quality, photorealistic UI element." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDci65iQporRC5B7QB1qTjc5Qc2bQIKtqK51kdxkoMRzdBMMwSf3Al95BpMKn-nrP62Kmk_sln2tIg6ADHWHXm3fFDWxYLfP8BpYlrV4TpGbfFD2UHCaPsXoyWVq31f1K9dNXj6WtmemPmKLx0wSLgjlAWjDQ0bOntyrgNW2hnLauHfPnlFiVFlNFQFM9WUHQXKQtj_ErAXCWMpu-ClzBE6n79gc-NVlelylicV8i0TCCUTeW5Fy-_R5IFnPjJ834aA-UWgjgxImIRL"/>
+<div class="flex-1 z-10">
+<p class="font-body-md text-body-md font-bold text-on-primary-container truncate">Lê Quang Liêm</p>
+<p class="font-caption-sm text-caption-sm text-outline">ELO 2800</p>
+</div>
+<span class="font-mono-timer text-mono-timer text-accent-gold z-10">1</span>
+</div>
+<div class="h-px bg-outline-variant my-xs"></div>
+<!-- Player 2 -->
+<div class="flex items-center gap-sm p-sm rounded bg-surface">
+<img alt="Avatar" class="w-8 h-8 rounded-full border border-wood-dark opacity-70 object-cover" data-alt="A portrait of a young Asian man looking focused. Soft lighting. Subtle traditional ink wash background in dark tones. Photorealistic UI component." src="https://lh3.googleusercontent.com/aida-public/AB6AXuC1JxDTgK_uS5AGAmTCm1uAdD7AUVeA1OBHaT8ldMGCnb_Xb_KTjOiR179GsCukBlhVZqsqKzPTD591ejGLdWbgRvGVgI7bLEZJB7kRTkCihenFVzZbT7cqn7ARYWXFZTOEZ-qRP6K9Asj818hFCjFOkTVrMCLDJRvy_zCJLfpQk-J3GE3q4rrLtnKXjOW50Kau79Ic0jaU2-licodV6YE9rUGQ-_5CVte0NWwhg5KGqQi9OutrDWgRqhrMF4a5b_P5yF_56RvAKI6D"/>
+<div class="flex-1 opacity-70">
+<p class="font-body-md text-body-md text-on-surface truncate">Nguyễn Ngọc Trường</p>
+<p class="font-caption-sm text-caption-sm text-outline">ELO 2650</p>
+</div>
+<span class="font-mono-timer text-mono-timer text-on-surface-variant">0</span>
+</div>
+<!-- Connection Right -->
+<div class="absolute top-1/2 -right-12 w-12 h-px bracket-path active"></div>
+</div>
+<!-- Match 2 -->
+<div class="bg-ivory-panel rounded-lg shadow-brown shadow-md p-xs relative">
+<!-- Player 1 -->
+<div class="flex items-center gap-sm p-sm rounded bg-surface">
+<img alt="Avatar" class="w-8 h-8 rounded-full border border-wood-dark opacity-70 object-cover" data-alt="A portrait of a middle-aged Asian man looking stern. Dim lighting. Subtle traditional ink wash background in dark tones. Photorealistic UI component." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCTpZYf-lbKXU3H5GEiH9LgAGxyMhAx4MwQJTUATwgjYb2jScEPAL_YM6OGmG_56SioA7zYAnbzXfXc4Z8jdy3G2q4TiYvYsHEbq74bm3ylidJvuzoZsIZRNXWKDuYRbUGGw4DOdWFEFvaPRXWfvcFP92WIqR1hsiF3rMBFoB8AOtcMxXYV1IB4pRLvrX4P9lhz7Iiart0sAp87w0JKm0Rmc84LbcSOa6ZXKxvaYK7HMb2TKANNlU9LqGduuDHdUbP4RXX4nJWxt7Yl"/>
+<div class="flex-1 opacity-70">
+<p class="font-body-md text-body-md text-on-surface truncate">Trần Văn B</p>
+<p class="font-caption-sm text-caption-sm text-outline">ELO 2710</p>
+</div>
+<span class="font-mono-timer text-mono-timer text-on-surface-variant">0</span>
+</div>
+<div class="h-px bg-outline-variant my-xs"></div>
+<!-- Player 2 -->
+<div class="flex items-center gap-sm p-sm rounded border border-accent-gold bg-gradient-to-r from-surface to-surface-container-low relative overflow-hidden">
+<div class="absolute inset-0 bg-accent-gold opacity-10"></div>
+<img alt="Avatar" class="w-8 h-8 rounded-full border border-wood-dark object-cover z-10" data-alt="A portrait of a young Asian woman looking confident. Warm lighting. Subtle traditional ink wash background in dark tones and muted golds. Photorealistic UI component." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDD_xIGr3OUvoo1SoDCM4zXu0UCMoHtUQ5Wvdgv042GqOWQwIh82GOABAmDSRJrpzv1up2ZO3nPo-lJgZsNysXzUvwad_jNA_lyA8hQ5aZss6-AIg9qqWx9Ri9AiSmjlcz2kf-QyzrAN2DfjefWwSyEL6jQmeKDa50Tjw0pqZvtHK1ZhOCioh7sjz_juWAW5KopVsh7flRIu5pnlMhdLWHCXjfI_pAeAaQvMy-Qj6pSNcOK9ijQqJcE58z4p6aIR1vk_nbLhNpa3gua"/>
+<div class="flex-1 z-10">
+<p class="font-body-md text-body-md font-bold text-on-primary-container truncate">Phạm Thu Hà</p>
+<p class="font-caption-sm text-caption-sm text-outline">ELO 2750</p>
+</div>
+<span class="font-mono-timer text-mono-timer text-accent-gold z-10">1</span>
+</div>
+<!-- Connection Right -->
+<div class="absolute top-1/2 -right-12 w-12 h-px bracket-path active"></div>
+</div>
+<!-- Vertical Connector QF to SF (Top Pair) -->
+<div class="absolute left-full top-[16.5%] bottom-[16.5%] w-px bracket-path active h-[calc(33.33%-1px)] my-auto translate-x-12 translate-y-[25%]"></div>
+<!-- Match 3 -->
+<div class="bg-ivory-panel rounded-lg shadow-brown shadow-md p-xs relative mt-xl">
+<!-- Player 1 -->
+<div class="flex items-center gap-sm p-sm rounded border border-accent-gold bg-gradient-to-r from-surface to-surface-container-low relative overflow-hidden">
+<div class="absolute inset-0 bg-accent-gold opacity-10"></div>
+<img alt="Avatar" class="w-8 h-8 rounded-full border border-wood-dark object-cover z-10" data-alt="A detailed portrait of an elderly Asian man with a traditional aesthetic. He is illuminated by warm, directional lighting. The background features a subtle ink-wash painting style texture in deep browns and muted golds. High quality, photorealistic UI element." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBwDuBrBHtHBypJMHoXZUbBrsuf2BmaQeryQeGTkNTKuUlkmGiOviivglGh7tlBP2EouiUQEFzMtvdruAs3bATcGL4NP6PRzdxeB2HFHOCfGEkahDLAEMnhwYExtgy0avmnMeLomSfd-oqE8zoyXZ3hTdV95oRLllm0avcURbeSUTjOXK5QMfxa6sWDwK-Sj_fk0osAmYdwJcdsPMBVMPJYvcHR-PJnvXhr0WyYboSkJYN4ThNNj4e0CAyMgKXQzy6vxPk_pwX7PUZw"/>
+<div class="flex-1 z-10">
+<p class="font-body-md text-body-md font-bold text-on-primary-container truncate">Lý Hùng</p>
+<p class="font-caption-sm text-caption-sm text-outline">ELO 2780</p>
+</div>
+<span class="font-mono-timer text-mono-timer text-accent-gold z-10">1</span>
+</div>
+<div class="h-px bg-outline-variant my-xs"></div>
+<!-- Player 2 -->
+<div class="flex items-center gap-sm p-sm rounded bg-surface">
+<img alt="Avatar" class="w-8 h-8 rounded-full border border-wood-dark opacity-70 object-cover" data-alt="A portrait of a young Asian man looking focused. Soft lighting. Subtle traditional ink wash background in dark tones. Photorealistic UI component." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDtyAV50cgC77AEkj0F7TmHDTkfpFNTNZ0nOAnHebDcxqsomfw0_erX_B2jHCa1FblnQUVle59pmL5H__HcBChLfWhuw_M5O9UaWHb1bS4qnshHVS37XG6PRJO0el46a8tLua7dvr_2vCca-YWMM6IoiN7_DRpJhzJ-xOpdURyUbnNd0Hx2a2rwMU24uoMKwySLyLj9dxDmE7iYCKChpd2oO8TKjTI_9rg6xp2zotAranmi8dj4bh6TVDeauEgtQDW43W7PD0oCJ6yx"/>
+<div class="flex-1 opacity-70">
+<p class="font-body-md text-body-md text-on-surface truncate">Võ Tòng</p>
+<p class="font-caption-sm text-caption-sm text-outline">ELO 2690</p>
+</div>
+<span class="font-mono-timer text-mono-timer text-on-surface-variant">0</span>
+</div>
+<!-- Connection Right -->
+<div class="absolute top-1/2 -right-12 w-12 h-px bracket-path active"></div>
+</div>
+<!-- Match 4 -->
+<div class="bg-ivory-panel rounded-lg shadow-brown shadow-md p-xs relative">
+<!-- Player 1 -->
+<div class="flex items-center gap-sm p-sm rounded border border-accent-gold bg-gradient-to-r from-surface to-surface-container-low relative overflow-hidden">
+<div class="absolute inset-0 bg-accent-gold opacity-10"></div>
+<img alt="Avatar" class="w-8 h-8 rounded-full border border-wood-dark object-cover z-10" data-alt="A detailed portrait of an elderly Asian man with a traditional aesthetic. He is illuminated by warm, directional lighting. The background features a subtle ink-wash painting style texture in deep browns and muted golds. High quality, photorealistic UI element." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBkDlxWW_AhzUmn13iph2AkAcIy1xvxzfaVBuUi37IiIaiM4uRVbFiqwONhFzBBmOH2xj--tCJVfMo6aRjuTz4_WaDjRrsMOENfudODYQkKZMX7gq8qZE8_xYTWrggxgMUu9ygX3uODRdjfEVPWpEGmDSM9U1du2ENk8bVyNuoMHl12ZZv_juETiU5Xxe08st7WoxlFWIKIAVjZS-BLEDNKi3UwMAwwOjIEhX5wLwF2pehlM1GYXHTdWDrM8rhcoS9iYDlIDUYZtEOk"/>
+<div class="flex-1 z-10">
+<p class="font-body-md text-body-md font-bold text-on-primary-container truncate">Đinh Tiên</p>
+<p class="font-caption-sm text-caption-sm text-outline">ELO 2720</p>
+</div>
+<span class="font-mono-timer text-mono-timer text-accent-gold z-10">1</span>
+</div>
+<div class="h-px bg-outline-variant my-xs"></div>
+<!-- Player 2 -->
+<div class="flex items-center gap-sm p-sm rounded bg-surface">
+<img alt="Avatar" class="w-8 h-8 rounded-full border border-wood-dark opacity-70 object-cover" data-alt="A portrait of a young Asian woman looking confident. Warm lighting. Subtle traditional ink wash background in dark tones and muted golds. Photorealistic UI component." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCTNaB_N4752UugKYlFzzSAx3BnEgjwQCAu2pnmsQugvRx5j0fqXdyNfpMH7jGR_ljC7BHKs7Zqv8-c1w4B3-GvQ2nAoFZFDseHjs0Td0HLV1qyVNIdCyhqnZpKjTOa40MRu1v_1TiH3FpR2-8GKiKlVdVBEyBDlCDrZjyQ4b-a4ZeRxFxBG9K6njYaYIuIK2wR5xaTGCPcl3xBEydIHtXQExBgy0uVY4PltFrXWWwvZ_3NcOJMVNpYhAngSQdcRg44Fcn7VaP1Kn1B"/>
+<div class="flex-1 opacity-70">
+<p class="font-body-md text-body-md text-on-surface truncate">Lê Hoa</p>
+<p class="font-caption-sm text-caption-sm text-outline">ELO 2700</p>
+</div>
+<span class="font-mono-timer text-mono-timer text-on-surface-variant">0</span>
+</div>
+<!-- Connection Right -->
+<div class="absolute top-1/2 -right-12 w-12 h-px bracket-path active"></div>
+</div>
+<!-- Vertical Connector QF to SF (Bottom Pair) -->
+<div class="absolute left-full top-[66.66%] bottom-[16.5%] w-px bracket-path active h-[calc(33.33%-1px)] my-auto translate-x-12 -translate-y-[25%]"></div>
+</div>
+<!-- Semi-finals Column -->
+<div class="flex flex-col justify-around h-full w-[280px] gap-xxl z-10 relative">
+<h3 class="font-button-text text-button-text text-parchment-tan text-center absolute -top-8 w-full">Bán kết</h3>
+<!-- Match 5 -->
+<div class="bg-ivory-panel rounded-lg shadow-brown shadow-md p-xs relative mt-xxl">
+<!-- Connection Left -->
+<div class="absolute top-1/2 -left-12 w-12 h-px bracket-path active"></div>
+<!-- Player 1 -->
+<div class="flex items-center gap-sm p-sm rounded border border-accent-gold bg-gradient-to-r from-surface to-surface-container-low relative overflow-hidden">
+<div class="absolute inset-0 bg-accent-gold opacity-10"></div>
+<img alt="Avatar" class="w-8 h-8 rounded-full border border-wood-dark object-cover z-10" data-alt="A detailed portrait of an elderly Asian man with a traditional aesthetic. He is illuminated by warm, directional lighting. The background features a subtle ink-wash painting style texture in deep browns and muted golds. High quality, photorealistic UI element." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCcMRIGgyPQW81i_emJVire4j7aTLnpINQsGvKRNWSycgOq-hG1JQqflfsojG3lGIbtDhn4DXjIb_FdlvCy8R8mAki0rGSGd8LbycfJCwjYgn8ZtfJf_iG3GhL5086JeapyOV5iLsaLYnTbNIrxqaPXXERfxwvBeg5dlSnwz1zTn81FbXYOPVmz86xI5CBsPZW2CA-8UNJi1lMQJJGCl_3XYCBuMuIx2j_wvHO9u3M6AHil8TPUwQd1_zeG4EWAsNPd_ZbMuXcYBdXW"/>
+<div class="flex-1 z-10">
+<p class="font-body-md text-body-md font-bold text-on-primary-container truncate">Lê Quang Liêm</p>
+<p class="font-caption-sm text-caption-sm text-outline">ELO 2800</p>
+</div>
+<span class="font-mono-timer text-mono-timer text-accent-gold z-10">1</span>
+</div>
+<div class="h-px bg-outline-variant my-xs"></div>
+<!-- Player 2 -->
+<div class="flex items-center gap-sm p-sm rounded bg-surface">
+<img alt="Avatar" class="w-8 h-8 rounded-full border border-wood-dark opacity-70 object-cover" data-alt="A portrait of a young Asian woman looking confident. Warm lighting. Subtle traditional ink wash background in dark tones and muted golds. Photorealistic UI component." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCkpZtg0RtT6Mduda7KTMwZZpyeps1PWAssdZjlvts4cEJf6xJQropEd_aeDa5F5DFeIozHxTNrUK3o6EikLORXoeWlqsXNLVke3ho9fRlVSNAi1eqm7sbVYCIRo8Mz36JJadx6nnzQkxDXQwMKTaiUJQV-1bQ7VFQR4tKf86Gi8yMS5Xskd-6BM9n3sfGM5adGQwh95WyH0zoBPWpEaAaz21pTyUU63qaE4_jY4WjDs-tz3s6wrDi19B-NPiZY1uvYF3gws98bNla6"/>
+<div class="flex-1 opacity-70">
+<p class="font-body-md text-body-md text-on-surface truncate">Phạm Thu Hà</p>
+<p class="font-caption-sm text-caption-sm text-outline">ELO 2750</p>
+</div>
+<span class="font-mono-timer text-mono-timer text-on-surface-variant">0</span>
+</div>
+<!-- Connection Right -->
+<div class="absolute top-1/2 -right-12 w-12 h-px bracket-path active"></div>
+</div>
+<!-- Match 6 -->
+<div class="bg-ivory-panel rounded-lg shadow-brown shadow-md p-xs relative mb-xxl">
+<!-- Connection Left -->
+<div class="absolute top-1/2 -left-12 w-12 h-px bracket-path active"></div>
+<!-- Player 1 -->
+<div class="flex items-center gap-sm p-sm rounded bg-surface">
+<img alt="Avatar" class="w-8 h-8 rounded-full border border-wood-dark opacity-70 object-cover" data-alt="A detailed portrait of an elderly Asian man with a traditional aesthetic. He is illuminated by warm, directional lighting. The background features a subtle ink-wash painting style texture in deep browns and muted golds. High quality, photorealistic UI element." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAipKulUUXgbkSq4tGtgoA1wlrUj3CyXuLrv8mWWoITGJ6B0Fl8fWtQrza61LYp0b5weL4rpRMvlq0dTjTtvXRRrZIi_34FMvFnKQo-JE6WGGe7roxBSZi4n-fF8IhcbLdqD1TSCwC82PsNIxJUEt6M4YAzu16JRAwg_CM4w6QL08ZDILnVOX14af-lFrVZJB1P__GQSM5k7STKDn95wBPs9vjdvjRR-XOxWFdaB0EdW3fN7clYxXlD2yOsqge7PjzIwzjl6nc9bZOf"/>
+<div class="flex-1 opacity-70">
+<p class="font-body-md text-body-md text-on-surface truncate">Lý Hùng</p>
+<p class="font-caption-sm text-caption-sm text-outline">ELO 2780</p>
+</div>
+<span class="font-mono-timer text-mono-timer text-on-surface-variant">0</span>
+</div>
+<div class="h-px bg-outline-variant my-xs"></div>
+<!-- Player 2 -->
+<div class="flex items-center gap-sm p-sm rounded border border-accent-gold bg-gradient-to-r from-surface to-surface-container-low relative overflow-hidden">
+<div class="absolute inset-0 bg-accent-gold opacity-10"></div>
+<img alt="Avatar" class="w-8 h-8 rounded-full border border-wood-dark object-cover z-10" data-alt="A detailed portrait of an elderly Asian man with a traditional aesthetic. He is illuminated by warm, directional lighting. The background features a subtle ink-wash painting style texture in deep browns and muted golds. High quality, photorealistic UI element." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAHrlvWaZQ4fOvoYVpC72mUTkM5tCfHBqpuyL-1z0rwK4Lxx3lK_AiceBChUrnbpAbm5oaxz48aivb5z1wLTqGLb-RDSLiUUkITFw3w5K4yeagAVr6Jou4WoGL69gURa2SGUs6sp83KsA1eZJFXDdNn7H1t7AwY_lFxSTqDprxhZKYTRgq315emag80VoY1DXwduVHgZAzBI5PC1vZd8UtUEZRYjlrhBIJLvPvPQtZjKB2HIzOnMSEaJSZBh34tk6PWfY9uFHMnoKLW"/>
+<div class="flex-1 z-10">
+<p class="font-body-md text-body-md font-bold text-on-primary-container truncate">Đinh Tiên</p>
+<p class="font-caption-sm text-caption-sm text-outline">ELO 2720</p>
+</div>
+<span class="font-mono-timer text-mono-timer text-accent-gold z-10">1</span>
+</div>
+<!-- Connection Right -->
+<div class="absolute top-1/2 -right-12 w-12 h-px bracket-path active"></div>
+</div>
+<!-- Vertical Connector SF to F -->
+<div class="absolute left-full top-[25%] bottom-[25%] w-px bracket-path active h-1/2 my-auto translate-x-12"></div>
+</div>
+<!-- Finals Column -->
+<div class="flex flex-col justify-center h-full w-[280px] z-10 relative">
+<h3 class="font-button-text text-button-text text-accent-gold text-center absolute -top-8 w-full flex items-center justify-center gap-xs">
+<span class="material-symbols-outlined text-[18px]" data-icon="star">star</span>
+                         Chung kết
+                         <span class="material-symbols-outlined text-[18px]" data-icon="star">star</span>
+</h3>
+<!-- Match 7 (Final) -->
+<div class="bg-gradient-to-br from-wood-dark to-ink-black rounded-lg shadow-brown shadow-lg p-[2px] relative">
+<!-- Connection Left -->
+<div class="absolute top-1/2 -left-12 w-12 h-px bracket-path active"></div>
+<div class="bg-ivory-panel rounded-md p-xs relative h-full w-full">
+<!-- Golden Glow for Winner -->
+<div class="absolute inset-0 rounded-md shadow-[0_0_15px_rgba(200,150,12,0.5)] pointer-events-none"></div>
+<!-- Player 1 -->
+<div class="flex items-center gap-sm p-sm rounded border border-accent-gold bg-gradient-to-r from-surface to-surface-container-low relative overflow-hidden">
+<div class="absolute inset-0 bg-accent-gold opacity-20"></div>
+<img alt="Avatar" class="w-10 h-10 rounded-full border-2 border-accent-gold object-cover z-10" data-alt="A detailed portrait of an elderly Asian man with a traditional aesthetic. He is illuminated by warm, directional lighting. The background features a subtle ink-wash painting style texture in deep browns and muted golds. High quality, photorealistic UI element." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAepkqw2gGYgk2m2otzFLC9v2u7xZi4ufuXxl8CELVyKSHPUylgnYy-ceLx_cmELJQVyDFZqRhwqjlZG1SCn3QgcOTOlDvC71B_t-jKFW8DMXN1Mo00Pa1ucBcMcWWQQh90xaKN8IZbcUYL06-9rPHV01L_z5gNwg8ly9ZIGNgm2F6w8oIxI7XCDVLTIZcx_DRk1E8mcyYRGugJymrkxJrlWdQny3XYUiz0VTlQMt5QFq-qX9i8Jny0cQifQICIUgaK_n0lqrOXTeQu"/>
+<div class="flex-1 z-10">
+<p class="font-body-md text-body-md font-bold text-accent-gold truncate">Lê Quang Liêm</p>
+<p class="font-caption-sm text-caption-sm text-outline">ELO 2800</p>
+</div>
+<div class="flex flex-col items-center z-10">
+<span class="material-symbols-outlined text-accent-gold text-[16px] mb-xs" data-icon="emoji_events">emoji_events</span>
+<span class="font-mono-timer text-mono-timer text-accent-gold">2</span>
+</div>
+</div>
+<div class="h-px bg-outline-variant my-xs"></div>
+<!-- Player 2 -->
+<div class="flex items-center gap-sm p-sm rounded bg-surface">
+<img alt="Avatar" class="w-8 h-8 rounded-full border border-wood-dark opacity-70 object-cover" data-alt="A detailed portrait of an elderly Asian man with a traditional aesthetic. He is illuminated by warm, directional lighting. The background features a subtle ink-wash painting style texture in deep browns and muted golds. High quality, photorealistic UI element." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAqPXRFo65i3nm8CUoNx5vcZN56Owl3PqgLq5HGbkEO4K_le3HPb26z0NlrOWMarodYr-iUE3ljP6nSU57ttzC_0McrnkgWxi0Jdxs5HvGQaeqEmIb4dS6qzVBhNOueBFbBlY_jTuGCwhW7yCrYP3DJGGLqEyCxL_FE2uTLx8Nxmpmzc4xO1i3Rpo5SZP59jJqV9XMEMkHo7CZ8vRRdlSy6_TArBZzNIDjOJG7rYwkfKgccRV-zQtdAzM7s2Wz8LLzQqFEA9OWwEy2G"/>
+<div class="flex-1 opacity-70">
+<p class="font-body-md text-body-md text-on-surface truncate">Đinh Tiên</p>
+<p class="font-caption-sm text-caption-sm text-outline">ELO 2720</p>
+</div>
+<span class="font-mono-timer text-mono-timer text-on-surface-variant mr-1">1</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Floating Controls -->
+<div class="absolute bottom-24 right-base flex flex-col gap-sm">
+<button class="w-10 h-10 rounded-full bg-surface-container-high border border-outline shadow-brown shadow-md flex items-center justify-center text-secondary hover:bg-surface-container-highest transition-colors">
+<span class="material-symbols-outlined" data-icon="add">add</span>
+</button>
+<button class="w-10 h-10 rounded-full bg-surface-container-high border border-outline shadow-brown shadow-md flex items-center justify-center text-secondary hover:bg-surface-container-highest transition-colors">
+<span class="material-symbols-outlined" data-icon="remove">remove</span>
+</button>
+<button class="w-10 h-10 rounded-full bg-surface-container-high border border-outline shadow-brown shadow-md flex items-center justify-center text-secondary hover:bg-surface-container-highest transition-colors mt-sm">
+<span class="material-symbols-outlined" data-icon="center_focus_strong">center_focus_strong</span>
+</button>
+</div>
+</main>
+<!-- BottomNavBar -->
+<nav class="bg-wood-dark dark:bg-surface-container-low text-secondary dark:text-secondary-fixed shadow-brown shadow-lg fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-base py-md md:hidden">
+<a class="flex flex-col items-center justify-center text-parchment-tan opacity-70 hover:text-wood-light" href="#">
+<span class="material-symbols-outlined" data-icon="home">home</span>
+<span class="font-button-text text-caption-sm mt-xs">Trang Chủ</span>
+</a>
+<a class="flex flex-col items-center justify-center text-parchment-tan opacity-70 hover:text-wood-light" href="#">
+<span class="material-symbols-outlined" data-icon="menu_book">menu_book</span>
+<span class="font-button-text text-caption-sm mt-xs">Học Tập</span>
+</a>
+<a class="flex flex-col items-center justify-center text-accent-gold transform -translate-y-1 transition-all duration-300 Active: scale-95 transition-all" href="#">
+<span class="material-symbols-outlined" data-icon="sports_esports" data-weight="fill" style="font-variation-settings: 'FILL' 1;">sports_esports</span>
+<span class="font-button-text text-caption-sm mt-xs font-display-calligraphy">Đối Đầu</span>
+</a>
+<a class="flex flex-col items-center justify-center text-parchment-tan opacity-70 hover:text-wood-light" href="#">
+<span class="material-symbols-outlined" data-icon="person">person</span>
+<span class="font-button-text text-caption-sm mt-xs">Hồ Sơ</span>
+</a>
+</nav>
+</body></html>

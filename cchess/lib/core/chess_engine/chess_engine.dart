@@ -1,0 +1,14 @@
+/// Public API of the CChess Xiangqi engine.
+library;
+
+export '../constants/piece_constants.dart' show PieceColor, PieceType, PieceColorX, PieceTypeX, kInitialFen;
+export 'ai/bot_difficulty.dart';
+export 'ai/bot_engine.dart';
+export 'ai/evaluator.dart';
+export 'ai/minimax.dart';
+export 'board.dart';
+export 'move.dart';
+export 'move_rules.dart';
+export 'piece.dart';
+export 'position.dart';
+export 'xiangqi_game.dart';

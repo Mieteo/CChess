@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="vi"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>CChess - Found Match</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif:ital,wght@0,400;0,600;0,700;1,400;1,600&amp;family=Courier+Prime:wght@400;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "secondary": "#ecbf7e",
+                      "surface-container": "#231f1c",
+                      "on-tertiary": "#03363d",
+                      "tertiary-fixed": "#beeaf3",
+                      "surface-bright": "#3d3835",
+                      "primary-fixed-dim": "#efbc97",
+                      "secondary-container": "#5f410a",
+                      "tertiary-container": "#1c484f",
+                      "on-secondary-fixed": "#291800",
+                      "accent-gold": "#C8960C",
+                      "on-surface": "#eae1dc",
+                      "secondary-fixed-dim": "#ecbf7e",
+                      "primary-fixed": "#ffdcc4",
+                      "on-tertiary-container": "#8bb6be",
+                      "surface": "#161310",
+                      "on-surface-variant": "#d4c3b9",
+                      "background": "#161310",
+                      "primary": "#efbc97",
+                      "outline": "#9d8e84",
+                      "inverse-surface": "#eae1dc",
+                      "surface-tint": "#efbc97",
+                      "on-primary": "#48290e",
+                      "error": "#ffb4ab",
+                      "ivory-panel": "#F5E6C8",
+                      "wood-dark": "#5C3A1E",
+                      "secondary-fixed": "#ffddb0",
+                      "on-primary-fixed": "#2f1500",
+                      "primary-container": "#5c3a1e",
+                      "on-tertiary-fixed": "#001f24",
+                      "surface-container-high": "#2e2926",
+                      "tertiary-fixed-dim": "#a3ced6",
+                      "error-container": "#93000a",
+                      "on-primary-fixed-variant": "#623f22",
+                      "tertiary": "#a3ced6",
+                      "surface-dim": "#161310",
+                      "shadow-brown": "#5C3A1E33",
+                      "on-tertiary-fixed-variant": "#214d54",
+                      "deep-navy-black": "#1A3A5C",
+                      "teal-success": "#4A7C59",
+                      "surface-variant": "#393431",
+                      "on-error-container": "#ffdad6",
+                      "surface-container-lowest": "#110d0b",
+                      "on-primary-container": "#d5a481",
+                      "vermilion-red": "#8B0000",
+                      "inverse-primary": "#7c5638",
+                      "surface-container-highest": "#393431",
+                      "charcoal-dark": "#3A2010",
+                      "wood-light": "#D4A96A",
+                      "ink-black": "#2C1810",
+                      "outline-variant": "#50443d",
+                      "on-secondary-fixed-variant": "#5f410a",
+                      "on-secondary-container": "#d9ae6e",
+                      "inverse-on-surface": "#342f2c",
+                      "surface-container-low": "#1f1b18",
+                      "on-secondary": "#442b00",
+                      "parchment-tan": "#7D5A3C",
+                      "on-error": "#690005",
+                      "on-background": "#eae1dc"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.25rem",
+                      "lg": "0.5rem",
+                      "xl": "0.75rem",
+                      "full": "9999px"
+              },
+              "spacing": {
+                      "base": "16px",
+                      "md": "12px",
+                      "lg": "24px",
+                      "xs": "4px",
+                      "sm": "8px",
+                      "xxl": "48px",
+                      "xl": "32px"
+              },
+              "fontFamily": {
+                      "display-calligraphy": [
+                              "Noto Serif"
+                      ],
+                      "button-text": [
+                              "Noto Serif"
+                      ],
+                      "caption-sm": [
+                              "Noto Serif"
+                      ],
+                      "title-lg": [
+                              "Noto Serif"
+                      ],
+                      "mono-timer": [
+                              "Courier Prime"
+                      ],
+                      "heading-md": [
+                              "Noto Serif"
+                      ],
+                      "body-md": [
+                              "Noto Serif"
+                      ]
+              },
+              "fontSize": {
+                      "display-calligraphy": [
+                              "32px",
+                              {
+                                      "lineHeight": "40px",
+                                      "fontWeight": "700"
+                              }
+                      ],
+                      "button-text": [
+                              "16px",
+                              {
+                                      "lineHeight": "20px",
+                                      "letterSpacing": "0.5px",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "caption-sm": [
+                              "12px",
+                              {
+                                      "lineHeight": "16px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "title-lg": [
+                              "24px",
+                              {
+                                      "lineHeight": "32px",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "mono-timer": [
+                              "18px",
+                              {
+                                      "lineHeight": "24px",
+                                      "fontWeight": "700"
+                              }
+                      ],
+                      "heading-md": [
+                              "18px",
+                              {
+                                      "lineHeight": "24px",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "body-md": [
+                              "14px",
+                              {
+                                      "lineHeight": "20px",
+                                      "fontWeight": "400"
+                              }
+                      ]
+              }
+            },
+          }
+      </script>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background text-on-surface h-screen w-screen overflow-hidden flex flex-col relative">
+<!-- Dimmed Background Overlay -->
+<div class="absolute inset-0 z-0 bg-ink-black/80 flex items-center justify-center overflow-hidden">
+<!-- Abstract Ink-wash Background -->
+<div class="absolute inset-0 z-[-1] opacity-30 mix-blend-overlay" data-alt="A moody, traditional Chinese ink-wash painting of distant mountains obscured by mist and clouds. The monochromatic palette relies on deep blacks, subtle greys, and ethereal whites to create depth and a sense of calm contemplation. The style is fluid and abstract, reminiscent of ancient East Asian brushwork techniques. This serves as a serene, textured backdrop for a sophisticated strategy game interface." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuDWko4cwItwnvxq7LZZ_7LGSOy7GLB0xL1YswYcwYw1cyZG42eQ58SNRuXNvLivGejPTKFe9uFBE95YopjvnRhhnJUG3KZG0qDEc0P_zJsLOcX4H9e4edj_FZe3kcLANfE4Of1_NhNQW-dUTcFwXNfLGalOcOF2b2MN3-HNiNQtwTAGAC4swG1bUaqGlMTfDJrph2UnnIS3ZOOoDdSjenWmOPCFj_G2zAp5JtF76CDgBgyERc64h3_m5Qt-yjn2nBFI91a7dOnCJ0W8'); background-size: cover; background-position: center;"></div>
+<div class="absolute inset-0 bg-gradient-to-t from-background via-transparent to-background opacity-80"></div>
+</div>
+<!-- Main Content Area -->
+<main class="relative z-10 flex-1 flex flex-col items-center justify-center px-base pb-xxl pt-xl w-full max-w-2xl mx-auto h-full">
+<!-- Title -->
+<div class="mb-xl text-center">
+<h1 class="font-display-calligraphy text-display-calligraphy text-accent-gold drop-shadow-[0_2px_4px_rgba(92,58,30,0.5)]">Trận Chiến Sắp Bắt Đầu</h1>
+</div>
+<!-- VS Matchup Container -->
+<div class="flex flex-col md:flex-row items-center justify-between w-full max-w-md gap-xl relative">
+<!-- Player 1 (Left/Top) -->
+<div class="flex flex-col items-center z-10">
+<div class="relative w-32 h-32 md:w-40 md:h-40 rounded-full border-4 border-wood-light shadow-brown shadow-xl bg-surface-container overflow-hidden flex items-center justify-center">
+<img alt="Player 1 Avatar" class="w-full h-full object-cover" data-alt="A portrait of a focused individual, serving as a player avatar in a sophisticated digital environment. The lighting is dramatic, highlighting their features against a dark, moody background. The overall aesthetic is polished and high-end, fitting for a competitive strategy game setting. The colors lean towards warm, earthy tones consistent with a traditional Asian theme." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCPvzuKu6eWDggvQKOpY3KvIoOF3nVMc8aqk4CLVjAfaktECjtyP_0Iowv2rK-YpxdHYKwRya85jFWECoAhPnbwvnOW7jEqRmwtQ8dgLx1hUVcYSk9P3ZbUp4LirRcHzKpgQ5-of_OfJJAJTzrgggh9ospxQbs3MXx2GWbjfdKcQXDH5fK8-JmlN_IJ80Zfj8exVL62o1Wj1ZYRaZnfhpeLDguP26AM133wTCmvCnLmRvBNdUtXuewGZAZmxPdLzr2eGDBzdZP-kTeC"/>
+</div>
+<div class="mt-sm text-center bg-surface-container-high px-base py-sm rounded-lg border border-outline-variant shadow-md">
+<h2 class="font-heading-md text-heading-md text-on-surface">Kỳ Thủ Hiện Tại</h2>
+<div class="flex items-center justify-center mt-xs text-accent-gold font-button-text text-button-text">
+<span class="material-symbols-outlined text-[18px] mr-1" style="font-variation-settings: 'FILL' 1;">military_tech</span>
+<span>ELO: 1250</span>
+</div>
+</div>
+</div>
+<!-- VS Calligraphy Icon Center -->
+<div class="relative z-20 flex items-center justify-center -my-md md:my-0">
+<div class="w-20 h-20 md:w-24 md:h-24 rounded-full bg-gradient-to-br from-wood-dark to-charcoal-dark border-2 border-accent-gold flex items-center justify-center shadow-[0_0_20px_rgba(200,150,12,0.4)]">
+<span class="font-display-calligraphy text-[40px] md:text-[48px] text-accent-gold leading-none italic font-bold">VS</span>
+</div>
+</div>
+<!-- Player 2 (Right/Bottom) -->
+<div class="flex flex-col items-center z-10">
+<div class="relative w-32 h-32 md:w-40 md:h-40 rounded-full border-4 border-accent-gold shadow-[0_0_15px_rgba(200,150,12,0.3)] bg-surface-container overflow-hidden flex items-center justify-center">
+<img alt="Player 2 Avatar" class="w-full h-full object-cover opacity-90" data-alt="A portrait of an older, mysterious figure with a profound, experienced expression, acting as an opponent avatar. They are depicted with a slight sepia or warm tonal filter to evoke a sense of history and mastery. The background is subtle and dark, drawing focus to their face. The image carries an aura of a grandmaster in a traditional Eastern setting." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBARvLjdW7GQf2uqgGezt-BCvs7vn4HHOfn6FdcWkRgwcJ9wfb8-n514j_F3JsA_hV5zuDb3N0-8VsEPrC2jPlOQvtkrdykooNqNsovkZvhKYwFzifVSJ9LhUZlxjucAMWOlq0g4TlEzOgDKPfXDGyLi7RlA8-jMGalR8wnvjQa9QHmeR5AwUZBHSm9mIRAJ0IS1dLhjwau-gwmbIoAZ3KtTLp7RHBDRWuFZ0rhu7trp9ooAsY6DZYHW-t08Ft_NmHt34DheOeHIdPq"/>
+</div>
+<div class="mt-sm text-center bg-surface-container-high px-base py-sm rounded-lg border border-accent-gold/30 shadow-md">
+<h2 class="font-heading-md text-heading-md text-on-surface">Độc Cô Cầu Bại</h2>
+<div class="flex items-center justify-center mt-xs text-accent-gold font-button-text text-button-text">
+<span class="material-symbols-outlined text-[18px] mr-1" style="font-variation-settings: 'FILL' 1;">military_tech</span>
+<span>ELO: 1320</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Preparation & Countdown Area -->
+<div class="mt-xl w-full max-w-sm flex flex-col items-center">
+<p class="font-body-md text-body-md text-on-surface-variant mb-md text-center italic">Đang chuẩn bị ván đấu...</p>
+<!-- Custom Lacquer Progress Bar -->
+<div class="w-full h-4 bg-wood-dark rounded-full overflow-hidden border border-charcoal-dark shadow-inner relative">
+<!-- Inner progress fill -->
+<div class="h-full bg-gradient-to-r from-secondary to-accent-gold rounded-full w-[80%] relative shadow-[0_0_10px_rgba(200,150,12,0.5)]">
+<div class="absolute inset-0 bg-white/20 w-full h-full" style="background-image: linear-gradient(45deg,rgba(255,255,255,.15) 25%,transparent 25%,transparent 50%,rgba(255,255,255,.15) 50%,rgba(255,255,255,.15) 75%,transparent 75%,transparent); background-size: 1rem 1rem;"></div>
+</div>
+</div>
+<!-- Countdown Timer -->
+<div class="mt-lg">
+<span class="font-mono-timer text-[48px] text-accent-gold font-bold drop-shadow-[0_0_8px_rgba(200,150,12,0.6)]">3</span>
+</div>
+</div>
+</main>
+</body></html>

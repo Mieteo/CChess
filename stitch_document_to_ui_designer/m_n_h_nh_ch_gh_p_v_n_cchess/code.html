@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="vi"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>CChess - Matchmaking</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif:wght@400;600;700&amp;family=Courier+Prime:wght@700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "on-tertiary-fixed": "#001f24",
+                    "primary-container": "#5c3a1e",
+                    "on-primary-fixed": "#2f1500",
+                    "secondary-fixed": "#ffddb0",
+                    "wood-dark": "#5C3A1E",
+                    "surface-container-lowest": "#110d0b",
+                    "on-primary-container": "#d5a481",
+                    "on-error-container": "#ffdad6",
+                    "teal-success": "#4A7C59",
+                    "surface-variant": "#393431",
+                    "deep-navy-black": "#1A3A5C",
+                    "on-tertiary-fixed-variant": "#214d54",
+                    "surface-dim": "#161310",
+                    "shadow-brown": "#5C3A1E33",
+                    "tertiary": "#a3ced6",
+                    "on-primary-fixed-variant": "#623f22",
+                    "tertiary-fixed-dim": "#a3ced6",
+                    "error-container": "#93000a",
+                    "surface-container-high": "#2e2926",
+                    "outline-variant": "#50443d",
+                    "wood-light": "#D4A96A",
+                    "ink-black": "#2C1810",
+                    "charcoal-dark": "#3A2010",
+                    "surface-container-highest": "#393431",
+                    "inverse-primary": "#7c5638",
+                    "vermilion-red": "#8B0000",
+                    "on-error": "#690005",
+                    "on-background": "#eae1dc",
+                    "parchment-tan": "#7D5A3C",
+                    "surface-container-low": "#1f1b18",
+                    "on-secondary": "#442b00",
+                    "inverse-on-surface": "#342f2c",
+                    "on-secondary-fixed-variant": "#5f410a",
+                    "on-secondary-container": "#d9ae6e",
+                    "secondary-container": "#5f410a",
+                    "primary-fixed-dim": "#efbc97",
+                    "surface-bright": "#3d3835",
+                    "tertiary-fixed": "#beeaf3",
+                    "surface-container": "#231f1c",
+                    "on-tertiary": "#03363d",
+                    "secondary": "#ecbf7e",
+                    "secondary-fixed-dim": "#ecbf7e",
+                    "on-surface": "#eae1dc",
+                    "accent-gold": "#C8960C",
+                    "tertiary-container": "#1c484f",
+                    "on-secondary-fixed": "#291800",
+                    "on-surface-variant": "#d4c3b9",
+                    "surface": "#161310",
+                    "primary-fixed": "#ffdcc4",
+                    "on-tertiary-container": "#8bb6be",
+                    "ivory-panel": "#F5E6C8",
+                    "error": "#ffb4ab",
+                    "surface-tint": "#efbc97",
+                    "on-primary": "#48290e",
+                    "outline": "#9d8e84",
+                    "inverse-surface": "#eae1dc",
+                    "primary": "#efbc97",
+                    "background": "#161310"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "xxl": "48px",
+                    "xl": "32px",
+                    "base": "16px",
+                    "md": "12px",
+                    "lg": "24px",
+                    "xs": "4px",
+                    "sm": "8px"
+            },
+            "fontFamily": {
+                    "display-calligraphy": [
+                            "Noto Serif"
+                    ],
+                    "button-text": [
+                            "Noto Serif"
+                    ],
+                    "caption-sm": [
+                            "Noto Serif"
+                    ],
+                    "title-lg": [
+                            "Noto Serif"
+                    ],
+                    "mono-timer": [
+                            "Courier Prime"
+                    ],
+                    "heading-md": [
+                            "Noto Serif"
+                    ],
+                    "body-md": [
+                            "Noto Serif"
+                    ]
+            },
+            "fontSize": {
+                    "display-calligraphy": [
+                            "32px",
+                            {
+                                    "lineHeight": "40px",
+                                    "fontWeight": "700"
+                            }
+                    ],
+                    "button-text": [
+                            "16px",
+                            {
+                                    "lineHeight": "20px",
+                                    "letterSpacing": "0.5px",
+                                    "fontWeight": "600"
+                            }
+                    ],
+                    "caption-sm": [
+                            "12px",
+                            {
+                                    "lineHeight": "16px",
+                                    "fontWeight": "400"
+                            }
+                    ],
+                    "title-lg": [
+                            "24px",
+                            {
+                                    "lineHeight": "32px",
+                                    "fontWeight": "600"
+                            }
+                    ],
+                    "mono-timer": [
+                            "18px",
+                            {
+                                    "lineHeight": "24px",
+                                    "fontWeight": "700"
+                            }
+                    ],
+                    "heading-md": [
+                            "18px",
+                            {
+                                    "lineHeight": "24px",
+                                    "fontWeight": "600"
+                            }
+                    ],
+                    "body-md": [
+                            "14px",
+                            {
+                                    "lineHeight": "20px",
+                                    "fontWeight": "400"
+                            }
+                    ]
+            }
+    },
+        },
+      }
+    </script>
+<style>
+        .radar-ring {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            border-radius: 50%;
+            border: 1px solid rgba(200, 150, 12, 0.3);
+            box-shadow: inset 0 0 20px rgba(200, 150, 12, 0.1), 0 0 20px rgba(200, 150, 12, 0.1);
+        }
+        .ring-1 { width: 120px; height: 120px; }
+        .ring-2 { width: 200px; height: 200px; border: 1px solid rgba(200, 150, 12, 0.2); }
+        .ring-3 { width: 300px; height: 300px; border: 1px dashed rgba(200, 150, 12, 0.15); }
+        .ring-4 { width: 420px; height: 420px; border: 1px solid rgba(200, 150, 12, 0.05); }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-surface text-on-surface min-h-screen flex flex-col relative overflow-hidden">
+<!-- Background Image Layer -->
+<div class="absolute inset-0 z-0">
+<img alt="Ink wash background" class="w-full h-full object-cover opacity-30 mix-blend-luminosity" data-alt="A delicate and expansive traditional Chinese ink-wash (Thủy Mặc) painting serving as a full-screen background. The scene depicts misty mountains and flowing rivers executed in muted earthy tones, soft grays, and deep charcoal strokes. The composition is highly atmospheric and ethereal, leaving ample negative space to evoke a sense of Zen calm and intellectual focus. The lighting is soft and ambient, perfect for an elegant, high-end oriental user interface." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCmq0KAZv8qzQelZrydUTKEUtskr_AIl8bgv-zuL5BHoywvLH_gTNZCNoengpnspPYgrgO6OcFzC3Xt_v1_a-xm4ouv-O5VC0ilrWl7cXkZ_FwA5UMmq3w_wGig80A4UHNZs69dvUVBe_eQzH6ARxMzp7MAAsm5_W6_xv4t1dL7AsoST9ekq9ukpP0eHxSE0hY4Zs-jBov2Eoec1iZMXoQ8uDPvN7wuDkssWaWuChzeHxU2MnwB6zOEG5Ewm3zE47bdqD7cx8PRNqt0"/>
+<div class="absolute inset-0 bg-gradient-to-b from-surface/80 via-surface/60 to-surface/90"></div>
+</div>
+<!-- Top App Bar (Structural representation, hidden but semantically present if needed for back navigation, though intent is transactional) -->
+<div class="w-full px-base py-sm z-50 flex justify-between items-center relative">
+<button class="text-parchment-tan hover:opacity-80 transition-opacity p-sm rounded-full bg-surface-container/50 backdrop-blur-sm">
+<span class="material-symbols-outlined" data-icon="arrow_back">arrow_back</span>
+</button>
+<div class="font-display-calligraphy text-title-lg text-accent-gold">CChess</div>
+<div class="w-10"></div> <!-- Spacer -->
+</div>
+<!-- Main Content Canvas -->
+<main class="flex-1 flex flex-col items-center justify-center relative z-10 px-base pb-xxl pt-lg">
+<!-- Player Info Card (Floating top center) -->
+<div class="absolute top-lg left-1/2 transform -translate-x-1/2 bg-ivory-panel/10 backdrop-blur-md border border-accent-gold/30 rounded-xl px-lg py-sm flex flex-col items-center shadow-brown shadow-lg">
+<span class="font-heading-md text-heading-md text-secondary">Kỳ Thủ</span>
+<div class="flex items-center gap-xs mt-xs">
+<span class="material-symbols-outlined text-accent-gold text-sm" data-icon="stars" data-weight="fill" style="font-variation-settings: 'FILL' 1;">stars</span>
+<span class="font-mono-timer text-body-md text-secondary-fixed">ELO: 1250</span>
+</div>
+</div>
+<!-- Central Radar Area -->
+<div class="relative w-full max-w-[420px] aspect-square flex items-center justify-center my-xl">
+<!-- Radar Rings -->
+<div class="radar-ring ring-4"></div>
+<div class="radar-ring ring-3"></div>
+<div class="radar-ring ring-2"></div>
+<div class="radar-ring ring-1 bg-surface-container-high/40 backdrop-blur-sm shadow-[0_0_30px_rgba(200,150,12,0.2)]"></div>
+<!-- Central Icon/Avatar -->
+<div class="relative z-20 w-20 h-20 bg-charcoal-dark rounded-full border-2 border-accent-gold flex items-center justify-center shadow-brown shadow-lg overflow-hidden">
+<span class="material-symbols-outlined text-accent-gold text-[40px]" data-icon="search">search</span>
+</div>
+</div>
+<!-- Status Text & Timer -->
+<div class="flex flex-col items-center text-center mt-lg space-y-md">
+<h2 class="font-display-calligraphy text-title-lg text-accent-gold tracking-wide drop-shadow-md">Đang tìm đối thủ...</h2>
+<div class="bg-surface-container-highest px-lg py-sm rounded-full border border-outline-variant shadow-inner">
+<span class="font-mono-timer text-mono-timer text-primary">00:15</span>
+</div>
+<p class="font-body-md text-body-md text-on-surface-variant max-w-xs mt-md opacity-80">
+                Hãy giữ sự tập trung. Cuộc chiến sắp bắt đầu.
+            </p>
+</div>
+</main>
+<!-- Bottom Action Area -->
+<div class="w-full px-lg py-xl z-20 relative flex justify-center pb-[max(32px,env(safe-area-inset-bottom))]">
+<button class="w-full max-w-[280px] bg-charcoal-dark/80 backdrop-blur-md border border-outline-variant text-on-surface font-button-text text-button-text py-md rounded-[24px] shadow-brown shadow-lg hover:opacity-90 active:scale-95 transition-all flex items-center justify-center gap-sm">
+<span class="material-symbols-outlined" data-icon="close">close</span>
+            Hủy
+        </button>
+</div>
+</body></html>

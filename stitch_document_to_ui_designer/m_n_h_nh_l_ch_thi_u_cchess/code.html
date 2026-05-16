@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="vi"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>CChess - Lịch Thi Đấu</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Courier+Prime:ital,wght@0,400;0,700;1,400;1,700&amp;family=Noto+Serif:ital,wght@0,100..900;1,100..900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "accent-gold": "#C8960C",
+                        "primary": "#efbc97",
+                        "on-secondary": "#442b00",
+                        "surface-container": "#231f1c",
+                        "inverse-on-surface": "#342f2c",
+                        "on-secondary-fixed-variant": "#5f410a",
+                        "on-tertiary-container": "#8bb6be",
+                        "parchment-tan": "#7D5A3C",
+                        "on-tertiary-fixed-variant": "#214d54",
+                        "on-primary": "#48290e",
+                        "surface-dim": "#161310",
+                        "on-tertiary-fixed": "#001f24",
+                        "surface-container-lowest": "#110d0b",
+                        "secondary": "#ecbf7e",
+                        "error-container": "#93000a",
+                        "background": "#161310",
+                        "inverse-surface": "#eae1dc",
+                        "on-error-container": "#ffdad6",
+                        "primary-fixed-dim": "#efbc97",
+                        "on-primary-fixed-variant": "#623f22",
+                        "outline": "#9d8e84",
+                        "on-primary-fixed": "#2f1500",
+                        "error": "#ffb4ab",
+                        "surface-container-low": "#1f1b18",
+                        "surface-container-high": "#2e2926",
+                        "wood-light": "#D4A96A",
+                        "ink-black": "#2C1810",
+                        "surface-variant": "#393431",
+                        "secondary-fixed-dim": "#ecbf7e",
+                        "on-tertiary": "#03363d",
+                        "on-background": "#eae1dc",
+                        "on-primary-container": "#d5a481",
+                        "tertiary-container": "#1c484f",
+                        "vermilion-red": "#8B0000",
+                        "surface-bright": "#3d3835",
+                        "surface-container-highest": "#393431",
+                        "wood-dark": "#5C3A1E",
+                        "primary-container": "#5c3a1e",
+                        "on-surface-variant": "#d4c3b9",
+                        "ivory-panel": "#F5E6C8",
+                        "surface": "#161310",
+                        "secondary-fixed": "#ffddb0",
+                        "tertiary-fixed": "#beeaf3",
+                        "on-error": "#690005",
+                        "secondary-container": "#5f410a",
+                        "on-secondary-container": "#d9ae6e",
+                        "teal-success": "#4A7C59",
+                        "inverse-primary": "#7c5638",
+                        "outline-variant": "#50443d",
+                        "deep-navy-black": "#1A3A5C",
+                        "tertiary-fixed-dim": "#a3ced6",
+                        "surface-tint": "#efbc97",
+                        "primary-fixed": "#ffdcc4",
+                        "tertiary": "#a3ced6",
+                        "on-secondary-fixed": "#291800",
+                        "on-surface": "#eae1dc",
+                        "charcoal-dark": "#3A2010",
+                        "shadow-brown": "#5C3A1E33"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "xl": "32px",
+                        "md": "12px",
+                        "xs": "4px",
+                        "xxl": "48px",
+                        "base": "16px",
+                        "sm": "8px",
+                        "lg": "24px"
+                    },
+                    "fontFamily": {
+                        "button-text": ["Noto Serif"],
+                        "mono-timer": ["Courier Prime"],
+                        "heading-md": ["Noto Serif"],
+                        "caption-sm": ["Noto Serif"],
+                        "body-md": ["Noto Serif"],
+                        "display-calligraphy": ["Noto Serif"],
+                        "title-lg": ["Noto Serif"]
+                    },
+                    "fontSize": {
+                        "button-text": ["16px", { "lineHeight": "20px", "letterSpacing": "0.5px", "fontWeight": "600" }],
+                        "mono-timer": ["18px", { "lineHeight": "24px", "fontWeight": "700" }],
+                        "heading-md": ["18px", { "lineHeight": "24px", "fontWeight": "600" }],
+                        "caption-sm": ["12px", { "lineHeight": "16px", "fontWeight": "400" }],
+                        "body-md": ["14px", { "lineHeight": "20px", "fontWeight": "400" }],
+                        "display-calligraphy": ["32px", { "lineHeight": "40px", "fontWeight": "700" }],
+                        "title-lg": ["24px", { "lineHeight": "32px", "fontWeight": "600" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background text-on-background min-h-screen pb-[100px]">
+<!-- TopAppBar -->
+<header class="docked full-width top-0 bg-gradient-to-b from-wood-dark to-charcoal-dark shadow-brown shadow-md flex justify-between items-center w-full px-base py-sm z-50 sticky">
+<button class="text-primary dark:text-primary-fixed hover:opacity-80 transition-opacity flex items-center justify-center p-sm">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">arrow_back</span>
+</button>
+<h1 class="text-title-lg font-display-calligraphy text-accent-gold tracking-tight">Lịch Thi Đấu</h1>
+<div class="w-10 h-10 rounded-full overflow-hidden border-2 border-accent-gold/50">
+<img alt="Avatar" class="w-full h-full object-cover" data-alt="A refined avatar portrait of a wise older Asian man with a neat grey beard, looking thoughtfully into the camera. He is dressed in traditional dark silk robes with subtle golden embroidery. The lighting is moody and cinematic, illuminating his features against a deep, dark wood-textured background, fitting the high-end ancient East aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDzkcSc1pnwRE-Vp69X2zMsbnTlP7un3fiiZzTeDZvRmMKBosZkvVcPJP-TtkKWMsx1lNY2blZ3fmDjPZHOIcqPB_1U5NCE6NTRO1kTZK1JjWom-DdYWKek5plNMcUob2iQEqxtY_TUN2RU3c0kdypjBGucoeNhk9YfPo2cF3oouExVIVQ2wquQLg5jCXNvCWEUVOlA39sdGk0bVm_BBfa3SRpBNO8UCs94GV0VRlvQ2k7hU7Kp7RrpkxE79o0i2-FiqBWmGhkbnzF2"/>
+</div>
+</header>
+<main class="px-base py-lg max-w-3xl mx-auto space-y-xl">
+<!-- View Filters -->
+<div class="flex justify-center gap-md">
+<button class="px-lg py-sm rounded-full bg-gradient-to-r from-accent-gold to-wood-light text-on-secondary font-button-text text-button-text shadow-md transform hover:scale-95 transition-transform duration-200">
+                Của tôi
+            </button>
+<button class="px-lg py-sm rounded-full bg-surface-container border border-outline text-on-surface-variant font-button-text text-button-text hover:bg-surface-variant transition-colors duration-200">
+                Tất cả
+            </button>
+</div>
+<!-- Scroll-like Calendar Strip -->
+<div class="bg-ivory-panel rounded-lg shadow-brown shadow-md p-md relative overflow-hidden">
+<!-- Decorative edge -->
+<div class="absolute inset-y-0 left-0 w-2 bg-gradient-to-b from-wood-dark to-charcoal-dark opacity-50"></div>
+<div class="absolute inset-y-0 right-0 w-2 bg-gradient-to-b from-wood-dark to-charcoal-dark opacity-50"></div>
+<div class="flex items-center justify-between gap-sm overflow-x-auto hide-scrollbar pb-xs">
+<!-- Days -->
+<button class="flex flex-col items-center p-sm min-w-[60px] text-ink-black opacity-60 hover:opacity-100 transition-opacity">
+<span class="font-caption-sm text-caption-sm uppercase">T2</span>
+<span class="font-heading-md text-heading-md">14</span>
+</button>
+<button class="flex flex-col items-center p-sm min-w-[60px] text-ink-black opacity-60 hover:opacity-100 transition-opacity">
+<span class="font-caption-sm text-caption-sm uppercase">T3</span>
+<span class="font-heading-md text-heading-md">15</span>
+</button>
+<!-- Selected Day -->
+<button class="flex flex-col items-center p-sm min-w-[60px] bg-ink-black text-ivory-panel rounded-md shadow-inner transform scale-105 relative">
+<div class="absolute inset-0 rounded-md border border-accent-gold opacity-50"></div>
+<span class="font-caption-sm text-caption-sm uppercase text-accent-gold">T4</span>
+<span class="font-heading-md text-heading-md text-wood-light">16</span>
+</button>
+<button class="flex flex-col items-center p-sm min-w-[60px] text-ink-black opacity-60 hover:opacity-100 transition-opacity">
+<span class="font-caption-sm text-caption-sm uppercase">T5</span>
+<span class="font-heading-md text-heading-md">17</span>
+</button>
+<button class="flex flex-col items-center p-sm min-w-[60px] text-ink-black opacity-60 hover:opacity-100 transition-opacity">
+<span class="font-caption-sm text-caption-sm uppercase">T6</span>
+<span class="font-heading-md text-heading-md">18</span>
+</button>
+</div>
+</div>
+<!-- Schedule List -->
+<div class="space-y-lg">
+<!-- Time Slot Group -->
+<div class="relative">
+<div class="absolute left-8 top-8 bottom-[-24px] w-0.5 bg-outline-variant opacity-30"></div>
+<div class="flex items-center gap-md mb-md">
+<div class="bg-surface-variant text-on-surface px-md py-xs rounded-full font-mono-timer text-body-md inline-flex items-center gap-xs z-10 border border-outline/20">
+<span class="material-symbols-outlined text-[16px] text-accent-gold" style="font-variation-settings: 'FILL' 1;">schedule</span>
+                        14:00
+                    </div>
+<div class="flex-grow h-px bg-gradient-to-r from-outline-variant/50 to-transparent"></div>
+</div>
+<!-- Match Card -->
+<div class="ml-xl bg-ivory-panel rounded-lg p-base shadow-brown shadow-md border-l-4 border-accent-gold relative overflow-hidden group">
+<!-- Subtle ink wash background effect -->
+<div class="absolute right-0 top-0 w-32 h-32 bg-ink-black/5 rounded-full blur-2xl -mr-16 -mt-16"></div>
+<div class="flex justify-between items-start mb-md relative z-10">
+<div>
+<h3 class="font-heading-md text-heading-md text-ink-black">Giải Vô Địch Toàn Quốc</h3>
+<p class="font-caption-sm text-caption-sm text-wood-dark mt-xs">Vòng 4 • Bàn 12</p>
+</div>
+<button class="p-xs bg-wood-dark/10 rounded-full text-ink-black hover:bg-wood-dark/20 transition-colors" title="Nhắc tôi">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">notifications</span>
+</button>
+</div>
+<div class="flex items-center justify-between gap-sm relative z-10 bg-white/40 rounded-md p-sm border border-wood-dark/10">
+<!-- Player 1 -->
+<div class="flex flex-col items-center gap-xs w-1/3">
+<img alt="Player 1" class="w-12 h-12 rounded-full border border-outline-variant object-cover" data-alt="A dramatic black and white style portrait portrait of a serious young man, suitable for a strategy game avatar. The image has a subtle sepia tone to match a parchment aesthetic, with high contrast lighting highlighting his intense focus. The background is a soft, non-distracting dark gradient." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBzsTrftZn5sEYPkq3Z3YrJPUWSFJFrhMz8ujeRkXasHSgogceKU7lC7Nt1FIvdaZmf_hmXwn-RjWzq877J6fLr5eWdvxS1TVgcpu-Le5FP1_rOLgy9PbHPDGRtBy-ptecZB65u4fkEMoKpeUVZiF1HEF7GE1ik0cd3-w7tXUPFQe8oQOpPPEqAd2WshC-Mw1lBeFSCJmhMhuwZTjtbkyQqSZbMyGhIBsCp62Y-Ex4puCLcOt9cqWUBphLjEB3x_dCcDwIOmkOPDXAx"/>
+<span class="font-body-md text-body-md text-ink-black text-center line-clamp-1">Trần Văn A</span>
+<span class="font-caption-sm text-caption-sm text-vermilion-red font-bold">2150</span>
+</div>
+<!-- VS -->
+<div class="flex flex-col items-center">
+<span class="font-display-calligraphy text-title-lg text-wood-dark opacity-50 italic">VS</span>
+</div>
+<!-- Player 2 -->
+<div class="flex flex-col items-center gap-xs w-1/3">
+<img alt="Player 2" class="w-12 h-12 rounded-full border border-outline-variant object-cover" data-alt="A stylized portrait of a middle-aged man with a calm, calculating expression. He is wearing simple dark clothing. The image has a subtle warm, ink-wash aesthetic filter applied, making it look slightly like an old photograph or detailed painting, fitting a sophisticated East Asian strategy game theme." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAFxb7AE67en80C1JW-nGwmT_naK5ff9c89Rvv3VkQgc_nYve0LdZ-EYCmy2cKk49PcEA0XG31hVRW5nDMhd8_Pczvv6UqLAnz1EaXqM7gO70Rf8MO8NYF-nvestK6PUxYCOe8IHjxbLjLxAQClcUCJPPSpzG0JzKGvMB3L24rpwdJVtpLJIfNs-J43Mgc_knKnuNLBDvjzpKBP5rsode89YS7O2wSfU-VTYkQNFD0H33XVaaePjT-Jn8AvPGgFQjxB-ZopgKO_j-Jl"/>
+<span class="font-body-md text-body-md text-ink-black text-center line-clamp-1">Lê Đức B</span>
+<span class="font-caption-sm text-caption-sm text-deep-navy-black font-bold">2210</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+<!-- BottomNavBar -->
+<nav class="bg-wood-dark dark:bg-surface-container-low shadow-brown shadow-lg fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-base py-md md:hidden">
+<a class="flex flex-col items-center justify-center text-parchment-tan opacity-70 hover:text-wood-light group" href="#">
+<span class="material-symbols-outlined mb-1 group-active:scale-95 transition-transform" style="font-variation-settings: 'FILL' 0;">home</span>
+<span class="font-button-text text-caption-sm">Trang Chủ</span>
+</a>
+<a class="flex flex-col items-center justify-center text-parchment-tan opacity-70 hover:text-wood-light group" href="#">
+<span class="material-symbols-outlined mb-1 group-active:scale-95 transition-transform" style="font-variation-settings: 'FILL' 0;">menu_book</span>
+<span class="font-button-text text-caption-sm">Học Tập</span>
+</a>
+<a class="flex flex-col items-center justify-center text-accent-gold transform -translate-y-1 transition-all duration-300 group" href="#">
+<span class="material-symbols-outlined mb-1 group-active:scale-95 transition-transform" style="font-variation-settings: 'FILL' 1;">sports_esports</span>
+<span class="font-button-text text-caption-sm font-display-calligraphy">Đối Đầu</span>
+</a>
+<a class="flex flex-col items-center justify-center text-parchment-tan opacity-70 hover:text-wood-light group" href="#">
+<span class="material-symbols-outlined mb-1 group-active:scale-95 transition-transform" style="font-variation-settings: 'FILL' 0;">person</span>
+<span class="font-button-text text-caption-sm">Hồ Sơ</span>
+</a>
+</nav>
+<style>
+        /* Hide scrollbar for the calendar strip */
+        .hide-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .hide-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
+</body></html>
