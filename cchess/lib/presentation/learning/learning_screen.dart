@@ -189,7 +189,7 @@ class _SectionGrid extends StatelessWidget {
         title: 'Khai Cuộc\nĐại Sư',
         icon: Icons.map_outlined,
         color: const Color(0xFFFDBA74),
-        onTap: () {},
+        onTap: () => context.go(AppConstants.routeOpenings),
       ),
       _LearningTile(
         title: 'Chụp Nhận\nDiện Cờ',

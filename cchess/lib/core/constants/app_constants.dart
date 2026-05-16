@@ -22,6 +22,11 @@ class AppConstants {
   static const String routePuzzle = '/puzzle';
   static const String routeSettings = '/settings';
   static const String routeShop = '/shop';
+  static const String routeAchievements = '/achievements';
+  static const String routeHistory = '/history';
+  static const String routeDailyQuests = '/daily-quests';
+  static const String routeReplay = '/replay';
+  static const String routeOpenings = '/openings';
 
   // Storage keys.
   static const String boxSettings = 'cchess_settings';

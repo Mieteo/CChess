@@ -1,46 +1,64 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
+import '../../core/constants/app_constants.dart';
+import '../../data/models/user_profile.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_spacing.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/common/common.dart';
+import 'profile_controller.dart';
 
-/// Hồ Sơ — user profile, stats, achievements, settings entry.
-class ProfileScreen extends StatelessWidget {
+/// Hồ Sơ — user profile backed by [profileControllerProvider].
+class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(
-        AppSpacing.base,
-        AppSpacing.base,
-        AppSpacing.base,
-        96,
-      ),
-      children: [
-        const _ProfileHeader(),
-        AppSpacing.vGapLg,
-        const _StatsGrid(),
-        AppSpacing.vGapLg,
-        const _WinLossBar(wins: 124, draws: 18, losses: 76),
-        AppSpacing.vGapLg,
-        SectionHeader(
-          title: 'Huy Chương',
-          actionLabel: 'Xem tất cả',
-          onActionPressed: () {},
-        ),
-        AppSpacing.vGapMd,
-        const _AchievementGrid(),
-        AppSpacing.vGapLg,
-        const _ProfileMenu(),
-      ],
+  Widget build(BuildContext context, WidgetRef ref) {
+    final asyncProfile = ref.watch(profileControllerProvider);
+
+    return asyncProfile.when(
+      loading: () => const Center(child: BrushStrokeSpinner()),
+      error: (e, _) => Center(child: Text('Lỗi: $e', style: AppTextStyles.bodyMd)),
+      data: (profile) {
+        return ListView(
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.base,
+            AppSpacing.base,
+            AppSpacing.base,
+            96,
+          ),
+          children: [
+            _ProfileHeader(profile: profile),
+            AppSpacing.vGapLg,
+            _StatsGrid(profile: profile),
+            AppSpacing.vGapLg,
+            _WinLossBar(
+              wins: profile.wins,
+              draws: profile.draws,
+              losses: profile.losses,
+            ),
+            AppSpacing.vGapLg,
+            SectionHeader(
+              title: 'Huy Chương',
+              actionLabel: 'Xem tất cả',
+              onActionPressed: () {},
+            ),
+            AppSpacing.vGapMd,
+            const _AchievementGrid(),
+            AppSpacing.vGapLg,
+            const _ProfileMenu(),
+          ],
+        );
+      },
     );
   }
 }
 
 class _ProfileHeader extends StatelessWidget {
-  const _ProfileHeader();
+  final UserProfile profile;
+  const _ProfileHeader({required this.profile});
 
   @override
   Widget build(BuildContext context) {
@@ -55,27 +73,37 @@ class _ProfileHeader extends StatelessWidget {
         children: [
           Row(
             children: [
-              const CChessAvatar(initials: 'KV', size: 72, elo: 1820),
+              CChessAvatar(
+                initials: profile.displayName.isNotEmpty
+                    ? profile.displayName[0]
+                    : '?',
+                size: 72,
+                elo: profile.eloChess,
+              ),
               AppSpacing.hGapMd,
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Kỳ Vương Việt', style: AppTextStyles.titleLg),
+                    Text(
+                      profile.displayName,
+                      style: AppTextStyles.titleLg,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                     AppSpacing.vGapXs,
                     Text(
-                      'ID: #A91886313',
+                      '${profile.shortId} • ${profile.region}',
                       style: AppTextStyles.captionSm.copyWith(
                         color: AppColors.parchmentTan,
                       ),
                     ),
                     AppSpacing.vGapSm,
-                    const CChessRankBadge(elo: 1820),
+                    CChessRankBadge(elo: profile.eloChess),
                   ],
                 ),
               ),
               IconButton(
-                onPressed: () {},
+                onPressed: () => context.go('${AppConstants.routeProfile}/edit'),
                 icon: const Icon(Icons.edit_outlined),
                 color: AppColors.accentGold,
               ),
@@ -84,13 +112,16 @@ class _ProfileHeader extends StatelessWidget {
           AppSpacing.vGapMd,
           Row(
             children: [
-              const Expanded(
-                child: CChessCurrencyDisplay(amount: 2278, large: true),
+              Expanded(
+                child: CChessCurrencyDisplay(
+                  amount: profile.coins,
+                  large: true,
+                ),
               ),
               AppSpacing.hGapSm,
-              const Expanded(
+              Expanded(
                 child: CChessCurrencyDisplay(
-                  amount: 1000,
+                  amount: profile.gems,
                   currency: CChessCurrency.gem,
                   large: true,
                 ),
@@ -104,10 +135,15 @@ class _ProfileHeader extends StatelessWidget {
 }
 
 class _StatsGrid extends StatelessWidget {
-  const _StatsGrid();
+  final UserProfile profile;
+  const _StatsGrid({required this.profile});
 
   @override
   Widget build(BuildContext context) {
+    final winPercent = profile.totalGames == 0
+        ? '—'
+        : '${(profile.winRate * 100).round()}%';
+
     return GridView.count(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
@@ -115,14 +151,14 @@ class _StatsGrid extends StatelessWidget {
       crossAxisSpacing: AppSpacing.md,
       mainAxisSpacing: AppSpacing.md,
       childAspectRatio: 1.8,
-      children: const [
+      children: [
         _StatTile(
           label: 'ELO Cờ Tướng',
-          value: '1820',
+          value: '${profile.eloChess}',
           icon: Icons.show_chart,
           color: AppColors.accentGold,
         ),
-        _StatTile(
+        const _StatTile(
           label: 'ELO Cờ Úp',
           value: '—',
           icon: Icons.help_outline,
@@ -130,13 +166,13 @@ class _StatsGrid extends StatelessWidget {
         ),
         _StatTile(
           label: 'Tổng ván',
-          value: '218',
+          value: '${profile.totalGames}',
           icon: Icons.dashboard_outlined,
           color: AppColors.tealSuccess,
         ),
         _StatTile(
           label: 'Tỷ lệ thắng',
-          value: '56%',
+          value: winPercent,
           icon: Icons.flag_outlined,
           color: AppColors.vermilionRed,
         ),
@@ -207,7 +243,24 @@ class _WinLossBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final total = wins + draws + losses;
-    if (total == 0) return const SizedBox.shrink();
+    if (total == 0) {
+      return CChessCard(
+        child: Row(
+          children: [
+            const Icon(Icons.flag_outlined, color: AppColors.parchmentTan),
+            AppSpacing.hGapSm,
+            Expanded(
+              child: Text(
+                'Chưa có ván đấu nào. Bắt đầu chơi để mở thống kê!',
+                style: AppTextStyles.bodyMd.copyWith(
+                  color: AppColors.onSurfaceVariant,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
     final winRatio = wins / total;
     final drawRatio = draws / total;
     final lossRatio = losses / total;
@@ -267,9 +320,9 @@ class _AchievementGrid extends StatelessWidget {
   const _AchievementGrid();
 
   static const _achievements = <(IconData, String, bool)>[
-    (Icons.emoji_events, 'Bách Thắng', true),
+    (Icons.emoji_events, 'Bách Thắng', false),
     (Icons.flag, 'Tân Thủ', true),
-    (Icons.local_fire_department, 'Ngũ Liên', true),
+    (Icons.local_fire_department, 'Ngũ Liên', false),
     (Icons.shield, 'Phòng Thủ', false),
     (Icons.bolt, 'Tốc Chiến', false),
     (Icons.psychology, 'Học Giả', false),
@@ -335,32 +388,70 @@ class _AchievementGrid extends StatelessWidget {
 class _ProfileMenu extends StatelessWidget {
   const _ProfileMenu();
 
-  static const _items = <(IconData, String, bool, String?)>[
-    (Icons.workspace_premium, 'Hội Viên VIP', false, 'Vàng'),
-    (Icons.analytics_outlined, 'Thống Kê Chi Tiết', false, null),
-    (Icons.emoji_events_outlined, 'Huy Chương', false, null),
-    (Icons.checkroom_outlined, 'Trang Phục Cá Nhân', false, null),
-    (Icons.settings_outlined, 'Cài Đặt', false, null),
-    (Icons.help_outline, 'Trợ Giúp & Phản Hồi', false, null),
-    (Icons.share_outlined, 'Giới Thiệu Bạn Bè', false, null),
-    (Icons.info_outline, 'Phiên bản', false, '1.0.0'),
-  ];
-
   @override
   Widget build(BuildContext context) {
+    final items = <_MenuEntry>[
+      _MenuEntry(
+        icon: Icons.workspace_premium,
+        label: 'Hội Viên VIP',
+        trailingBadge: 'Vàng',
+        isVip: true,
+        onTap: () {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('VIP sẽ có ở Sprint 9.')),
+          );
+        },
+      ),
+      _MenuEntry(
+        icon: Icons.history_edu,
+        label: 'Kỳ Phổ Của Tôi',
+        onTap: () => context.go(AppConstants.routeHistory),
+      ),
+      _MenuEntry(
+        icon: Icons.emoji_events_outlined,
+        label: 'Huy Chương',
+        onTap: () => context.go(AppConstants.routeAchievements),
+      ),
+      _MenuEntry(
+        icon: Icons.task_alt_outlined,
+        label: 'Nhiệm Vụ Hôm Nay',
+        onTap: () => context.go(AppConstants.routeDailyQuests),
+      ),
+      _MenuEntry(
+        icon: Icons.checkroom_outlined,
+        label: 'Trang Phục Cá Nhân',
+        onTap: () {},
+      ),
+      _MenuEntry(
+        icon: Icons.settings_outlined,
+        label: 'Cài Đặt',
+        onTap: () => context.go(AppConstants.routeSettings),
+      ),
+      _MenuEntry(
+        icon: Icons.help_outline,
+        label: 'Trợ Giúp & Phản Hồi',
+        onTap: () {},
+      ),
+      _MenuEntry(
+        icon: Icons.share_outlined,
+        label: 'Giới Thiệu Bạn Bè',
+        onTap: () {},
+      ),
+      _MenuEntry(
+        icon: Icons.info_outline,
+        label: 'Phiên bản',
+        trailingBadge: AppConstants.appVersion,
+        onTap: () {},
+      ),
+    ];
+
     return CChessCard(
       padding: EdgeInsets.zero,
       child: Column(
         children: [
-          for (var i = 0; i < _items.length; i++) ...[
-            _MenuRow(
-              icon: _items[i].$1,
-              title: _items[i].$2,
-              trailingBadge: _items[i].$4,
-              isVip: i == 0,
-              onTap: () {},
-            ),
-            if (i != _items.length - 1)
+          for (var i = 0; i < items.length; i++) ...[
+            _MenuRow(entry: items[i]),
+            if (i != items.length - 1)
               const Divider(height: 1, color: AppColors.outlineVariant),
           ],
         ],
@@ -369,25 +460,30 @@ class _ProfileMenu extends StatelessWidget {
   }
 }
 
-class _MenuRow extends StatelessWidget {
+class _MenuEntry {
   final IconData icon;
-  final String title;
+  final String label;
   final String? trailingBadge;
   final bool isVip;
   final VoidCallback onTap;
 
-  const _MenuRow({
+  _MenuEntry({
     required this.icon,
-    required this.title,
-    required this.trailingBadge,
-    required this.isVip,
+    required this.label,
+    this.trailingBadge,
+    this.isVip = false,
     required this.onTap,
   });
+}
+
+class _MenuRow extends StatelessWidget {
+  final _MenuEntry entry;
+  const _MenuRow({required this.entry});
 
   @override
   Widget build(BuildContext context) {
     return InkWell(
-      onTap: onTap,
+      onTap: entry.onTap,
       child: Padding(
         padding: const EdgeInsets.symmetric(
           horizontal: AppSpacing.base,
@@ -396,34 +492,34 @@ class _MenuRow extends StatelessWidget {
         child: Row(
           children: [
             Icon(
-              icon,
-              color: isVip ? AppColors.accentGold : AppColors.primary,
+              entry.icon,
+              color: entry.isVip ? AppColors.accentGold : AppColors.primary,
             ),
             AppSpacing.hGapMd,
             Expanded(
               child: Text(
-                title,
+                entry.label,
                 style: AppTextStyles.bodyMd.copyWith(
                   color: AppColors.onSurface,
                 ),
               ),
             ),
-            if (trailingBadge != null) ...[
+            if (entry.trailingBadge != null) ...[
               Container(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 8,
                   vertical: 2,
                 ),
                 decoration: BoxDecoration(
-                  color: isVip
+                  color: entry.isVip
                       ? AppColors.accentGold
                       : AppColors.surfaceContainerHigh,
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
-                  trailingBadge!,
+                  entry.trailingBadge!,
                   style: AppTextStyles.captionSm.copyWith(
-                    color: isVip
+                    color: entry.isVip
                         ? AppColors.surfaceContainerLowest
                         : AppColors.onSurfaceVariant,
                     fontWeight: FontWeight.w700,
@@ -432,8 +528,11 @@ class _MenuRow extends StatelessWidget {
               ),
               AppSpacing.hGapSm,
             ],
-            const Icon(Icons.chevron_right,
-                color: AppColors.parchmentTan, size: 20),
+            const Icon(
+              Icons.chevron_right,
+              color: AppColors.parchmentTan,
+              size: 20,
+            ),
           ],
         ),
       ),

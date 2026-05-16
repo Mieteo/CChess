@@ -5,6 +5,7 @@ export '../constants/piece_constants.dart' show PieceColor, PieceType, PieceColo
 export 'ai/bot_difficulty.dart';
 export 'ai/bot_engine.dart';
 export 'ai/evaluator.dart';
+export 'ai/game_analyzer.dart';
 export 'ai/minimax.dart';
 export 'board.dart';
 export 'move.dart';

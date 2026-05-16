@@ -1,15 +1,11 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/chess_engine/chess_engine.dart';
+import '../../data/models/game_record.dart';
 
-/// Mode the current screen is playing.
-enum GameMode {
-  /// Two humans sharing the device.
-  localTwoPlayer,
-
-  /// Human vs CPU. CPU plays the [cpuColor] passed in.
-  vsBot,
-}
+// GameMode lives in [game_record.dart] so the data + presentation layers
+// agree on the same enum. Re-exported for convenience.
+export '../../data/models/game_record.dart' show GameMode, GameModeX;
 
 /// Family-key for the per-screen game controller. Keeps each navigation to
 /// /game with different params isolated.

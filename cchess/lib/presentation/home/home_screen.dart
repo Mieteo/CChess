@@ -80,7 +80,12 @@ class HomeScreen extends StatelessWidget {
           ],
         ),
         AppSpacing.vGapLg,
-        const SectionHeader(title: 'Phần Thưởng Hôm Nay'),
+        SectionHeader(
+          title: 'Phần Thưởng Hôm Nay',
+          actionLabel: 'Nhiệm vụ',
+          onActionPressed: () =>
+              context.go(AppConstants.routeDailyQuests),
+        ),
         AppSpacing.vGapMd,
         const _DailyRewardCard(),
       ],

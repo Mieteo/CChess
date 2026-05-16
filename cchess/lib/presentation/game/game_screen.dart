@@ -6,10 +6,18 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/chess_engine/chess_engine.dart';
 import '../../core/constants/app_constants.dart';
+import '../../data/models/achievement.dart';
+import '../../data/models/game_record.dart';
+import '../../data/repositories/achievement_repository.dart';
+import '../../data/repositories/daily_quest_repository.dart';
+import '../../data/repositories/game_history_repository.dart';
+import '../../data/repositories/puzzle_repository.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_spacing.dart';
+import '../../theme/app_text_styles.dart';
 import '../../widgets/chess/chess_board.dart';
 import '../../widgets/common/common.dart';
+import '../profile/profile_controller.dart';
 import 'game_controller.dart';
 import 'widgets/game_action_bar.dart';
 import 'widgets/game_result_overlay.dart';
@@ -44,6 +52,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
   bool _soundOn = true;
   final BotEngine _botEngine = BotEngine();
   late final GameControllerArgs _args;
+  bool _resultPersisted = false;
 
   @override
   void initState() {
@@ -144,12 +153,143 @@ class _GameScreenState extends ConsumerState<GameScreen> {
       _redTime = _gameClock;
       _blackTime = _gameClock;
       _gameStartedAt = DateTime.now();
+      _resultPersisted = false;
     });
     _controller.newGame();
     _startTicker();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _maybePlayBotMove();
     });
+  }
+
+  /// When the game ends, persist a [GameRecord], update profile stats,
+  /// bump daily quest counters, and check for newly unlocked achievements.
+  Future<void> _persistGameResult() async {
+    if (_resultPersisted) return;
+    _resultPersisted = true;
+    final state = _state;
+    final game = state.game;
+    if (!game.status.isOver) return;
+
+    final humanColor = state.mode == GameMode.vsBot
+        ? (state.cpuColor == PieceColor.red ? PieceColor.black : PieceColor.red)
+        : null;
+    final won = humanColor != null &&
+        ((game.status == GameStatus.redWin && humanColor == PieceColor.red) ||
+            (game.status == GameStatus.blackWin &&
+                humanColor == PieceColor.black));
+    final drew = game.status == GameStatus.draw;
+
+    // 1. Save a kỳ phổ record.
+    final repo = ref.read(gameHistoryRepositoryProvider);
+    final opponentLabel = state.mode == GameMode.vsBot
+        ? 'Bot ${(state.botDifficulty ?? BotDifficulty.medium).nameVi}'
+        : 'Người Chơi 2';
+    final mode = state.mode == GameMode.vsBot
+        ? GameMode.vsBot
+        : GameMode.localTwoPlayer;
+    final duration = _gameStartedAt == null
+        ? Duration.zero
+        : DateTime.now().difference(_gameStartedAt!);
+    await repo.save(GameRecord(
+      id: '',
+      opponentLabel: opponentLabel,
+      mode: mode,
+      humanColor: humanColor,
+      startingFen: kInitialFen,
+      moves: game.history.map((m) => m.toUci()).toList(),
+      result: game.status,
+      endReason: game.endReason,
+      eloDelta: 0,
+      duration: duration,
+      endedAt: DateTime.now(),
+    ));
+
+    // 2. Apply to profile stats (no ELO change for local / bot games yet).
+    if (humanColor != null || state.mode == GameMode.localTwoPlayer) {
+      // For local 2-player we still bump totalGames but no win/loss credit.
+      if (humanColor != null) {
+        await ref.read(profileControllerProvider.notifier).applyGameResult(
+              eloDelta: 0,
+              won: won,
+              drew: drew,
+            );
+      } else {
+        await ref.read(profileControllerProvider.notifier).update(
+              (p) => p.copyWith(
+                totalGames: p.totalGames + 1,
+                lastActiveAt: DateTime.now(),
+              ),
+            );
+      }
+    }
+
+    // 3. Bump today's quest progress.
+    if (humanColor != null) {
+      await ref
+          .read(dailyQuestControllerProvider.notifier)
+          .recordGamePlayed(won: won);
+    } else {
+      await ref
+          .read(dailyQuestControllerProvider.notifier)
+          .recordGamePlayed(won: false);
+    }
+
+    // 4. Check achievements & toast each newly-unlocked one.
+    await _checkAchievements();
+  }
+
+  Future<void> _checkAchievements() async {
+    final profile = ref.read(profileControllerProvider).valueOrNull;
+    if (profile == null) return;
+    final achRepo = ref.read(achievementRepositoryProvider);
+    final puzzleRepo = ref.read(puzzleRepositoryProvider);
+    final allPuzzleProgress = await puzzleRepo.getAllProgress();
+    final puzzlesSolved =
+        allPuzzleProgress.values.where((p) => p.solved).length;
+
+    final stats = AchievementStats(
+      totalGames: profile.totalGames,
+      wins: profile.wins,
+      // Win streak not tracked yet — derive a crude approximation from
+      // total wins / games ratio. Refine in Sprint 10.
+      winStreak: profile.wins > 0 ? 1 : 0,
+      eloChess: profile.eloChess,
+      puzzlesSolved: puzzlesSolved,
+      loginStreak: 1,
+    );
+
+    final progress = await achRepo.getAllProgress();
+    final unlocked = AchievementEngine.newlyUnlocked(
+      stats: stats,
+      currentProgress: progress,
+    );
+    for (final a in unlocked) {
+      await achRepo.markUnlocked(a.id);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: AppColors.accentGold.withValues(alpha: 0.95),
+            content: Row(
+              children: [
+                Icon(a.icon, color: AppColors.inkBlack, size: 22),
+                AppSpacing.hGapSm,
+                Expanded(
+                  child: Text(
+                    'Huy chương mới: ${a.nameVi}',
+                    style: AppTextStyles.bodyMd.copyWith(
+                      color: AppColors.inkBlack,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    }
   }
 
   void _onLeave() async {
@@ -207,6 +347,13 @@ class _GameScreenState extends ConsumerState<GameScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Persist exactly once when the game transitions to a finished status.
+    ref.listen<GameUiState>(gameControllerProvider(_args), (prev, next) {
+      if (next.game.status.isOver && !_resultPersisted) {
+        _persistGameResult();
+      }
+    });
+
     final state = ref.watch(gameControllerProvider(_args));
     final game = state.game;
 

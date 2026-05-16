@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/chess_engine/chess_engine.dart';
 import '../../data/models/chess_puzzle.dart';
+import '../../data/repositories/daily_quest_repository.dart';
 import '../../data/repositories/puzzle_repository.dart';
 
 /// Feedback flash shown after the user attempts a move.
@@ -79,12 +80,15 @@ class PuzzleUiState {
 
 class PuzzleController extends StateNotifier<PuzzleUiState> {
   final PuzzleRepository _repo;
+  final DailyQuestController? _questController;
 
   PuzzleController({
     required ChessPuzzle puzzle,
     required PuzzleRepository repo,
     PuzzleProgress? progress,
+    DailyQuestController? questController,
   })  : _repo = repo,
+        _questController = questController,
         super(
           PuzzleUiState(
             puzzle: puzzle,
@@ -212,11 +216,15 @@ class PuzzleController extends StateNotifier<PuzzleUiState> {
       );
 
       if (allSolved) {
+        final wasSolvedBefore = state.progress.solved;
         final updated = await _repo.recordAttempt(
           state.puzzle.id,
           solved: true,
         );
         state = state.copyWith(progress: updated);
+        if (!wasSolvedBefore) {
+          await _questController?.recordPuzzleSolved();
+        }
       }
     } else {
       // Wrong move — provide feedback. After 3 wrong attempts reveal the
@@ -260,5 +268,9 @@ final puzzleControllerProvider = StateNotifierProvider.autoDispose
   if (puzzle == null) {
     throw ArgumentError('Unknown puzzle id: $puzzleId');
   }
-  return PuzzleController(puzzle: puzzle, repo: repo);
+  return PuzzleController(
+    puzzle: puzzle,
+    repo: repo,
+    questController: ref.read(dailyQuestControllerProvider.notifier),
+  );
 });

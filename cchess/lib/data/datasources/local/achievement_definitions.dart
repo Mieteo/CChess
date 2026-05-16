@@ -1,0 +1,167 @@
+import 'package:flutter/material.dart';
+
+import '../../models/achievement.dart';
+
+/// Static catalog of achievements. Order matters — earlier tiers come first
+/// in their category so the UI naturally lists progression.
+const List<Achievement> kAchievements = [
+  // ─── Play ──────────────────────────────────────────────
+  Achievement(
+    id: 'first_game',
+    nameVi: 'Khai Cuộc',
+    descVi: 'Chơi ván đầu tiên.',
+    icon: Icons.flag_outlined,
+    category: AchievementCategory.play,
+    tier: AchievementTier.bronze,
+    target: 1,
+    statKey: 'totalGames',
+  ),
+  Achievement(
+    id: 'play_10',
+    nameVi: 'Kỳ Đồ Tập Sự',
+    descVi: 'Chơi 10 ván cờ.',
+    icon: Icons.casino_outlined,
+    category: AchievementCategory.play,
+    tier: AchievementTier.bronze,
+    target: 10,
+    statKey: 'totalGames',
+  ),
+  Achievement(
+    id: 'play_50',
+    nameVi: 'Lão Luyện',
+    descVi: 'Chơi 50 ván cờ.',
+    icon: Icons.hub_outlined,
+    category: AchievementCategory.play,
+    tier: AchievementTier.silver,
+    target: 50,
+    statKey: 'totalGames',
+  ),
+
+  // ─── Win ──────────────────────────────────────────────
+  Achievement(
+    id: 'first_win',
+    nameVi: 'Trận Thắng Đầu',
+    descVi: 'Giành chiến thắng ván đầu.',
+    icon: Icons.emoji_events_outlined,
+    category: AchievementCategory.win,
+    tier: AchievementTier.bronze,
+    target: 1,
+    statKey: 'wins',
+  ),
+  Achievement(
+    id: 'win_10',
+    nameVi: 'Thập Thắng',
+    descVi: 'Thắng 10 ván.',
+    icon: Icons.emoji_events,
+    category: AchievementCategory.win,
+    tier: AchievementTier.silver,
+    target: 10,
+    statKey: 'wins',
+  ),
+  Achievement(
+    id: 'win_50',
+    nameVi: 'Bách Thắng Tướng Quân',
+    descVi: 'Thắng 50 ván.',
+    icon: Icons.military_tech,
+    category: AchievementCategory.win,
+    tier: AchievementTier.gold,
+    target: 50,
+    statKey: 'wins',
+  ),
+  Achievement(
+    id: 'win_streak_3',
+    nameVi: 'Tam Liên Thắng',
+    descVi: 'Thắng liên tiếp 3 ván.',
+    icon: Icons.local_fire_department_outlined,
+    category: AchievementCategory.win,
+    tier: AchievementTier.bronze,
+    target: 3,
+    statKey: 'winStreak',
+  ),
+  Achievement(
+    id: 'win_streak_5',
+    nameVi: 'Ngũ Liên Thắng',
+    descVi: 'Thắng liên tiếp 5 ván.',
+    icon: Icons.local_fire_department,
+    category: AchievementCategory.win,
+    tier: AchievementTier.silver,
+    target: 5,
+    statKey: 'winStreak',
+  ),
+
+  // ─── Learn ──────────────────────────────────────────────
+  Achievement(
+    id: 'puzzle_1',
+    nameVi: 'Tàn Cục Sơ Khai',
+    descVi: 'Giải xong bài tập tàn cục đầu tiên.',
+    icon: Icons.extension_outlined,
+    category: AchievementCategory.learn,
+    tier: AchievementTier.bronze,
+    target: 1,
+    statKey: 'puzzlesSolved',
+  ),
+  Achievement(
+    id: 'puzzle_5',
+    nameVi: 'Kỳ Thủ Học Giỏi',
+    descVi: 'Giải xong 5 bài tập tàn cục.',
+    icon: Icons.psychology_outlined,
+    category: AchievementCategory.learn,
+    tier: AchievementTier.silver,
+    target: 5,
+    statKey: 'puzzlesSolved',
+  ),
+  Achievement(
+    id: 'puzzle_15',
+    nameVi: 'Tàn Cục Đại Sư',
+    descVi: 'Giải xong 15 bài tập tàn cục.',
+    icon: Icons.school,
+    category: AchievementCategory.learn,
+    tier: AchievementTier.gold,
+    target: 15,
+    statKey: 'puzzlesSolved',
+  ),
+
+  // ─── Milestone ──────────────────────────────────────────────
+  Achievement(
+    id: 'elo_1200',
+    nameVi: 'Kỳ Sinh',
+    descVi: 'Đạt ELO 1200.',
+    icon: Icons.bar_chart,
+    category: AchievementCategory.milestone,
+    tier: AchievementTier.bronze,
+    target: 1200,
+    statKey: 'eloChess',
+  ),
+  Achievement(
+    id: 'elo_1600',
+    nameVi: 'Kỳ Tướng',
+    descVi: 'Đạt ELO 1600.',
+    icon: Icons.shield,
+    category: AchievementCategory.milestone,
+    tier: AchievementTier.silver,
+    target: 1600,
+    statKey: 'eloChess',
+  ),
+  Achievement(
+    id: 'elo_2000',
+    nameVi: 'Kỳ Vương',
+    descVi: 'Đạt ELO 2000.',
+    icon: Icons.workspace_premium,
+    category: AchievementCategory.milestone,
+    tier: AchievementTier.gold,
+    target: 2000,
+    statKey: 'eloChess',
+  ),
+
+  // ─── Social ──────────────────────────────────────────────
+  Achievement(
+    id: 'login_7',
+    nameVi: 'Thất Nhật Liên',
+    descVi: 'Điểm danh 7 ngày liên tiếp.',
+    icon: Icons.calendar_today,
+    category: AchievementCategory.social,
+    tier: AchievementTier.silver,
+    target: 7,
+    statKey: 'loginStreak',
+  ),
+];

@@ -4,15 +4,24 @@ import 'package:go_router/go_router.dart';
 
 import '../core/chess_engine/ai/bot_difficulty.dart';
 import '../core/constants/app_constants.dart';
+import '../presentation/achievements/achievements_screen.dart';
 import '../presentation/bot_game/bot_select_screen.dart';
 import '../presentation/community/community_screen.dart';
 import '../presentation/game/game_screen.dart';
+import '../presentation/history/game_history_screen.dart';
 import '../presentation/home/home_screen.dart';
 import '../presentation/learning/learning_screen.dart';
+import '../presentation/onboarding/onboarding_screen.dart';
+import '../presentation/openings/opening_detail_screen.dart';
+import '../presentation/openings/opening_list_screen.dart';
 import '../presentation/play/compete_screen.dart';
+import '../presentation/profile/edit_profile_screen.dart';
 import '../presentation/profile/profile_screen.dart';
 import '../presentation/puzzle/puzzle_list_screen.dart';
 import '../presentation/puzzle/puzzle_screen.dart';
+import '../presentation/quests/daily_quests_screen.dart';
+import '../presentation/replay/game_replay_screen.dart';
+import '../presentation/settings/settings_screen.dart';
 import '../presentation/shell/app_shell.dart';
 import '../presentation/splash/splash_screen.dart';
 
@@ -24,6 +33,48 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppConstants.routeSplash,
         builder: (context, state) => const SplashScreen(),
+      ),
+      GoRoute(
+        path: AppConstants.routeOnboarding,
+        builder: (context, state) => const OnboardingScreen(),
+      ),
+      GoRoute(
+        path: AppConstants.routeSettings,
+        builder: (context, state) => const SettingsScreen(),
+      ),
+      GoRoute(
+        path: '${AppConstants.routeProfile}/edit',
+        builder: (context, state) => const EditProfileScreen(),
+      ),
+      GoRoute(
+        path: AppConstants.routeAchievements,
+        builder: (context, state) => const AchievementsScreen(),
+      ),
+      GoRoute(
+        path: AppConstants.routeHistory,
+        builder: (context, state) => const GameHistoryScreen(),
+      ),
+      GoRoute(
+        path: AppConstants.routeDailyQuests,
+        builder: (context, state) => const DailyQuestsScreen(),
+      ),
+      GoRoute(
+        path: '${AppConstants.routeReplay}/:id',
+        builder: (context, state) {
+          final id = state.pathParameters['id'] ?? '';
+          return GameReplayScreen(recordId: id);
+        },
+      ),
+      GoRoute(
+        path: AppConstants.routeOpenings,
+        builder: (context, state) => const OpeningListScreen(),
+      ),
+      GoRoute(
+        path: '${AppConstants.routeOpenings}/:id',
+        builder: (context, state) {
+          final id = state.pathParameters['id'] ?? '';
+          return OpeningDetailScreen(openingId: id);
+        },
       ),
       GoRoute(
         path: AppConstants.routeBotSelect,

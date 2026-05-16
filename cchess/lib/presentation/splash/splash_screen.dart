@@ -1,21 +1,24 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/constants/app_constants.dart';
+import '../../data/models/user_profile.dart';
+import '../../data/repositories/profile_repository.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_spacing.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/common/loading_overlay.dart';
 
 /// Initial splash screen — ink-wash background, logo fade-in, brush spinner.
-class SplashScreen extends StatefulWidget {
+class SplashScreen extends ConsumerStatefulWidget {
   const SplashScreen({super.key});
 
   @override
-  State<SplashScreen> createState() => _SplashScreenState();
+  ConsumerState<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _SplashScreenState extends State<SplashScreen>
+class _SplashScreenState extends ConsumerState<SplashScreen>
     with SingleTickerProviderStateMixin {
   late final AnimationController _ctrl;
   late final Animation<double> _logoFade;
@@ -36,10 +39,22 @@ class _SplashScreenState extends State<SplashScreen>
         .animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOutBack));
     _ctrl.forward();
 
-    Future.delayed(const Duration(milliseconds: 2200), () {
-      if (!mounted) return;
-      context.go(AppConstants.routeHome);
-    });
+    _navigateAfterSplash();
+  }
+
+  Future<void> _navigateAfterSplash() async {
+    final repo = ref.read(profileRepositoryProvider);
+    // Run profile load in parallel with the splash animation.
+    final results = await Future.wait([
+      Future.delayed(const Duration(milliseconds: 2200)),
+      repo.loadOrCreate(),
+    ]);
+    if (!mounted) return;
+    final profile = results[1] as UserProfile;
+    final destination = profile.onboardingCompleted
+        ? AppConstants.routeHome
+        : AppConstants.routeOnboarding;
+    context.go(destination);
   }
 
   @override
