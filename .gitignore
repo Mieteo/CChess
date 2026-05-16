@@ -1,0 +1,10 @@
+# Local agent worktrees
+.claude/worktrees/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor metadata
+.idea/
+*.iml
