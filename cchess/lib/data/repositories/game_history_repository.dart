@@ -4,11 +4,15 @@ import 'package:uuid/uuid.dart';
 
 import '../../core/constants/app_constants.dart';
 import '../models/game_record.dart';
+import 'game_record_remote_repository.dart';
 
 class GameHistoryRepository {
+  GameHistoryRepository({GameRecordRemoteRepository? remote}) : _remote = remote;
+
   static const String _boxName = AppConstants.boxGameHistory;
   static const Uuid _uuid = Uuid();
 
+  final GameRecordRemoteRepository? _remote;
   Box<dynamic>? _box;
 
   Future<Box<dynamic>> _openBox() async {
@@ -19,7 +23,7 @@ class GameHistoryRepository {
     return box;
   }
 
-  /// Save a finished game. Returns the assigned id.
+  /// Save a finished game locally and fire-and-forget push to cloud.
   Future<GameRecord> save(GameRecord record) async {
     final box = await _openBox();
     final id = record.id.isEmpty ? _uuid.v4() : record.id;
@@ -38,6 +42,7 @@ class GameHistoryRepository {
       isFavorite: record.isFavorite,
     );
     await box.put(id, stored.toJson());
+    _remote?.pushGameRecord(stored).ignore();
     return stored;
   }
 
@@ -69,7 +74,10 @@ class GameHistoryRepository {
   Future<void> toggleFavorite(String id) async {
     final current = await getById(id);
     if (current == null) return;
-    await save(current.copyWith(isFavorite: !current.isFavorite));
+    final next = current.copyWith(isFavorite: !current.isFavorite);
+    final box = await _openBox();
+    await box.put(id, next.toJson());
+    _remote?.updateFavorite(id, next.isFavorite).ignore();
   }
 
   Future<void> clear() async {
@@ -78,5 +86,8 @@ class GameHistoryRepository {
   }
 }
 
-final gameHistoryRepositoryProvider =
-    Provider<GameHistoryRepository>((ref) => GameHistoryRepository());
+final gameHistoryRepositoryProvider = Provider<GameHistoryRepository>((ref) {
+  return GameHistoryRepository(
+    remote: ref.watch(gameRecordRemoteRepositoryProvider),
+  );
+});

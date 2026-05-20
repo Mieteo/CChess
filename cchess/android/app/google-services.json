@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1063038096342",
+    "project_id": "cchess-dev",
+    "storage_bucket": "cchess-dev.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1063038096342:android:69cf10a32b5623d9b40a77",
+        "android_client_info": {
+          "package_name": "vn.cchess.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBqJWRoknAwnPdLgzHxsRpcBwLqKgFn0nc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

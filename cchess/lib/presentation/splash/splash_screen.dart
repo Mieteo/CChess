@@ -3,8 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/constants/app_constants.dart';
-import '../../data/models/user_profile.dart';
-import '../../data/repositories/profile_repository.dart';
+import '../../data/services/cloud_sync_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_spacing.dart';
 import '../../theme/app_text_styles.dart';
@@ -43,15 +42,14 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
   }
 
   Future<void> _navigateAfterSplash() async {
-    final repo = ref.read(profileRepositoryProvider);
-    // Run profile load in parallel with the splash animation.
+    final sync = ref.read(cloudSyncServiceProvider);
     final results = await Future.wait([
       Future.delayed(const Duration(milliseconds: 2200)),
-      repo.loadOrCreate(),
+      sync.syncOnStart(),
     ]);
     if (!mounted) return;
-    final profile = results[1] as UserProfile;
-    final destination = profile.onboardingCompleted
+    final result = results[1] as CloudSyncResult;
+    final destination = result.profile.onboardingCompleted
         ? AppConstants.routeHome
         : AppConstants.routeOnboarding;
     context.go(destination);

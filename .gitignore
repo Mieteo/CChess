@@ -1,5 +1,5 @@
-# Local agent worktrees
-.claude/worktrees/
+# Claude Code local workspace
+.claude/
 
 # OS files
 .DS_Store

@@ -1,0 +1,7 @@
+{
+  "projects": {
+    "default": "cchess-dev",
+    "dev": "cchess-dev",
+    "prod": "cchess-prod"
+  }
+}

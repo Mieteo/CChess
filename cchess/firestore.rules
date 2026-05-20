@@ -1,0 +1,156 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // --- HELPER FUNCTIONS ---
+
+    // Kiểm tra user đã đăng nhập chưa
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    // Kiểm tra request có phải từ chủ sở hữu document (dựa vào {uid}) không
+    function isOwner(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    // Kiểm tra các trường được phép có mặt trong dữ liệu mới (để đảm bảo không thêm trường lạ)
+    // Dùng cho create: request.resource.data.keys().hasOnly(allowedFields)
+    function hasOnly(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    // Kiểm tra các trường được phép thay đổi trong dữ liệu update
+    // Dùng cho update: request.resource.data.diff(resource.data).affectedKeys().hasOnly(allowedFields)
+    function hasOnlyAffected(fields) {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(fields);
+    }
+
+    // Kiểm tra giá trị của một trường không thay đổi sau khi update
+    function unchanged(field) {
+      return resource.data[field] == request.resource.data[field];
+    }
+
+    // Kiểm tra các trường nhạy cảm có đúng giá trị mặc định khi tạo mới user không
+    function hasDefaultSensitiveFields() {
+      return request.resource.data.eloChess == 1000
+             && request.resource.data.eloCup == 1000
+             && request.resource.data.totalGames == 0
+             && request.resource.data.wins == 0
+             && request.resource.data.losses == 0
+             && request.resource.data.draws == 0
+             && request.resource.data.coins == 100
+             && request.resource.data.gems == 10
+             && request.resource.data.creditScore == 100
+             && request.resource.data.isVip == false
+             && request.resource.data.vipExpiresAt == null;
+    }
+
+    // --- USERS COLLECTION ---
+    match /users/{uid} {
+      // User chỉ đọc document của chính mình
+      allow read: if isOwner(uid);
+
+      // Khi tạo user:
+      // - Phải là user đã đăng nhập và là chủ sở hữu (request.auth.uid == uid)
+      // - Chỉ được tạo các trường mặc định và các trường client được phép sửa
+      // - Các trường nhạy cảm (elo, coins, gems, etc.) phải có giá trị mặc định.
+      // - `createdAt` và `lastActiveAt` phải là server timestamp hoặc chưa có (sẽ được Cloud Function set).
+      //   Ở đây chỉ cần đảm bảo client không tự set giá trị sai cho các trường này.
+      allow create: if isOwner(uid)
+                      && hasDefaultSensitiveFields()
+                      && (request.resource.data.keys().hasAll(['displayName', 'eloChess', 'eloCup', 'totalGames', 'wins', 'losses', 'draws', 'coins', 'gems', 'creditScore', 'isVip', 'onboardingCompleted'])
+                          && request.resource.data.keys().hasOnly(['displayName', 'region', 'avatarUrl', 'eloChess', 'eloCup', 'totalGames', 'wins', 'losses', 'draws', 'coins', 'gems', 'creditScore', 'isVip', 'vipExpiresAt', 'createdAt', 'lastActiveAt', 'onboardingCompleted']))
+                      && (!("createdAt" in request.resource.data) || request.resource.data.createdAt is timestamp) // Đảm bảo createdAt nếu có thì là timestamp
+                      && (!("lastActiveAt" in request.resource.data) || request.resource.data.lastActiveAt is timestamp); // Đảm bảo lastActiveAt nếu có thì là timestamp
+
+      // Khi update user:
+      // - Phải là user đã đăng nhập và là chủ sở hữu
+      // - Chỉ được sửa các trường trong whitelist: displayName, region, avatarUrl, lastActiveAt, onboardingCompleted
+      // - Các trường còn lại phải giữ nguyên giá trị
+      allow update: if isOwner(uid)
+                      && hasOnlyAffected(['displayName', 'region', 'avatarUrl', 'lastActiveAt', 'onboardingCompleted'])
+                      && unchanged('eloChess')
+                      && unchanged('eloCup')
+                      && unchanged('totalGames')
+                      && unchanged('wins')
+                      && unchanged('losses')
+                      && unchanged('draws')
+                      && unchanged('coins')
+                      && unchanged('gems')
+                      && unchanged('creditScore')
+                      && unchanged('isVip')
+                      && unchanged('vipExpiresAt')
+                      && unchanged('createdAt');
+
+      // Luôn deny thao tác delete user document
+      allow delete: if false;
+
+      // --- SUBCOLLECTION: GAME_RECORDS ---
+      match /game_records/{gameId} {
+        // User chỉ đọc game_records của chính mình
+        allow read: if isOwner(uid);
+
+        // Khi tạo game_record (cho ván local/bot):
+        // - Phải là user đã đăng nhập và là chủ sở hữu
+        // - Các trường bắt buộc phải có, và các trường nhạy cảm (result, moveList, duration, endedAt)
+        //   không được phép bị sửa sau khi tạo.
+        allow create: if isOwner(uid); // Cloud Function sẽ đảm bảo tính toàn vẹn cho ván Ranked
+
+        // Khi update game_record:
+        // - Phải là user đã đăng nhập và là chủ sở hữu
+        // - CHỈ được sửa trường 'isFavorite'.
+        // - Các trường khác (opponent, mode, startingPosition, moveList, result, duration, endedAt) không được thay đổi.
+        allow update: if isOwner(uid)
+                        && hasOnlyAffected(['isFavorite'])
+                        && unchanged('opponent')
+                        && unchanged('mode')
+                        && unchanged('startingPosition')
+                        && unchanged('moveList')
+                        && unchanged('result')
+                        && unchanged('duration')
+                        && unchanged('endedAt');
+
+        // Deny xóa game_records từ client
+        allow delete: if false;
+      }
+
+      // --- SUBCOLLECTION: ACHIEVEMENTS ---
+      match /achievements/{achievementId} {
+        // User chỉ đọc achievements của chính mình
+        allow read: if isOwner(uid);
+        // Client không được phép ghi (create, update, delete) achievements
+        allow write: if false;
+      }
+
+      // --- SUBCOLLECTION: DAILY_QUESTS ---
+      match /daily_quests/{date} {
+        // User chỉ đọc daily_quests của chính mình
+        allow read: if isOwner(uid);
+        // Client không được phép ghi (create, update, delete) daily_quests
+        allow write: if false;
+      }
+    }
+
+    // --- GLOBAL COLLECTIONS (Public Read, Server-Only Write) ---
+
+    // Puzzles: Ai cũng đọc được, chỉ server mới được ghi
+    match /puzzles/{puzzleId} {
+      allow read: if true;
+      allow write: if false; // Chỉ server hoặc admin có thể ghi
+    }
+
+    // Openings: Ai cũng đọc được, chỉ server mới được ghi
+    match /openings/{openingId} {
+      allow read: if true;
+      allow write: if false; // Chỉ server hoặc admin có thể ghi
+    }
+
+    // Leaderboards: Ai cũng đọc được, chỉ server mới được ghi
+    match /leaderboards/{boardType}/{period}/{entryUid} {
+      allow read: if true;
+      allow write: if false; // Chỉ server hoặc admin có thể ghi
+    }
+  }
+}
+

@@ -1,3 +1,4 @@
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -5,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 
 import 'core/constants/app_constants.dart';
+import 'firebase_options.dart';
 import 'router/app_router.dart';
 import 'theme/app_colors.dart';
 import 'theme/app_theme.dart';
@@ -12,13 +14,15 @@ import 'theme/app_theme.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Lock to portrait — chess is best vertical on mobile.
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
+
   await SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
     DeviceOrientation.portraitDown,
   ]);
 
-  // Status bar on top of our wood gradient app-bar.
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
@@ -29,7 +33,6 @@ Future<void> main() async {
   );
 
   await Hive.initFlutter();
-  // Box opens happen lazily inside repositories.
 
   runApp(const ProviderScope(child: CChessApp()));
 }

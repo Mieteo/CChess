@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -124,6 +125,19 @@ class SettingsScreen extends ConsumerWidget {
                     ),
                   ],
                 ),
+                if (kDebugMode) ...[
+                  AppSpacing.vGapLg,
+                  _SectionLabel('Cloud (Debug)'),
+                  _SettingsCard(
+                    children: [
+                      _RowItem(
+                        icon: Icons.cloud_outlined,
+                        label: 'Kiểm tra kết nối Firebase',
+                        onTap: () => context.push(AppConstants.routeCloudTest),
+                      ),
+                    ],
+                  ),
+                ],
                 AppSpacing.vGapLg,
                 _SectionLabel('Giới thiệu'),
                 _SettingsCard(

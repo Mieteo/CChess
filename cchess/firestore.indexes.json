@@ -1,0 +1,21 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "game_records",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "endedAt", "order": "DESCENDING" },
+        { "fieldPath": "result", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "game_records",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "isFavorite", "order": "ASCENDING" },
+        { "fieldPath": "endedAt", "order": "DESCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}
