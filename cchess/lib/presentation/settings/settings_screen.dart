@@ -140,6 +140,12 @@ class SettingsScreen extends ConsumerWidget {
                         label: 'Kiểm tra kết nối Firebase',
                         onTap: () => context.push(AppConstants.routeCloudTest),
                       ),
+                      _Divider(),
+                      _RowItem(
+                        icon: Icons.cable,
+                        label: 'Backend WebSocket test',
+                        onTap: () => context.push(AppConstants.routeBackendTest),
+                      ),
                     ],
                   ),
                 ],

@@ -28,6 +28,7 @@ class AppConstants {
   static const String routeReplay = '/replay';
   static const String routeOpenings = '/openings';
   static const String routeCloudTest = '/cloud-test';
+  static const String routeBackendTest = '/backend-test';
 
   // Storage keys.
   static const String boxSettings = 'cchess_settings';

@@ -6,6 +6,7 @@ import '../core/chess_engine/ai/bot_difficulty.dart';
 import '../core/constants/app_constants.dart';
 import '../presentation/achievements/achievements_screen.dart';
 import '../presentation/bot_game/bot_select_screen.dart';
+import '../presentation/cloud/backend_test_screen.dart';
 import '../presentation/cloud/cloud_test_screen.dart';
 import '../presentation/community/community_screen.dart';
 import '../presentation/game/game_screen.dart';
@@ -46,6 +47,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppConstants.routeCloudTest,
         builder: (context, state) => const CloudTestScreen(),
+      ),
+      GoRoute(
+        path: AppConstants.routeBackendTest,
+        builder: (context, state) => const BackendTestScreen(),
       ),
       GoRoute(
         path: '${AppConstants.routeProfile}/edit',
