@@ -1,9 +1,11 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/constants/app_constants.dart';
+import '../../data/services/google_auth_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_spacing.dart';
 import '../../theme/app_text_styles.dart';
@@ -125,6 +127,9 @@ class SettingsScreen extends ConsumerWidget {
                     ),
                   ],
                 ),
+                AppSpacing.vGapLg,
+                _SectionLabel('Tài khoản'),
+                const _AccountSection(),
                 if (kDebugMode) ...[
                   AppSpacing.vGapLg,
                   _SectionLabel('Cloud (Debug)'),
@@ -405,6 +410,154 @@ class _RowItem extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _AccountSection extends ConsumerStatefulWidget {
+  const _AccountSection();
+
+  @override
+  ConsumerState<_AccountSection> createState() => _AccountSectionState();
+}
+
+class _AccountSectionState extends ConsumerState<_AccountSection> {
+  bool _busy = false;
+  String? _error;
+  bool _credentialInUse = false;
+
+  String _humanReadableAuthError(FirebaseAuthException e) {
+    switch (e.code) {
+      case 'credential-already-in-use':
+      case 'email-already-in-use':
+        return 'Tài khoản Google này đã thuộc về người dùng khác. '
+            'Đăng xuất rồi đăng nhập lại nếu muốn dùng tài khoản đó '
+            '(dữ liệu ẩn danh hiện tại sẽ bị bỏ).';
+      case 'no-id-token':
+        return 'Không lấy được ID token từ Google. Thử lại.';
+      case 'network-request-failed':
+        return 'Mất kết nối mạng.';
+      default:
+        return '${e.code}: ${e.message ?? "lỗi không rõ"}';
+    }
+  }
+
+  Future<void> _linkGoogle() async {
+    setState(() {
+      _busy = true;
+      _error = null;
+      _credentialInUse = false;
+    });
+    try {
+      await ref.read(googleAuthServiceProvider).linkAnonymousWithGoogle();
+    } on FirebaseAuthException catch (e) {
+      if (mounted) {
+        setState(() {
+          _error = _humanReadableAuthError(e);
+          _credentialInUse =
+              e.code == 'credential-already-in-use' || e.code == 'email-already-in-use';
+        });
+      }
+    } catch (e) {
+      if (mounted) setState(() => _error = e.toString());
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _forceSignInGoogle() async {
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      await ref.read(googleAuthServiceProvider).signInWithGoogle();
+      setState(() => _credentialInUse = false);
+    } catch (e) {
+      if (mounted) setState(() => _error = e.toString());
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _signOut() async {
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      await ref.read(googleAuthServiceProvider).signOutGoogle();
+      await FirebaseAuth.instance.signOut();
+      if (mounted) context.go(AppConstants.routeSplash);
+    } catch (e) {
+      if (mounted) setState(() => _error = e.toString());
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<User?>(
+      stream: FirebaseAuth.instance.authStateChanges(),
+      builder: (context, snap) {
+        final user = snap.data;
+        if (user == null) {
+          return _SettingsCard(
+            children: [
+              _RowItem(
+                icon: Icons.cloud_off_outlined,
+                label: 'Chưa đăng nhập',
+              ),
+            ],
+          );
+        }
+        final isAnon = user.isAnonymous;
+        return _SettingsCard(
+          children: [
+            _RowItem(
+              icon: isAnon ? Icons.person_outline : Icons.verified_user_outlined,
+              label: isAnon
+                  ? 'Đăng nhập ẩn danh'
+                  : (user.displayName ?? user.email ?? 'Tài khoản Google'),
+              trailing: isAnon ? null : user.email,
+            ),
+            _Divider(),
+            if (isAnon)
+              _RowItem(
+                icon: Icons.link,
+                label: _busy ? 'Đang liên kết...' : 'Liên kết với Google',
+                onTap: _busy ? null : _linkGoogle,
+              )
+            else
+              _RowItem(
+                icon: Icons.logout,
+                label: _busy ? 'Đang đăng xuất...' : 'Đăng xuất',
+                onTap: _busy ? null : _signOut,
+              ),
+            if (_credentialInUse) ...[
+              _Divider(),
+              _RowItem(
+                icon: Icons.swap_horiz,
+                label: 'Đăng nhập Google (bỏ data ẩn danh)',
+                onTap: _busy ? null : _forceSignInGoogle,
+              ),
+            ],
+            if (_error != null) ...[
+              _Divider(),
+              Padding(
+                padding: const EdgeInsets.all(AppSpacing.base),
+                child: Text(
+                  _error!,
+                  style: AppTextStyles.captionSm.copyWith(
+                    color: Colors.redAccent,
+                  ),
+                ),
+              ),
+            ],
+          ],
+        );
+      },
     );
   }
 }

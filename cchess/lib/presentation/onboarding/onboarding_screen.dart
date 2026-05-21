@@ -61,12 +61,12 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     return Scaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
-        child: Padding(
+        child: SingleChildScrollView(
           padding: const EdgeInsets.all(AppSpacing.lg),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              AppSpacing.vGapXl,
+              AppSpacing.vGapLg,
               Center(
                 child: Container(
                   width: 88,
@@ -174,7 +174,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                   ],
                 ),
               ),
-              const Spacer(),
+              AppSpacing.vGapXl,
               CChessButton(
                 label: _saving ? 'Đang lưu…' : 'Bắt đầu',
                 icon: Icons.arrow_forward,

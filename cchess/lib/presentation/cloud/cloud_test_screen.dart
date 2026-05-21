@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/constants/app_constants.dart';
+import '../../data/services/google_auth_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_spacing.dart';
 import '../../theme/app_text_styles.dart';
@@ -18,12 +19,14 @@ class CloudTestScreen extends StatefulWidget {
 class _CloudTestScreenState extends State<CloudTestScreen> {
   final _auth = FirebaseAuth.instance;
   final _db = FirebaseFirestore.instance;
+  final _googleAuth = GoogleAuthService(FirebaseAuth.instance);
 
   bool _busy = false;
   String? _error;
   Map<String, dynamic>? _userDoc;
   String? _docStatus;
   List<_RuleTestResult>? _ruleTests;
+  bool _credentialInUse = false;
 
   Future<void> _run(Future<void> Function() action) async {
     setState(() {
@@ -45,6 +48,35 @@ class _CloudTestScreenState extends State<CloudTestScreen> {
 
   Future<void> _signInAnon() => _run(() async {
         await _auth.signInAnonymously();
+      });
+
+  Future<void> _linkGoogle() => _run(() async {
+        try {
+          await _googleAuth.linkAnonymousWithGoogle();
+          setState(() => _credentialInUse = false);
+          if (_auth.currentUser != null) {
+            await _readUserDoc(_auth.currentUser!.uid);
+          }
+        } on FirebaseAuthException catch (e) {
+          if (e.code == 'credential-already-in-use' ||
+              e.code == 'email-already-in-use') {
+            setState(() => _credentialInUse = true);
+          }
+          rethrow;
+        }
+      });
+
+  Future<void> _forceSignInGoogle() => _run(() async {
+        await _googleAuth.signInWithGoogle();
+        setState(() {
+          _credentialInUse = false;
+          _userDoc = null;
+          _docStatus = null;
+          _ruleTests = null;
+        });
+        if (_auth.currentUser != null) {
+          await _readUserDoc(_auth.currentUser!.uid);
+        }
       });
 
   Future<void> _signOut() => _run(() async {
@@ -194,6 +226,22 @@ class _CloudTestScreenState extends State<CloudTestScreen> {
                         onPressed: _busy ? null : () => _runRuleTests(user.uid),
                       ),
                     AppSpacing.vGapBase,
+                    if (user.isAnonymous)
+                      _ActionButton(
+                        label: 'Liên kết với Google',
+                        icon: Icons.link,
+                        onPressed: _busy ? null : _linkGoogle,
+                      ),
+                    if (_credentialInUse) ...[
+                      AppSpacing.vGapBase,
+                      _ActionButton(
+                        label: 'Đăng nhập Google (mất data ẩn danh)',
+                        icon: Icons.swap_horiz,
+                        onPressed: _busy ? null : _forceSignInGoogle,
+                        destructive: true,
+                      ),
+                    ],
+                    AppSpacing.vGapBase,
                     _ActionButton(
                       label: 'Đăng xuất',
                       icon: Icons.logout,
@@ -260,7 +308,15 @@ class _StatusCard extends StatelessWidget {
             const SizedBox(height: 8),
             Text('UID: ${user!.uid}', style: AppTextStyles.captionSm),
             Text(
-              'Provider: ${user!.isAnonymous ? "anonymous" : user!.providerData.map((p) => p.providerId).join(", ")}',
+              'Anonymous: ${user!.isAnonymous}',
+              style: AppTextStyles.captionSm,
+            ),
+            if (user!.email != null)
+              Text('Email: ${user!.email}', style: AppTextStyles.captionSm),
+            if (user!.displayName != null)
+              Text('Name: ${user!.displayName}', style: AppTextStyles.captionSm),
+            Text(
+              'Providers: ${user!.providerData.isEmpty ? "(none — anonymous only)" : user!.providerData.map((p) => p.providerId).join(", ")}',
               style: AppTextStyles.captionSm,
             ),
           ],

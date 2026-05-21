@@ -12,7 +12,20 @@
           "package_name": "vn.cchess.app"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "1063038096342-r0skmkh605j3pu5tbqtpacn62rjvelnt.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "vn.cchess.app",
+            "certificate_hash": "f9611037764b3e216fe1aafc66fadf03c6d5d850"
+          }
+        },
+        {
+          "client_id": "1063038096342-vlcb8vthqi6r580sut3f9h5gqpah3apu.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyBqJWRoknAwnPdLgzHxsRpcBwLqKgFn0nc"
@@ -20,7 +33,19 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "1063038096342-vlcb8vthqi6r580sut3f9h5gqpah3apu.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "1063038096342-vl8t59e5t22d07g404aq1e1ns1gf27ib.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "vn.cchess.app"
+              }
+            }
+          ]
         }
       }
     }

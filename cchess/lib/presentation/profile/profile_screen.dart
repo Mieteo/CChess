@@ -1,3 +1,4 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -99,6 +100,8 @@ class _ProfileHeader extends StatelessWidget {
                     ),
                     AppSpacing.vGapSm,
                     CChessRankBadge(elo: profile.eloChess),
+                    AppSpacing.vGapXs,
+                    const _AccountChip(),
                   ],
                 ),
               ),
@@ -536,6 +539,53 @@ class _MenuRow extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// Small chip under rank badge in profile header — shows account type
+/// (anonymous vs Google) and routes to Settings for linking.
+class _AccountChip extends StatelessWidget {
+  const _AccountChip();
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<User?>(
+      stream: FirebaseAuth.instance.authStateChanges(),
+      builder: (context, snap) {
+        final user = snap.data;
+        if (user == null) {
+          return const SizedBox.shrink();
+        }
+        final isAnon = user.isAnonymous;
+        final label = isAnon
+            ? 'Ẩn danh • Liên kết Google'
+            : (user.email ?? user.displayName ?? 'Tài khoản đã liên kết');
+        final icon = isAnon ? Icons.link : Icons.verified_user;
+        final color = isAnon ? AppColors.parchmentTan : AppColors.tealSuccess;
+
+        return InkWell(
+          onTap: () => context.push(AppConstants.routeSettings),
+          borderRadius: BorderRadius.circular(20),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 2),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icon, size: 14, color: color),
+                const SizedBox(width: 4),
+                Flexible(
+                  child: Text(
+                    label,
+                    style: AppTextStyles.captionSm.copyWith(color: color),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 }
