@@ -367,6 +367,22 @@ Không phải từ hồ sơ người dùng nhỏ.
 - Cache / KV cho public content nếu số liệu chứng minh cần
 - Cân nhắc Durable Objects nếu muốn chuyển phòng game sang edge realtime
 
+## 12.1. Trạng thái triển khai (cập nhật 2026-05-21)
+
+Sau 3 session implement, lát kiến trúc thực tế:
+
+| Lớp | Trạng thái | Nơi |
+|---|---|---|
+| Firebase Auth (Anonymous + Google) | ✅ Bật cho `cchess-dev` + `cchess-prod` | Console |
+| Firestore + rules + indexes | ✅ Deployed `cchess-dev` | [cchess/firestore.rules](cchess/firestore.rules), [firestore.indexes.json](cchess/firestore.indexes.json) |
+| Cloud Functions: `createFirestoreUser`, `recordRankedGame` | ✅ Deployed `cchess-dev` (Blaze) | [cchess/functions/src/index.ts](cchess/functions/src/index.ts) |
+| Flutter cloud sync layer | ✅ Splash auto + ProfileController push | [cchess/lib/data/services/cloud_sync_service.dart](cchess/lib/data/services/cloud_sync_service.dart) |
+| WebSocket backend (Node.js + `ws`) | 🟡 Step 1+2 test xanh, Step 3 chưa test E2E | [cchess-backend/src/](cchess-backend/src/) |
+| WS server hosting (Render/Railway/Fly.io) | ⬜ Vẫn localhost | — |
+| R2 / Cloudflare media | ⬜ Chưa cần | — |
+
+Kiến trúc đang đi đúng phương án đề xuất: Firebase + WS Node.js riêng + Cloud Functions cho ELO. Chưa có Cloudflare gì cả vì media + content pack chưa cần.
+
 ## 13. Tài liệu liên quan trong repo
 
 - `01_FEATURE_SPECIFICATION.md`

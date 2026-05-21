@@ -367,6 +367,15 @@ Tuy nhiên ở bản hiện tại, đây chủ yếu là **màn hình giới thi
 - Mỗi huy chương gắn với một loại tiến bộ cụ thể
 - Hệ thống dùng cả mục tiêu ngắn hạn và dài hạn để giữ chân người dùng
 
+### 5.6a. Đồng bộ local ↔ cloud (Sprint 8b)
+
+- Splash khởi động → tự động đăng nhập anonymous nếu chưa có session → đọc `users/{uid}` trên cloud.
+- Nếu cloud chưa có: tạo mới từ profile local. Các field nhạy cảm (ELO, coin, gem, ...) bị **rules ép về giá trị mặc định** — client không thể tự gán giá trị cao hơn.
+- Nếu cloud đã có: pull **chỉ whitelist** (displayName, region, avatarUrl, onboardingCompleted, createdAt, lastActiveAt) xuống local, sensitive fields giữ nguyên local.
+- Khi user sửa profile (rename, change region, complete onboarding): `ProfileController` lưu local rồi tự push whitelist lên cloud, fire-and-forget.
+- Khi local lưu kỳ phổ (game_records): cũng tự push lên `users/{uid}/game_records/{gameId}` subcollection.
+- Sensitive (ELO update sau ván ranked) chỉ server có quyền ghi qua Cloud Function `recordRankedGame` — đảm bảo chống gian lận.
+
 ### 5.6. Kỳ phổ và phân tích
 
 - Mọi ván đã hoàn tất đều có thể được dựng lại từ đầu
@@ -377,6 +386,8 @@ Tuy nhiên ở bản hiện tại, đây chủ yếu là **màn hình giới thi
 ### 6.1. Đang dùng được trong bản hiện tại
 
 - Onboarding và hồ sơ cá nhân
+- **Đăng nhập ẩn danh tự động + liên kết Google (giữ uid)** — Sprint 8a
+- **Đồng bộ hồ sơ và kỳ phổ lên cloud Firestore** — Sprint 8b
 - Đấu tại chỗ
 - Đấu với bot AI 5 cấp
 - Danh sách bài tập tàn cục và màn hình giải bài
@@ -385,7 +396,7 @@ Tuy nhiên ở bản hiện tại, đây chủ yếu là **màn hình giới thi
 - AI Coach trong phục bàn
 - Nhiệm vụ hằng ngày
 - Huy chương
-- Cài đặt cá nhân
+- Cài đặt cá nhân, có section Tài khoản (liên kết Google, đăng xuất)
 
 ### 6.2. Có mặt trong giao diện nhưng chưa thành flow hoàn chỉnh
 

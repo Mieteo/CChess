@@ -413,22 +413,46 @@ Sprint 8 nên dừng ở mức:
 - Sync user ổn
 - Có đường đi rõ cho backend realtime
 
-## 12. Checklist hoàn thành Sprint 8a / 8b
+## 12. Checklist hoàn thành Sprint 8a / 8b (✅ all done 2026-05-21)
 
-- [ ] Chốt package ID / bundle ID thật
-- [ ] Tạo project `dev`
-- [ ] Tạo project `prod`
-- [ ] Chọn Firestore region
-- [ ] Bật Anonymous Auth
-- [ ] Tạo Firestore database
-- [ ] Cấu hình FlutterFire
-- [ ] App init Firebase được
-- [ ] Có `uid`
-- [ ] Tạo / đọc `users/{uid}` được
-- [ ] Rule chặn field nhạy cảm
-- [ ] Có document schema ghi lại trong repo
-- [ ] Đồng bộ được hồ sơ local hiện tại lên cloud
-- [ ] Có budget alert
+- [x] Chốt package ID / bundle ID thật — `vn.cchess.app` đồng bộ 5 platforms.
+- [x] Tạo project `cchess-dev`
+- [x] Tạo project `cchess-prod`
+- [x] Chọn Firestore region — `asia-southeast1` (Singapore).
+- [x] Bật Anonymous Auth (cả dev + prod) + Google Sign-In.
+- [x] Tạo Firestore database (production mode).
+- [x] Cấu hình FlutterFire — `firebase_options.dart` + `google-services.json` + `GoogleService-Info.plist`.
+- [x] App init Firebase được — `Firebase.initializeApp` trong [cchess/lib/main.dart](cchess/lib/main.dart).
+- [x] Có `uid` — splash auto sign-in Anonymous; user có thể link Google qua Settings.
+- [x] Tạo / đọc `users/{uid}` được — [cchess/lib/data/repositories/user_remote_repository.dart](cchess/lib/data/repositories/user_remote_repository.dart) + [cloud_sync_service.dart](cchess/lib/data/services/cloud_sync_service.dart).
+- [x] Rule chặn field nhạy cảm — verified bằng test trong Cloud Test screen (3 case eloChess/coins deny + displayName allow).
+- [x] Có document schema ghi lại trong repo — mục 6 doc này.
+- [x] Đồng bộ được hồ sơ local hiện tại lên cloud — qua splash + `ProfileController._pushWhitelistChangesToCloud`.
+- [ ] Có budget alert — **chưa set** vì hiện tại đã upgrade Blaze trên `cchess-dev` rồi (free tier headroom + đang dev), khuyến nghị setup khi gần production launch.
+
+## 12.1. Gotcha thực tế khi deploy Cloud Functions lần đầu
+
+Sau khi `firebase deploy --only functions` trên project vừa upgrade Blaze, có thể gặp:
+
+```
+Build failed: Access to bucket gcf-sources-<NUMBER>-<REGION> denied.
+You must grant Storage Object Viewer permission to
+<NUMBER>-compute@developer.gserviceaccount.com.
+```
+
+**Nguyên nhân**: Default Compute Engine service account của project mới không tự có quyền đọc bucket source code — đây là thay đổi IAM của Google từ T4/2024.
+
+**Fix nhanh**: Vào https://console.cloud.google.com/iam-admin/iam → tìm principal `<NUMBER>-compute@developer.gserviceaccount.com` → thêm role `Editor` (hoặc tối thiểu `Storage Object Viewer` + `Artifact Registry Reader`). Đợi ~2 phút propagate rồi retry deploy.
+
+Cũng gặp prompt:
+> `No cleanup policy detected... How many days do you want to keep container images? (1)`
+
+Chọn `1` (default) — chỉ giữ image của lần deploy gần nhất + 1 ngày trước, tiết kiệm chi phí Artifact Registry.
+
+## 12.2. Region của triggers
+
+- `recordRankedGame` (v2 callable) — region `asia-southeast1` qua `setGlobalOptions`.
+- `createFirestoreUser` (v1 auth `onCreate` trigger) — region mặc định `us-east1`. **v1 Auth triggers không nghe `setGlobalOptions`**. Latency ~200ms cao hơn nhưng không nghiêm trọng vì chỉ chạy 1 lần đời account. Nếu muốn gần VN hơn, đổi sang v2 blocking trigger `beforeUserCreated` (API hơi khác).
 
 ## 13. Tài liệu liên quan trong repo
 

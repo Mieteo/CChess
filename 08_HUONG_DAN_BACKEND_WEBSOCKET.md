@@ -304,29 +304,45 @@ thì hãy đánh giá lại Durable Objects.
 
 ## 13. Lộ trình triển khai theo bước
 
-### Bước 1 - Echo server
+> Trạng thái 2026-05-21: code Step 1-3 đã có trong [`cchess-backend/`](cchess-backend/) (Node 20 + TypeScript + `ws` + `firebase-admin`). Step 2 đã test E2E (Android phone qua LAN). Step 3 chưa test 2-peer end-to-end.
 
+### ✅ Bước 1 — Echo server
 Mục tiêu:
-
 - Client kết nối được
 - Gửi một message
 - Server echo lại
 
-### Bước 2 - Auth handshake
+**Code thực tế**: [cchess-backend/src/server.ts](cchess-backend/src/server.ts). Connection sends `welcome`, mọi message JSON đều được echo lại với timestamp.
 
+### ✅ Bước 2 — Auth handshake
 Mục tiêu:
-
 - Client gửi token
 - Server verify token
 - Gắn socket với `uid`
 
-### Bước 3 - Room thủ công
+**Code thực tế**: [cchess-backend/src/auth.ts](cchess-backend/src/auth.ts) wrap `admin.auth().verifyIdToken()`; server.ts giữ `Map<WebSocket, uid>`, 10s auth timeout (close code `4001`), invalid token → `4002`.
 
+**Client Flutter**: [cchess/lib/data/services/game_socket_service.dart](cchess/lib/data/services/game_socket_service.dart) tự lấy idToken từ `FirebaseAuth.currentUser.getIdToken()` và gửi `{type:'auth', token}`.
+
+**Test**: [cchess/lib/presentation/cloud/backend_test_screen.dart](cchess/lib/presentation/cloud/backend_test_screen.dart) — debug screen, gated `kDebugMode`.
+
+### 🟡 Bước 3 — Room thủ công
 Mục tiêu:
-
 - Tạo room bằng tay
 - Cho 2 user join room
 - Broadcast sự kiện giữa hai socket
+
+**Code thực tế**: [cchess-backend/src/rooms.ts](cchess-backend/src/rooms.ts) — `Map<roomId, Room>` + `Map<socket, roomId>`, max 2 members, 6-ký-tự alphabet-only ID (loại bỏ 0/O/1/I gây nhầm). Auto-leave + notify peer khi socket disconnect.
+
+Protocol messages:
+- `→ create-room` `← room-created {roomId}`
+- `→ join-room {roomId}` `← room-joined {roomId, members, status}` + `← peer-joined {uid}` cho peer cũ
+- `→ broadcast {payload}` `← peer-message {from, payload, ts}` cho peer khác
+- `→ leave-room` `← left-room` + `← peer-left {uid}` cho peer còn lại
+
+Errors: `room-not-found`, `room-full`, `already-in-room`, `not-in-room`, `missing-room-id`.
+
+**Chưa làm**: test E2E 2 peer (Flutter app + browser console hoặc 2 device).
 
 ### Bước 4 - Move transport
 
@@ -442,17 +458,17 @@ Khi thêm online:
 
 ## 17. Checklist hoàn thành Sprint 8c
 
-- [ ] Client kết nối backend được
-- [ ] Backend verify Firebase token được
-- [ ] Có room state tối thiểu
-- [ ] Hai client join cùng room được
-- [ ] Gửi / nhận move realtime được
-- [ ] Server từ chối move sai
-- [ ] Server giữ turn chính xác
-- [ ] Có clock server-side
+- [x] Client kết nối backend được — `WebSocketChannel.connect`
+- [x] Backend verify Firebase token được — `admin.auth().verifyIdToken`
+- [x] Có room state tối thiểu — `rooms.ts`
+- [ ] Hai client join cùng room được — **code có, chưa test E2E**
+- [ ] Gửi / nhận move realtime được (Step 4)
+- [ ] Server từ chối move sai (Step 5)
+- [ ] Server giữ turn chính xác (Step 5-6)
+- [ ] Có clock server-side (Step 6)
 - [ ] Có `game_ended`
-- [ ] Ghi được kết quả cuối về cloud
-- [ ] Có reconnect cơ bản
+- [ ] Ghi được kết quả cuối về cloud — `recordRankedGame` callable đã deploy
+- [ ] Có reconnect cơ bản (Step 8)
 
 ## 18. Sau Sprint 8c mới nên làm gì
 

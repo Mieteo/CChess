@@ -1,6 +1,8 @@
 # 📋 TÀI LIỆU ĐẶC TẢ TÍNH NĂNG
 # Game Cờ Tướng Việt Nam — Dự án CChess
-# Phiên bản: 1.0 | Ngày: 2026-05-12
+# Phiên bản: 1.0 | Ngày: 2026-05-12 (spec gốc; trạng thái triển khai cập nhật riêng ở [`05_KE_HOACH_DU_AN.md`](05_KE_HOACH_DU_AN.md))
+
+> Doc này là **spec đặc tả** — nội dung tính năng ổn định, không thay đổi theo từng commit. Trạng thái "đã làm / chưa làm / chờ phụ thuộc" được track ở doc 05 và làm sống. Doc 01 chỉ revise khi scope tính năng thật sự đổi.
 
 ---
 

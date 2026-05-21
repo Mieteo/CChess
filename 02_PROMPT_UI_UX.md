@@ -218,6 +218,7 @@ Tạo màn hình hồ sơ cá nhân:
    - Avatar lớn (80px) với khung avatar theo rank
    - Tên + ID (#A91886313 style)
    - Badge cấp bậc: icon + text (vd: "Kỳ Sĩ ⭐⭐")
+   - **Account chip nhỏ** (cập nhật Sprint 10): icon + label "Ẩn danh • Liên kết Google" (kem) hoặc "✓ email@..." (xanh tealSuccess), tap → mở Settings.
    - Hàng currency: 🪙 2278 | 💎 1000
    - Nút Chỉnh sửa (icon bút)
 
@@ -247,6 +248,8 @@ Tạo màn hình hồ sơ cá nhân:
 
 Output: profile_screen.dart, stats_grid.dart, achievement_grid.dart, profile_menu.dart
 ```
+
+> **Bổ sung Sprint 8a/10**: trong Settings screen có thêm section "TÀI KHOẢN" hiển thị trạng thái đăng nhập (anonymous / Google) + button "Liên kết với Google" (khi anonymous) hoặc "Đăng xuất" (khi Google). Khi link thất bại do `credential-already-in-use`, hiện thêm button "Đăng nhập Google (bỏ data ẩn danh)" cho phép recovery về account cũ.
 
 ---
 

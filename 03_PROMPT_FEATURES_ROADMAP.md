@@ -3,6 +3,11 @@
 # Dành cho: AI code assistant (GitHub Copilot, Cursor, Claude)
 # File: 03_PROMPT_FEATURES_ROADMAP.md
 
+> **Trạng thái triển khai**: doc này là **lộ trình prompt**, không phải status tracker. Để biết Sprint nào đã làm xong và còn gì, đọc [`05_KE_HOACH_DU_AN.md`](05_KE_HOACH_DU_AN.md) (cập nhật sống). Tóm tắt 2026-05-21:
+> - PROMPT 01-06 (Phase 1 MVP): ✅ Done (Sprint 1-7 + 8a + 8b + 9 + 10 + 11 + một phần PROMPT 04 online)
+> - PROMPT 04 WebSocket: 🟡 Step 1+2 server xong, Step 3 chưa test (xem [`08_HUONG_DAN_BACKEND_WEBSOCKET.md`](08_HUONG_DAN_BACKEND_WEBSOCKET.md))
+> - PROMPT 07+: ⬜ Chưa bắt đầu
+
 ---
 
 ## HƯỚNG DẪN CHUNG CHO AI

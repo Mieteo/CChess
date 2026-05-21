@@ -1,8 +1,8 @@
 # 📊 KẾ HOẠCH & TIẾN ĐỘ DỰ ÁN — CChess
 
-> Tài liệu sống — cập nhật ngày **2026-05-16** sau commit `63bab56` (turn 2).
+> Tài liệu sống — cập nhật ngày **2026-05-21** sau commit `040e895` (Backend Step 2 auth handshake).
 > Mục đích: tổng kết **đã làm**, **chưa làm**, **đang chờ phụ thuộc** theo từng Sprint.
-> Tham chiếu chéo: [`01_FEATURE_SPECIFICATION.md`](01_FEATURE_SPECIFICATION.md), [`02_PROMPT_UI_UX.md`](02_PROMPT_UI_UX.md), [`03_PROMPT_FEATURES_ROADMAP.md`](03_PROMPT_FEATURES_ROADMAP.md).
+> Tham chiếu chéo: [`01_FEATURE_SPECIFICATION.md`](01_FEATURE_SPECIFICATION.md), [`02_PROMPT_UI_UX.md`](02_PROMPT_UI_UX.md), [`03_PROMPT_FEATURES_ROADMAP.md`](03_PROMPT_FEATURES_ROADMAP.md), [`07_HUONG_DAN_THIET_LAP_FIREBASE.md`](07_HUONG_DAN_THIET_LAP_FIREBASE.md), [`08_HUONG_DAN_BACKEND_WEBSOCKET.md`](08_HUONG_DAN_BACKEND_WEBSOCKET.md).
 
 ---
 
@@ -29,19 +29,21 @@
 | 5 | Bot AI (Minimax + Evaluator) | ✅ | 5 mức độ, `chess_engine/ai/` |
 | 6 | Puzzle System (Tàn Cục) | ✅ | Seed 5+ bài, controller + UI + test |
 | 7 | Settings, Profile, Hồ sơ chi tiết | ✅ | Settings + EditProfile + Onboarding |
-| 8 | **Firebase + WebSocket Multiplayer** | ⬜ | **Sprint chặn** — chưa khởi động |
-| 9 | Game History + Replay AI | 🟢 | Code & test xanh, chờ S8 để đồng bộ cloud |
-| 10 | Achievements + Daily Quests | 🟢 | Engine + UI xong, chờ S8 đẩy server-side |
-| 11 | Opening Library (Khai cuộc Đại sư) | 🟢 | Seed cứng 5 khai cuộc, chờ S8 cho content CMS |
-| 12 | Online Matchmaking + Spectate (A1, A6) | 🔒 | Chờ S8 |
-| 13 | Cờ Úp + Cờ Casual (A3, A2) | 🔒 | Chờ S8 + biến thể engine |
-| 14 | Community (Bạn bè, Leaderboard, CLB) | 🔒 | Chờ S8 |
+| 8a | Firebase setup (config + Auth + Firestore) | ✅ | `cchess-dev`/`cchess-prod`, rules + indexes deployed, Anonymous + Google linking, splash auto-sync |
+| 8b | Firestore sync + Cloud Functions code | ✅ | `users/`, `game_records/` sync local↔cloud; `createFirestoreUser` + `recordRankedGame` deployed (Blaze) |
+| 8c | Backend WebSocket scaffold | 🟡 | `cchess-backend/`: Step 1 echo + Step 2 auth handshake ✓; Step 3 rooms code xong nhưng **chưa test E2E** |
+| 9 | Game History + Replay AI | 🟢 | Local Hive + push `game_records` lên cloud subcollection ✓ |
+| 10 | Achievements + Daily Quests | 🟢 | Engine + UI xong, chờ Cloud Functions sync server-side |
+| 11 | Opening Library (Khai cuộc Đại sư) | 🟢 | Seed cứng 5 khai cuộc, chờ CMS |
+| 12 | Online Matchmaking + Spectate (A1, A6) | 🟡 | Phụ thuộc 8c — protocol create-room/join-room/broadcast đã có khung |
+| 13 | Cờ Úp + Cờ Casual (A3, A2) | 🔒 | Chờ S12 + biến thể engine |
+| 14 | Community (Bạn bè, Leaderboard, CLB) | 🔒 | Chờ S12 |
 | 15 | AI Coach (B3) + AI Replay nâng cao (B5) | ⬜ | Cần Pikafish FFI |
 | 16 | Khám Phá (Shop, Inventory, Mail, Event) | ⬜ | Cần backend kinh tế |
 | 17 | VIP Center + IAP | ⬜ | Phụ thuộc store account |
 | 18 | OCR thế cờ (B7), học thuộc kỳ phổ (B8) | ⬜ | Giai đoạn 3 |
 
-> **Trục thời gian:** Sprint 1–7 đã đi qua trong 2 turn implement (commit `9d5d6cb` "Start → Sprint 6" và `63bab56` "turn 2"). Sprint 9–11 được làm song song trong turn 2 để giảm phụ thuộc tuyến tính, **nhưng phần real-time/đồng bộ đều bị chặn cho đến khi Sprint 8 (Firebase) hoàn thành.**
+> **Trục thời gian cập nhật (5/2026):** Sprint 8 hoàn thành theo 3 lát: 8a (Firebase Auth + Firestore + rules + indexes deployed), 8b (sync local↔cloud + Cloud Functions deployed lên Blaze tại `cchess-dev`), 8c (backend Node.js WebSocket đang xây ở repo `cchess-backend/` — sibling với `cchess/`). Sprint 9–11 đã unblock một phần (sync ván + profile lên cloud chạy được). Sprint 12 đã có protocol room cơ bản, chờ tích hợp vào game flow thật.
 
 ---
 
@@ -129,13 +131,56 @@
 - Profile: [profile_screen.dart](cchess/lib/presentation/profile/profile_screen.dart), [profile_controller.dart](cchess/lib/presentation/profile/profile_controller.dart), [edit_profile_screen.dart](cchess/lib/presentation/profile/edit_profile_screen.dart), model [user_profile.dart](cchess/lib/data/models/user_profile.dart), repo [profile_repository.dart](cchess/lib/data/repositories/profile_repository.dart).
 - **Test:** [settings_profile_test.dart](cchess/test/data/settings_profile_test.dart).
 
-**Chưa làm:** liên kết social (Facebook/Google/Apple) — phụ thuộc Firebase Auth ở Sprint 8.
+**Chưa làm:** —
 
 ---
 
-## 3. Các Sprint đã code xong nhưng **đang chờ Sprint 8**
+### ✅ Sprint 8a — Firebase setup (auth + Firestore)
+**Đã làm:**
+- Project Firebase: `cchess-dev` + `cchess-prod`, region `asia-southeast1` (Singapore).
+- Package ID đồng bộ 5 platforms: `vn.cchess.app` (Android/iOS/macOS/Web/Windows).
+- FlutterFire configure → [firebase_options.dart](cchess/lib/firebase_options.dart) + `google-services.json` + `GoogleService-Info.plist`.
+- Auth: **Anonymous** bật, **Google Sign-In** bật + SHA-1 fingerprint thêm vào console.
+- `Firebase.initializeApp` trong [main.dart](cchess/lib/main.dart).
+- Account linking: [google_auth_service.dart](cchess/lib/data/services/google_auth_service.dart) (google_sign_in 7.x + Web serverClientId).
+- UI: "Tài khoản" section trong Settings + account chip trong Profile header.
 
-> Các sprint dưới đây code & test đều xanh, nhưng chỉ chạy với **dữ liệu local**. Khi Firebase ở Sprint 8 hoàn thành, sẽ cắm vào để đồng bộ giữa thiết bị và làm leaderboard server-side.
+**Chưa làm:** Facebook/Apple sign-in (defer Sprint 17 cùng IAP).
+
+---
+
+### ✅ Sprint 8b — Firestore sync + Cloud Functions
+**Đã làm:**
+- Rules + indexes deployed cho `cchess-dev`: [firestore.rules](cchess/firestore.rules), [firestore.indexes.json](cchess/firestore.indexes.json).
+- Sync local↔cloud: [user_remote_repository.dart](cchess/lib/data/repositories/user_remote_repository.dart), [cloud_sync_service.dart](cchess/lib/data/services/cloud_sync_service.dart) — splash auto sign-in + merge cloud whitelist vào local.
+- ProfileController auto-push whitelist (`displayName`, `region`, `avatarUrl`, `onboardingCompleted`) lên cloud.
+- Game history cũng sync: [game_record_remote_repository.dart](cchess/lib/data/repositories/game_record_remote_repository.dart) — push toàn bộ record khi save, update isFavorite riêng (rules-compliant).
+- Cloud Functions deployed lên prod (`cchess-dev`, upgraded Blaze): [functions/src/index.ts](cchess/functions/src/index.ts) — `createFirestoreUser` (us-east1 v1 auth trigger) + `recordRankedGame` (asia-southeast1 v2 callable).
+- Cloud Test screen debug (gated `kDebugMode`): [cloud_test_screen.dart](cchess/lib/presentation/cloud/cloud_test_screen.dart) — test rules + linking.
+
+**Chưa làm:** retry queue cho writes khi offline (data có thể bị stale-rollback). Sprint 11 nếu cần.
+
+---
+
+### 🟡 Sprint 8c — Backend WebSocket scaffold
+**Đã làm:**
+- Project mới: [`cchess-backend/`](cchess-backend/) — Node 20 + TypeScript + `ws` + `firebase-admin`.
+- **Step 1** echo server: [server.ts](cchess-backend/src/server.ts).
+- **Step 2** auth handshake: [auth.ts](cchess-backend/src/auth.ts) — verify Firebase ID token, gắn `uid` vào socket, 10s timeout.
+- **Step 3** rooms (code only, chưa test E2E): [rooms.ts](cchess-backend/src/rooms.ts) — create/join/leave/broadcast với 6-ký-tự roomId.
+- Flutter client: [game_socket_service.dart](cchess/lib/data/services/game_socket_service.dart) + [backend_test_screen.dart](cchess/lib/presentation/cloud/backend_test_screen.dart) (debug-only).
+- Đã test thực tế Step 2 trên Android phone qua LAN + service account trên PC.
+
+**Chưa làm:**
+- Test E2E Step 3 rooms (2-peer broadcast — cần 2 endpoint).
+- Step 4 move transport, Step 5 move validation server-side, Step 6 server clock, Step 7 persistence (đẩy result lên Firestore).
+- Production hosting (Render/Railway/Fly.io). Hiện chỉ localhost.
+
+---
+
+## 3. Các Sprint đã code xong, sync cloud một phần
+
+> Sprint 9, 10, 11 vẫn dựa trên local Hive là chính, nhưng đã có cầu nối lên cloud Firestore qua Sprint 8b.
 
 ### 🟢 Sprint 9 — Game History + Replay AI
 - Model lưu ván: [game_record.dart](cchess/lib/data/models/game_record.dart).
@@ -145,7 +190,7 @@
 - AI phân tích nước hay/dở: [game_analyzer.dart](cchess/lib/core/chess_engine/ai/game_analyzer.dart) (351 dòng).
 - **Test:** [game_history_test.dart](cchess/test/game/game_history_test.dart), [replay_controller_test.dart](cchess/test/replay/replay_controller_test.dart).
 
-**Phụ thuộc Sprint 8:** đồng bộ ván lên cloud để xem từ thiết bị khác, chia sẻ kỳ phổ qua link.
+**Cloud sync:** mỗi ván local/bot saved sẽ push lên `users/{uid}/game_records/{gameId}` (Sprint 8b). Ván ranked online sẽ do server backend ghi qua `recordRankedGame` (Sprint 12).
 
 ---
 
@@ -172,27 +217,23 @@
 
 ## 4. Các Sprint **chưa làm** (theo thứ tự ưu tiên)
 
-### ⬜ Sprint 8 — Firebase + WebSocket (⚠️ SPRINT CHẶN)
-Là **điều kiện tiên quyết** cho mọi tính năng online. Cần làm:
-- Setup Firebase project (Android `google-services.json`, iOS `GoogleService-Info.plist`).
-- Thêm dependency vào [pubspec.yaml](cchess/pubspec.yaml): `firebase_core`, `firebase_auth`, `cloud_firestore`, `firebase_database`, `socket_io_client`.
-- Auth: anonymous + Google/Facebook/Apple, link account.
-- Firestore schema: `users/`, `games/`, `puzzles/`, `achievements_log/`.
-- WebSocket server (Node.js) cho real-time moves — **cần repo backend riêng**.
-- Cloud Functions: ELO recalculation, anti-cheat, leaderboard aggregation.
+### 🟡 Sprint 12 — Online Matchmaking + Spectate (A1, A5, A6)
+**Đã có**: protocol Room ở backend (create/join/leave/broadcast), Flutter client socket service.
 
-### 🔒 Sprint 12 — Online Matchmaking + Spectate (A1, A5, A6)
-- Matchmaking theo ELO, ghép trong vài giây.
+**Còn lại**:
+- Step 4-7 backend (move transport, validation, clock, persistence).
+- Matchmaking queue server-side (ghép theo ELO).
 - Đồng hồ ván 15ph/60s mỗi nước (tích hợp với UI đã có).
-- Chat nhanh + emoji (A5 — UI đã có khung ở `game_action_bar.dart`, cần WebSocket).
+- Chat nhanh + emoji (A5 — UI đã có khung ở `game_action_bar.dart`, cần wire vào broadcast).
 - Spectate mode.
+- Deploy backend lên Render/Railway/Fly.io.
 
-### 🔒 Sprint 13 — Biến thể: Cờ Úp (A3), Cờ Casual (A2)
+### 🔒 Sprint 13 — Biến thể: Cờ Úp (A3), Cờ Casual (A2) (cần S12)
 - Engine biến thể Cờ Úp (random úp quân, mở khi đi nước đầu của quân đó).
 - ELO Cờ Úp tính riêng.
 - Mời bạn qua link/ID.
 
-### 🔒 Sprint 14 — Community (Module C)
+### 🔒 Sprint 14 — Community (Module C) (cần S12 + Cloud Functions cho leaderboard aggregation)
 - Bạn bè (C1): tìm theo ID, danh sách online/offline.
 - Leaderboard server-side (C2): toàn quốc + khu vực.
 - Câu lạc bộ Kỳ Xã (C3).
@@ -225,17 +266,17 @@ Là **điều kiện tiên quyết** cho mọi tính năng online. Cần làm:
 
 | Mã spec | Tính năng | Trạng thái | Sprint |
 |---|---|:---:|:---:|
-| A1 | Cờ Tướng Online Ranked | 🔒 | 12 |
+| A1 | Cờ Tướng Online Ranked | 🟡 | 12 (protocol có, chưa wire) |
 | A2 | Cờ Casual + mời bạn | 🔒 | 13 |
 | A3 | Cờ Úp | 🔒 | 13 |
-| A5 | Chat + emoji + AI hint trong ván | 🟡 | UI có khung, chờ S12 |
+| A5 | Chat + emoji + AI hint trong ván | 🟡 | UI có khung, broadcast có sẵn ở 8c |
 | A6 | Spectate | 🔒 | 12 |
 | A7 | Đấu Bot AI | ✅ | 5 |
 | B1 | Khóa học vỡ lòng | 🟡 | UI placeholder, content chưa có |
 | B2 | Khóa học video | ⬜ | sau S15 |
 | B3 | AI Coach | ⬜ | 15 |
 | B4 | Kho bài tập 10.000+ | 🟡 | Engine xong (S6), content thiếu |
-| B5 | Kỳ phổ + Replay AI | 🟢 | 9 (chờ cloud sync) |
+| B5 | Kỳ phổ + Replay AI | 🟢 | 9 — đã sync `game_records` cloud |
 | B6 | Khai cuộc Đại sư | 🟢 | 11 (chờ CMS) |
 | B7 | OCR thế cờ | ⬜ | 18 |
 | B8 | Học thuộc kỳ phổ | ⬜ | 18 |
@@ -249,32 +290,34 @@ Là **điều kiện tiên quyết** cho mọi tính năng online. Cần làm:
 | E3 | Huy chương | 🟢 | 10 |
 | E4 | Nhiệm vụ | 🟢 | 10 |
 | E5 | VIP Center | ⬜ | 17 |
-| E6 | Tài khoản & bảo mật | 🔒 | cần S8 Auth |
-| E7 | Cài đặt | ✅ | 7 |
+| E6 | Tài khoản & bảo mật | ✅ | 8a — Anonymous + Google linking + sign out |
+| E7 | Cài đặt | ✅ | 7 + 8a (thêm section Tài khoản) |
 
 ---
 
-## 6. Số liệu tổng (tại commit `63bab56`)
+## 6. Số liệu tổng (tại commit `040e895`)
 
-- **Tổng file Dart `lib/`:** ~70 file.
-- **Tổng dòng test:** 1.306 dòng / 12 file test.
-- **Sprint hoàn thành (1 chiều):** 7/18.
-- **Sprint hoàn thành chờ tích hợp:** 3/18 (S9, S10, S11).
-- **Sprint chặn bởi S8:** 4 (S12, S13, S14, S15 phần online).
-- **Tỷ lệ hoàn thành code (ước lượng theo spec MVP+G2):** ~55%.
-- **Tỷ lệ hoàn thành tính năng thật sự dùng được end-to-end (cần backend):** ~25% (vì tất cả tính năng online vẫn local-only).
+- **Tổng file Dart `lib/`:** ~80 file (+services/cloud/, +screens cloud/).
+- **Tổng dòng test:** 1.306 dòng / 12 file test (chưa tăng — tests cho cloud sync chưa viết).
+- **Backend TypeScript:** ~330 dòng (server.ts + auth.ts + rooms.ts) trong [`cchess-backend/`](cchess-backend/).
+- **Sprint hoàn thành (1 chiều):** 9/18 (1–7 + 8a + 8b).
+- **Sprint đang dở:** 1 (8c — Step 3 chưa test E2E).
+- **Sprint code xong, sync một phần:** 3/18 (S9, S10, S11).
+- **Sprint phụ thuộc 8c → S12:** đang có protocol, cần tích hợp game flow.
+- **Tỷ lệ hoàn thành code (ước lượng theo spec MVP+G2):** ~65%.
+- **Tỷ lệ tính năng end-to-end dùng được thật:** ~40% (đã có cloud sync + auth thật, chưa có matchmaking online).
 
 ---
 
 ## 7. Khuyến nghị bước tiếp theo
 
-1. **Ưu tiên #1 — khởi động Sprint 8** để mở khóa S9–S14. Đề xuất chia nhỏ:
-   - 8a: Firebase setup + Anonymous Auth.
-   - 8b: Firestore schema + User sync (đẩy `UserProfile` local lên cloud).
-   - 8c: WebSocket scaffold + 1 ván test local↔local.
-2. **Song song** — hoàn thiện content khai cuộc (S11) và puzzle (S6) bằng cách viết tool import từ file PGN/FEN, để khi S8 xong là sync được luôn.
-3. **Trước khi mở rộng UI** ở các module D/E5/E6 — quyết định lại kiến trúc tab (giữ 5 hay thêm tab Khám Phá riêng).
+1. **Test Step 3 backend rooms E2E** (2 endpoint phone + browser console) — verify protocol create/join/broadcast hoạt động trước khi đi Step 4.
+2. **Step 4-7 backend** theo doc 8 mục 13: move transport → validate luật → server clock → persistence (đẩy ranked result lên `users/{uid}/game_records` qua Cloud Function `recordRankedGame`).
+3. **Deploy backend** Render/Railway/Fly.io khi sẵn sàng public dev URL.
+4. **Wire game flow ranked**: matchmaking queue + UI chọn ranked → join room → đánh → kết thúc → server ghi record.
+5. **Optional ngay**: viết retry queue cho whitelist push (fix stale-rollback offline) + unit test cho `CloudSyncService`.
+6. **Trước khi mở rộng UI** ở các module D/E5/E6 — quyết định lại kiến trúc tab (giữ 5 hay thêm tab Khám Phá riêng).
 
 ---
 
-*Cập nhật bởi Claude Code sau khi rà soát `cchess/lib/`, `cchess/test/` và lịch sử commit. Lần cập nhật kế tiếp đề xuất: sau khi hoàn thành Sprint 8a.*
+*Cập nhật bởi Claude Code sau session 2026-05-21 (commits `a3b9231` Sprint 8+9, `f056164` Sprint 10, `040e895` Backend Step 2). Lần cập nhật kế tiếp đề xuất: sau khi hoàn thành Sprint 8c full (Step 1-7 backend test xanh).*
