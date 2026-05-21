@@ -21,12 +21,15 @@ class GameSocketService {
   StreamController<Map<String, dynamic>>? _controller;
   StreamSubscription<dynamic>? _sub;
   String? _authedUid;
+  String? _currentRoomId;
 
   Stream<Map<String, dynamic>> get messages =>
       _controller?.stream ?? const Stream.empty();
   String? get authedUid => _authedUid;
+  String? get currentRoomId => _currentRoomId;
   bool get isConnected => _channel != null;
   bool get isAuthed => _authedUid != null;
+  bool get isInRoom => _currentRoomId != null;
 
   Future<void> connect(String url) async {
     if (_channel != null) {
@@ -40,8 +43,17 @@ class GameSocketService {
         try {
           final raw = data is String ? data : (data as List<int>).toString();
           final msg = jsonDecode(raw) as Map<String, dynamic>;
-          if (msg['type'] == 'authed') {
-            _authedUid = msg['uid'] as String?;
+          switch (msg['type']) {
+            case 'authed':
+              _authedUid = msg['uid'] as String?;
+              break;
+            case 'room-created':
+            case 'room-joined':
+              _currentRoomId = msg['roomId'] as String?;
+              break;
+            case 'left-room':
+              _currentRoomId = null;
+              break;
           }
           _controller?.add(msg);
         } catch (e) {
@@ -53,6 +65,7 @@ class GameSocketService {
       },
       onDone: () {
         _authedUid = null;
+        _currentRoomId = null;
         _controller?.close();
         _channel = null;
         _controller = null;
@@ -73,12 +86,23 @@ class GameSocketService {
     _channel?.sink.add(jsonEncode(data));
   }
 
+  void createRoom() => send({'type': 'create-room'});
+
+  void joinRoom(String roomId) =>
+      send({'type': 'join-room', 'roomId': roomId.trim().toUpperCase()});
+
+  void leaveRoom() => send({'type': 'leave-room'});
+
+  void broadcast(Map<String, dynamic> payload) =>
+      send({'type': 'broadcast', 'payload': payload});
+
   Future<void> disconnect() async {
     await _sub?.cancel();
     _sub = null;
     await _channel?.sink.close();
     _channel = null;
     _authedUid = null;
+    _currentRoomId = null;
     await _controller?.close();
     _controller = null;
   }

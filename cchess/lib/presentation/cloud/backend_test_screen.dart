@@ -1,6 +1,8 @@
 import 'dart:async';
 
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -24,6 +26,7 @@ class _BackendTestScreenState extends ConsumerState<BackendTestScreen> {
   /// - `localhost:8080` → iOS simulator / desktop
   /// - For physical phone, replace với LAN IP của máy chạy backend
   final _urlCtrl = TextEditingController(text: 'ws://10.0.2.2:8080');
+  final _roomIdCtrl = TextEditingController();
 
   final _log = <String>[];
   StreamSubscription<Map<String, dynamic>>? _sub;
@@ -35,6 +38,7 @@ class _BackendTestScreenState extends ConsumerState<BackendTestScreen> {
   @override
   void dispose() {
     _urlCtrl.dispose();
+    _roomIdCtrl.dispose();
     _sub?.cancel();
     super.dispose();
   }
@@ -88,10 +92,43 @@ class _BackendTestScreenState extends ConsumerState<BackendTestScreen> {
         await _svc.disconnect();
       });
 
+  Future<void> _createRoom() => _run('create-room', () async {
+        _svc.createRoom();
+        _appendLog('→ {type:create-room}');
+      });
+
+  Future<void> _joinRoom() => _run('join-room', () async {
+        final id = _roomIdCtrl.text.trim();
+        if (id.isEmpty) {
+          throw 'Nhập roomId';
+        }
+        _svc.joinRoom(id);
+        _appendLog('→ {type:join-room, roomId:$id}');
+      });
+
+  Future<void> _leaveRoom() => _run('leave-room', () async {
+        _svc.leaveRoom();
+        _appendLog('→ {type:leave-room}');
+      });
+
+  Future<void> _broadcast() => _run('broadcast', () async {
+        _svc.broadcast({'msg': 'hello peer', 'at': DateTime.now().toIso8601String()});
+        _appendLog('→ {type:broadcast, payload:{msg:hello peer}}');
+      });
+
+  Future<void> _copyToken() => _run('copy token', () async {
+        final user = FirebaseAuth.instance.currentUser;
+        if (user == null) throw 'Chưa đăng nhập Firebase';
+        final token = await user.getIdToken();
+        await Clipboard.setData(ClipboardData(text: token ?? ''));
+        _appendLog('✓ Token copied to clipboard (${token?.length ?? 0} chars)');
+      });
+
   @override
   Widget build(BuildContext context) {
     final connected = _svc.isConnected;
     final authed = _svc.authedUid != null;
+    final inRoom = _svc.isInRoom;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -165,11 +202,71 @@ class _BackendTestScreenState extends ConsumerState<BackendTestScreen> {
                   ),
                 ],
               ),
-              AppSpacing.vGapBase,
+              AppSpacing.vGapXs,
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton.icon(
+                  icon: const Icon(Icons.copy, size: 16),
+                  label: const Text('Copy ID token (for browser test)'),
+                  onPressed: _busy ? null : _copyToken,
+                ),
+              ),
               _StatusRow(
                 connected: connected,
                 authed: authed,
                 uid: _svc.authedUid,
+                roomId: _svc.currentRoomId,
+              ),
+              AppSpacing.vGapBase,
+              TextField(
+                controller: _roomIdCtrl,
+                textCapitalization: TextCapitalization.characters,
+                decoration: const InputDecoration(
+                  labelText: 'Room ID',
+                  helperText: '6 ký tự, vd ABC234. Để trống → Create sẽ sinh.',
+                  prefixIcon: Icon(Icons.meeting_room_outlined),
+                ),
+                enabled: !_busy && authed,
+              ),
+              AppSpacing.vGapBase,
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      icon: const Icon(Icons.add),
+                      label: const Text('Create'),
+                      onPressed:
+                          (!_busy && authed && !inRoom) ? _createRoom : null,
+                    ),
+                  ),
+                  AppSpacing.hGapSm,
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      icon: const Icon(Icons.login),
+                      label: const Text('Join'),
+                      onPressed:
+                          (!_busy && authed && !inRoom) ? _joinRoom : null,
+                    ),
+                  ),
+                  AppSpacing.hGapSm,
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      icon: const Icon(Icons.campaign),
+                      label: const Text('Broadcast'),
+                      onPressed:
+                          (!_busy && authed && inRoom) ? _broadcast : null,
+                    ),
+                  ),
+                  AppSpacing.hGapSm,
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      icon: const Icon(Icons.logout),
+                      label: const Text('Leave'),
+                      onPressed:
+                          (!_busy && authed && inRoom) ? _leaveRoom : null,
+                    ),
+                  ),
+                ],
               ),
               if (_error != null) ...[
                 AppSpacing.vGapBase,
@@ -218,10 +315,12 @@ class _StatusRow extends StatelessWidget {
     required this.connected,
     required this.authed,
     required this.uid,
+    required this.roomId,
   });
   final bool connected;
   final bool authed;
   final String? uid;
+  final String? roomId;
 
   @override
   Widget build(BuildContext context) {
@@ -231,35 +330,54 @@ class _StatusRow extends StatelessWidget {
         color: AppColors.parchmentTan.withValues(alpha: 0.2),
         borderRadius: BorderRadius.circular(8),
       ),
-      child: Row(
+      child: Wrap(
+        spacing: 12,
+        runSpacing: 4,
+        crossAxisAlignment: WrapCrossAlignment.center,
         children: [
-          Icon(
-            connected ? Icons.check_circle : Icons.radio_button_unchecked,
-            color: connected ? Colors.greenAccent : Colors.white54,
-            size: 18,
-          ),
-          const SizedBox(width: 6),
-          Text('connected', style: AppTextStyles.captionSm),
-          const SizedBox(width: 16),
-          Icon(
-            authed ? Icons.check_circle : Icons.radio_button_unchecked,
-            color: authed ? Colors.greenAccent : Colors.white54,
-            size: 18,
-          ),
-          const SizedBox(width: 6),
-          Text('authed', style: AppTextStyles.captionSm),
-          if (uid != null) ...[
-            const SizedBox(width: 16),
-            Expanded(
+          _Pip(label: 'connected', on: connected),
+          _Pip(label: 'authed', on: authed),
+          if (uid != null)
+            Text('uid: ${uid!.substring(0, 8)}…', style: AppTextStyles.captionSm),
+          if (roomId != null)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              decoration: BoxDecoration(
+                color: AppColors.accentGold.withValues(alpha: 0.2),
+                borderRadius: BorderRadius.circular(12),
+              ),
               child: Text(
-                'uid: ${uid!.substring(0, 8)}…',
-                style: AppTextStyles.captionSm,
-                overflow: TextOverflow.ellipsis,
+                'room: $roomId',
+                style: AppTextStyles.captionSm.copyWith(
+                  color: AppColors.accentGold,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
             ),
-          ],
         ],
       ),
+    );
+  }
+}
+
+class _Pip extends StatelessWidget {
+  const _Pip({required this.label, required this.on});
+  final String label;
+  final bool on;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(
+          on ? Icons.check_circle : Icons.radio_button_unchecked,
+          color: on ? Colors.greenAccent : Colors.white54,
+          size: 18,
+        ),
+        const SizedBox(width: 4),
+        Text(label, style: AppTextStyles.captionSm),
+      ],
     );
   }
 }

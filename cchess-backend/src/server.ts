@@ -1,25 +1,38 @@
 import { createServer, IncomingMessage } from 'http';
 import { WebSocketServer, WebSocket } from 'ws';
 import { initFirebaseAdmin, verifyIdToken } from './auth';
+import {
+  createRoom,
+  joinRoom,
+  leaveRoom,
+  membersOf,
+  roomOf,
+  type Room,
+} from './rooms';
 
-// Step 2 from 08_HUONG_DAN_BACKEND_WEBSOCKET.md: auth handshake.
+// Step 2-3 from 08_HUONG_DAN_BACKEND_WEBSOCKET.md.
 //
-// Protocol:
-//   1. Client connects.
-//   2. Server sends `{type:"welcome"}` and waits up to AUTH_TIMEOUT_MS.
-//   3. Client sends `{type:"auth", token: "<firebase id token>"}`.
-//   4. Server verifies via Firebase Admin → sends `{type:"authed", uid}`.
-//   5. From now on every message is tagged with that uid (echo for now).
-//
-// If client doesn't auth in time, or token invalid, socket is closed.
+// Protocol summary:
+//   ← welcome
+//   → auth {token}
+//   ← authed {uid, email, anonymous} | error {code}
+//   → create-room
+//   ← room-created {roomId}
+//   → join-room {roomId}
+//   ← room-joined {roomId, members:[uid...]}
+//   ← peer-joined {uid}                            // to existing peer
+//   → broadcast {payload}
+//   ← peer-message {from, payload, ts}             // to other peer
+//   → leave-room
+//   ← left-room                                    // to leaver
+//   ← peer-left {uid}                              // to remaining peer
 
 const PORT = Number(process.env.PORT ?? 8080);
 const AUTH_TIMEOUT_MS = 10_000;
 
-// Initialize Firebase Admin once.
 initFirebaseAdmin();
 
-// Map socket -> uid (only set after successful auth).
+// socket -> uid (only after successful auth)
 const sessions = new Map<WebSocket, string>();
 
 const httpServer = createServer((req, res) => {
@@ -37,6 +50,17 @@ const wss = new WebSocketServer({ server: httpServer });
 function send(socket: WebSocket, payload: Record<string, unknown>) {
   if (socket.readyState === WebSocket.OPEN) {
     socket.send(JSON.stringify(payload));
+  }
+}
+
+function broadcastToRoom(
+  room: Room,
+  except: WebSocket | null,
+  payload: Record<string, unknown>,
+) {
+  for (const s of room.members) {
+    if (s === except) continue;
+    send(s, payload);
   }
 }
 
@@ -64,7 +88,7 @@ wss.on('connection', (socket: WebSocket, request: IncomingMessage) => {
       return;
     }
 
-    let msg: { type?: string; token?: string; [k: string]: unknown };
+    let msg: { type?: string; token?: string; roomId?: string; payload?: unknown };
     try {
       msg = JSON.parse(data.toString());
     } catch {
@@ -98,24 +122,90 @@ wss.on('connection', (socket: WebSocket, request: IncomingMessage) => {
       return;
     }
 
-    // ── Post-auth messages ────────────────────────────────────────────
+    // ── Require auth for everything below ─────────────────────────────
     const uid = sessions.get(socket);
     if (!uid) {
       send(socket, { type: 'error', code: 'not-authed' });
       return;
     }
 
-    // Echo with uid attached, for now.
-    send(socket, {
-      type: 'echo',
-      uid,
-      original: msg,
-      ts: Date.now(),
-    });
+    // ── Room operations ───────────────────────────────────────────────
+    if (msg.type === 'create-room') {
+      if (roomOf(socket)) {
+        send(socket, { type: 'error', code: 'already-in-room' });
+        return;
+      }
+      const room = createRoom(socket);
+      send(socket, { type: 'room-created', roomId: room.id });
+      console.log(`[room] ${room.id} created by ${uid}`);
+      return;
+    }
+
+    if (msg.type === 'join-room') {
+      const roomId = typeof msg.roomId === 'string' ? msg.roomId : '';
+      if (!roomId) {
+        send(socket, { type: 'error', code: 'missing-room-id' });
+        return;
+      }
+      const result = joinRoom(socket, roomId.toUpperCase());
+      if (!result.ok) {
+        send(socket, { type: 'error', code: result.code });
+        return;
+      }
+      const room = result.room;
+      const members = membersOf(room, (s) => sessions.get(s));
+      send(socket, {
+        type: 'room-joined',
+        roomId: room.id,
+        members,
+        status: room.status,
+      });
+      broadcastToRoom(room, socket, { type: 'peer-joined', uid });
+      console.log(`[room] ${room.id} joined by ${uid} (${room.members.size}/2)`);
+      return;
+    }
+
+    if (msg.type === 'leave-room') {
+      const before = roomOf(socket);
+      const room = leaveRoom(socket);
+      if (!before || !room) {
+        send(socket, { type: 'error', code: 'not-in-room' });
+        return;
+      }
+      send(socket, { type: 'left-room', roomId: before.id });
+      broadcastToRoom(room, socket, { type: 'peer-left', uid });
+      console.log(`[room] ${before.id} left by ${uid}`);
+      return;
+    }
+
+    if (msg.type === 'broadcast') {
+      const room = roomOf(socket);
+      if (!room) {
+        send(socket, { type: 'error', code: 'not-in-room' });
+        return;
+      }
+      broadcastToRoom(room, socket, {
+        type: 'peer-message',
+        from: uid,
+        payload: msg.payload,
+        ts: Date.now(),
+      });
+      return;
+    }
+
+    // Unknown → echo with uid
+    send(socket, { type: 'echo', uid, original: msg, ts: Date.now() });
   });
 
   socket.on('close', (code, reason) => {
     const uid = sessions.get(socket);
+    // Notify room peers if this socket was in a room
+    const before = roomOf(socket);
+    const room = leaveRoom(socket);
+    if (before && room && uid) {
+      broadcastToRoom(room, socket, { type: 'peer-left', uid });
+      console.log(`[room] ${before.id} auto-left by ${uid} (disconnect)`);
+    }
     sessions.delete(socket);
     clearTimeout(authTimer);
     console.log(
