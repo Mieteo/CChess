@@ -89,7 +89,7 @@ Close codes:
 - [x] **Step 1** Echo server
 - [x] **Step 2** Auth handshake — server verifies Firebase ID token, gắn socket với `uid`
 - [x] **Step 3** Room (manual create/join, broadcast events) — verified E2E 2026-05-21
-- [ ] **Step 4** Move transport — client A sends move, server forwards to client B
+- [x] **Step 4** Move transport — UCI regex check + moveNumber + opponent-move — verified E2E 2026-05-21
 - [ ] **Step 5** Move validation — server runs Xiangqi rules
 - [ ] **Step 6** Server-side clock + timeout
 - [ ] **Step 7** Persistence — write ranked results back to Firestore via Admin SDK

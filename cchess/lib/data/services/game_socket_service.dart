@@ -55,22 +55,33 @@ class GameSocketService {
               _currentRoomId = null;
               break;
           }
-          _controller?.add(msg);
+          _safeAdd(msg);
         } catch (e) {
-          _controller?.addError('Parse error: $e');
+          _safeAddError('Parse error: $e');
         }
       },
       onError: (Object e, StackTrace st) {
-        _controller?.addError(e, st);
+        _safeAddError(e, st);
       },
       onDone: () {
         _authedUid = null;
         _currentRoomId = null;
-        _controller?.close();
-        _channel = null;
+        final c = _controller;
         _controller = null;
+        _channel = null;
+        c?.close();
       },
     );
+  }
+
+  void _safeAdd(Map<String, dynamic> msg) {
+    final c = _controller;
+    if (c != null && !c.isClosed) c.add(msg);
+  }
+
+  void _safeAddError(Object err, [StackTrace? st]) {
+    final c = _controller;
+    if (c != null && !c.isClosed) c.addError(err, st);
   }
 
   Future<void> authenticate() async {
@@ -95,6 +106,13 @@ class GameSocketService {
 
   void broadcast(Map<String, dynamic> payload) =>
       send({'type': 'broadcast', 'payload': payload});
+
+  /// Step 4: send a Xiangqi move in UCI format (e.g. "e2e4").
+  /// Server validates format only; legality check comes in Step 5.
+  void sendMove(String uci) => send({
+        'type': 'move',
+        'uci': uci.trim().toLowerCase(),
+      });
 
   Future<void> disconnect() async {
     await _sub?.cancel();

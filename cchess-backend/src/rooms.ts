@@ -5,6 +5,7 @@ export interface Room {
   members: Set<WebSocket>;
   status: 'waiting' | 'playing' | 'finished';
   createdAt: number;
+  moveCount: number;
 }
 
 const rooms = new Map<string, Room>();
@@ -36,6 +37,7 @@ export function createRoom(socket: WebSocket): Room {
     members: new Set([socket]),
     status: 'waiting',
     createdAt: Date.now(),
+    moveCount: 0,
   };
   rooms.set(room.id, room);
   socketToRoom.set(socket, room.id);

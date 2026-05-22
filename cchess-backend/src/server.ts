@@ -30,6 +30,10 @@ import {
 const PORT = Number(process.env.PORT ?? 8080);
 const AUTH_TIMEOUT_MS = 10_000;
 
+// Xiangqi UCI: 9 cols (a-i) × 10 rows (0-9). Format check only — Step 5 will
+// add legality (turn, piece existence, rule compliance).
+const UCI_REGEX = /^[a-i][0-9][a-i][0-9]$/;
+
 initFirebaseAdmin();
 
 // socket -> uid (only after successful auth)
@@ -88,7 +92,14 @@ wss.on('connection', (socket: WebSocket, request: IncomingMessage) => {
       return;
     }
 
-    let msg: { type?: string; token?: string; roomId?: string; payload?: unknown };
+    let msg: {
+      type?: string;
+      token?: string;
+      roomId?: string;
+      payload?: unknown;
+      uci?: string;
+      [k: string]: unknown;
+    };
     try {
       msg = JSON.parse(data.toString());
     } catch {
@@ -190,6 +201,35 @@ wss.on('connection', (socket: WebSocket, request: IncomingMessage) => {
         payload: msg.payload,
         ts: Date.now(),
       });
+      return;
+    }
+
+    // ── Step 4: move transport ────────────────────────────────────────
+    if (msg.type === 'move') {
+      const room = roomOf(socket);
+      if (!room) {
+        send(socket, { type: 'error', code: 'not-in-room' });
+        return;
+      }
+      if (room.members.size < 2) {
+        send(socket, { type: 'error', code: 'no-opponent' });
+        return;
+      }
+      const rawUci = typeof msg.uci === 'string' ? msg.uci.trim().toLowerCase() : '';
+      if (!UCI_REGEX.test(rawUci)) {
+        send(socket, { type: 'error', code: 'invalid-uci', uci: rawUci });
+        return;
+      }
+      room.moveCount++;
+      const moveNumber = room.moveCount;
+      broadcastToRoom(room, socket, {
+        type: 'opponent-move',
+        uci: rawUci,
+        from: uid,
+        moveNumber,
+        ts: Date.now(),
+      });
+      console.log(`[room] ${room.id} move #${moveNumber} ${uid} → ${rawUci}`);
       return;
     }
 

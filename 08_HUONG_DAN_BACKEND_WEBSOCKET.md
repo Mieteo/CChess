@@ -304,7 +304,7 @@ thì hãy đánh giá lại Durable Objects.
 
 ## 13. Lộ trình triển khai theo bước
 
-> Trạng thái 2026-05-21: Step 1, 2, 3 đã verified E2E trong [`cchess-backend/`](cchess-backend/) (Node 20 + TypeScript + `ws` + `firebase-admin`). Step 4-7 chưa bắt đầu.
+> Trạng thái 2026-05-21: Step 1, 2, 3, 4 đã verified E2E trong [`cchess-backend/`](cchess-backend/) (Node 20 + TypeScript + `ws` + `firebase-admin`). Step 5-7 chưa bắt đầu.
 
 ### ✅ Bước 1 — Echo server
 Mục tiêu:
@@ -344,13 +344,16 @@ Errors: `room-not-found`, `room-full`, `already-in-room`, `not-in-room`, `missin
 
 **Test E2E** ✓ 2026-05-21: Flutter phone + Chrome console (cùng PC). Verified create-room, join-room, peer-joined, broadcast cả 2 hướng, peer-left khi đóng tab (close code 1005 từ Chrome auto-cleanup OK).
 
-### Bước 4 - Move transport
+### ✅ Bước 4 — Move transport
 
 Mục tiêu:
-
 - Client A gửi nước
 - Server nhận, kiểm tra format
 - Server phát cho client B
+
+**Code thực tế**: handler `move` trong [server.ts](cchess-backend/src/server.ts) — regex `^[a-i][0-9][a-i][0-9]$` (9 cột × 10 hàng Xiangqi UCI), forward `opponent-move {uci, from, moveNumber, ts}` đến peer khác, `room.moveCount` tăng dần. Reject `no-opponent` nếu chưa đủ 2 người, `invalid-uci` nếu sai format.
+
+**Test E2E** ✓ 2026-05-21: Flutter ↔ browser hai chiều gửi/nhận move, moveNumber tăng đúng 1→2→3, invalid UCI bị reject trước khi forward, no-opponent khi peer rời room.
 
 ### Bước 5 - Move validation thật
 
@@ -462,7 +465,7 @@ Khi thêm online:
 - [x] Backend verify Firebase token được — `admin.auth().verifyIdToken`
 - [x] Có room state tối thiểu — `rooms.ts`
 - [x] Hai client join cùng room được — verified 2026-05-21
-- [ ] Gửi / nhận move realtime được (Step 4)
+- [x] Gửi / nhận move realtime được — verified 2026-05-21 (Step 4)
 - [ ] Server từ chối move sai (Step 5)
 - [ ] Server giữ turn chính xác (Step 5-6)
 - [ ] Có clock server-side (Step 6)
