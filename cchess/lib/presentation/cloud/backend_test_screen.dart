@@ -125,6 +125,11 @@ class _BackendTestScreenState extends ConsumerState<BackendTestScreen> {
         _appendLog('→ {type:move, uci:$uci}');
       });
 
+  Future<void> _resign() => _run('resign', () async {
+        _svc.resign();
+        _appendLog('→ {type:resign}');
+      });
+
   Future<void> _copyToken() => _run('copy token', () async {
         final user = FirebaseAuth.instance.currentUser;
         if (user == null) throw 'Chưa đăng nhập Firebase';
@@ -287,6 +292,13 @@ class _BackendTestScreenState extends ConsumerState<BackendTestScreen> {
                     onPressed: (!_busy && authed && inRoom) ? _sendMove : null,
                     background: AppColors.accentGold,
                     foreground: AppColors.inkBlack,
+                  ),
+                  AppSpacing.hGapSm,
+                  _CompactFilledBtn(
+                    icon: Icons.flag_outlined,
+                    label: 'Resign',
+                    destructive: true,
+                    onPressed: (!_busy && authed && inRoom) ? _resign : null,
                   ),
                 ],
               ),

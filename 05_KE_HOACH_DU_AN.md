@@ -31,7 +31,7 @@
 | 7 | Settings, Profile, Hồ sơ chi tiết | ✅ | Settings + EditProfile + Onboarding |
 | 8a | Firebase setup (config + Auth + Firestore) | ✅ | `cchess-dev`/`cchess-prod`, rules + indexes deployed, Anonymous + Google linking, splash auto-sync |
 | 8b | Firestore sync + Cloud Functions code | ✅ | `users/`, `game_records/` sync local↔cloud; `createFirestoreUser` + `recordRankedGame` deployed (Blaze) |
-| 8c | Backend WebSocket scaffold | 🟡 | `cchess-backend/`: Step 1 echo + Step 2 auth + Step 3 rooms + Step 4 move transport ✓ (verified E2E phone+browser); Step 5-7 chưa làm |
+| 8c | Backend WebSocket scaffold | 🟡 | `cchess-backend/`: Step 1-4 + 6 (clock/timeout/resign/disconnect-loss) + 7 (Firestore persistence) ✓ verified E2E; Step 5 (Xiangqi rule validation) deferred (Path C) |
 | 9 | Game History + Replay AI | 🟢 | Local Hive + push `game_records` lên cloud subcollection ✓ |
 | 10 | Achievements + Daily Quests | 🟢 | Engine + UI xong, chờ Cloud Functions sync server-side |
 | 11 | Opening Library (Khai cuộc Đại sư) | 🟢 | Seed cứng 5 khai cuộc, chờ CMS |
@@ -168,14 +168,15 @@
 - **Step 1** echo server: [server.ts](cchess-backend/src/server.ts) ✓ verified.
 - **Step 2** auth handshake: [auth.ts](cchess-backend/src/auth.ts) — verify Firebase ID token, gắn `uid` vào socket, 10s timeout ✓ verified (Android phone qua LAN + Firebase Admin SDK).
 - **Step 3** rooms: [rooms.ts](cchess-backend/src/rooms.ts) — create/join/leave/broadcast với 6-ký-tự roomId, auto-cleanup on disconnect ✓ verified E2E (Flutter phone + Chrome console cùng PC, cả 2 hướng broadcast + peer-left khi đóng tab).
-- **Step 4** move transport: server.ts handler `move` → check UCI regex `^[a-i][0-9][a-i][0-9]$` + room phải đủ 2 người + forward sang peer kèm `moveNumber` tăng dần ✓ verified E2E.
-- Flutter client: [game_socket_service.dart](cchess/lib/data/services/game_socket_service.dart) + [backend_test_screen.dart](cchess/lib/presentation/cloud/backend_test_screen.dart) (debug-only). UI compact với log Expanded; `_safeAdd` guard chống "Cannot add event after closing" race condition.
+- **Step 4** move transport: server.ts handler `move` → UCI regex `^[a-i][0-9][a-i][0-9]$` + room đủ 2 người + forward sang peer kèm `moveNumber` tăng dần ✓ verified E2E.
+- **Step 6** clock + game lifecycle: [match.ts](cchess-backend/src/match.ts) — 30s per side (testing), `game-start` khi đủ 2 người, turn validation theo socket reference (không phải uid — hỗ trợ solo-test 1 user 2 socket), per-second timer kiểm tra timeout, `resign` message, disconnect = thua. ✓ verified E2E.
+- **Step 7** persistence: [persistence.ts](cchess-backend/src/persistence.ts) — Admin SDK ghi 2 record mirror vào `users/{redUid}/game_records/{gameId}` và `users/{blackUid}/game_records/{gameId}` mỗi khi game-ended. ✓ verified E2E.
+- Flutter client: [game_socket_service.dart](cchess/lib/data/services/game_socket_service.dart) + [backend_test_screen.dart](cchess/lib/presentation/cloud/backend_test_screen.dart) (debug-only). UI compact với log Expanded; `_safeAdd` guard chống "Cannot add event after closing" race condition; nút Move + Resign.
 
 **Chưa làm:**
-- Step 5 move validation server-side (port Xiangqi rules sang TypeScript hoặc gọi engine).
-- Step 6 server clock + timeout.
-- Step 7 persistence (đẩy ranked result lên `users/{uid}/game_records` qua `recordRankedGame` callable).
-- Step 8 reconnect cơ bản.
+- Step 5 move validation server-side (deferred per Path C — port Xiangqi rules khi cần Sprint 14 ranked).
+- Step 8 reconnect (grace period khi mạng chập chờn).
+- Wire backend vào GameScreen thật (thay thế UI Backend Test debug bằng game flow online thật).
 - Production hosting (Render/Railway/Fly.io). Hiện chỉ localhost.
 
 ---

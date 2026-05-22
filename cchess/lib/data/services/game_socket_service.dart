@@ -108,11 +108,15 @@ class GameSocketService {
       send({'type': 'broadcast', 'payload': payload});
 
   /// Step 4: send a Xiangqi move in UCI format (e.g. "e2e4").
-  /// Server validates format only; legality check comes in Step 5.
+  /// Server validates format + turn + clock (Step 6); piece-movement
+  /// legality is still client-trusted until Step 5 (full rule port).
   void sendMove(String uci) => send({
         'type': 'move',
         'uci': uci.trim().toLowerCase(),
       });
+
+  /// Step 6: resign current game. Sender loses; server broadcasts `game-ended`.
+  void resign() => send({'type': 'resign'});
 
   Future<void> disconnect() async {
     await _sub?.cancel();

@@ -1,11 +1,30 @@
 import type { WebSocket } from 'ws';
 
+export type Color = 'red' | 'black';
+export type EndReason = 'timeout' | 'resign' | 'disconnect';
+export type GameResult = 'red-win' | 'black-win' | 'draw';
+
 export interface Room {
   id: string;
   members: Set<WebSocket>;
   status: 'waiting' | 'playing' | 'finished';
   createdAt: number;
   moveCount: number;
+
+  // Step 6 game state (populated when status -> 'playing')
+  redSocket?: WebSocket;
+  blackSocket?: WebSocket;
+  redUid?: string;
+  blackUid?: string;
+  clockMsByColor?: { red: number; black: number };
+  currentTurn?: Color;
+  turnStartedAt?: number;
+  startedAt?: number;
+  endedAt?: number;
+  result?: GameResult;
+  endReason?: EndReason;
+  movesUci?: string[];
+  clockTimer?: NodeJS.Timeout;
 }
 
 const rooms = new Map<string, Room>();

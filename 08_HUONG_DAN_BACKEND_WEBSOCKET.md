@@ -304,7 +304,7 @@ thì hãy đánh giá lại Durable Objects.
 
 ## 13. Lộ trình triển khai theo bước
 
-> Trạng thái 2026-05-21: Step 1, 2, 3, 4 đã verified E2E trong [`cchess-backend/`](cchess-backend/) (Node 20 + TypeScript + `ws` + `firebase-admin`). Step 5-7 chưa bắt đầu.
+> Trạng thái 2026-05-23: Step 1, 2, 3, 4, 6, 7 đã verified E2E trong [`cchess-backend/`](cchess-backend/) (Node 20 + TypeScript + `ws` + `firebase-admin`). Step 5 (Xiangqi rule validation server-side) deferred — Path C trong doc 05.
 
 ### ✅ Bước 1 — Echo server
 Mục tiêu:
@@ -355,14 +355,22 @@ Mục tiêu:
 
 **Test E2E** ✓ 2026-05-21: Flutter ↔ browser hai chiều gửi/nhận move, moveNumber tăng đúng 1→2→3, invalid UCI bị reject trước khi forward, no-opponent khi peer rời room.
 
-### Bước 5 - Move validation thật
+### ⏸️ Bước 5 — Move validation thật (deferred)
+
+**Quyết định 2026-05-23 (Path C)**: skip Step 5, làm 6+7 trước → có end-to-end game online demo-able. Step 5 sẽ port Dart `chess_engine` sang TypeScript khi cần Sprint 14 ranked launch.
+
+Hiện tại server chỉ check format UCI + turn + clock, **không** validate piece-movement legality. Client là source of truth cho luật cờ. Acceptable cho prototype, không acceptable khi launch ranked có ELO/tiền.
 
 Mục tiêu:
 
 - Server có engine Xiangqi hoặc module kiểm tra luật
 - Chỉ move hợp lệ mới được áp dụng
 
-### Bước 6 - Clock server-side
+### ✅ Bước 6 — Clock server-side
+
+**Code thực tế**: [match.ts](cchess-backend/src/match.ts) — `startMatch` (assign red/black theo socket reference + 30s initial clock), `applyMove` (compute elapsed, decrement clock, switch turn), `isTimedOut` checked qua `setInterval` 1Hz, `endMatch` clear timer + finalize. Server.ts hooks: `game-start` broadcast khi đủ 2 người, `move-ack` to sender + `opponent-move` to peer (cả 2 kèm clock snapshot), `resign` handler, disconnect-mid-game = thua.
+
+**Test E2E** ✓ 2026-05-23: timeout sau 30s, resign, disconnect, turn validation (đặc biệt fix bug solo-test 2 socket cùng uid — track color qua socket reference thay vì uid).
 
 Mục tiêu:
 
@@ -370,7 +378,13 @@ Mục tiêu:
 - Client chỉ hiển thị
 - Timeout do server quyết định
 
-### Bước 7 - Persistence
+### ✅ Bước 7 — Persistence
+
+**Code thực tế**: [persistence.ts](cchess-backend/src/persistence.ts) — Admin SDK ghi đồng thời 2 record (perspective per player) vào `users/{redUid}/game_records/{gameId}` và `users/{blackUid}/game_records/{gameId}` ngay sau `finishGame`. Schema: `opponent`, `humanColor`, `result` (win/loss/draw từ góc nhìn user), `mode: 'ranked'`, `moveList`, `moveCount`, `endReason`, `duration`, `startedAt`/`endedAt` (server timestamps), `clockRemainingMs`. Rules client-side không chặn vì Admin SDK bypass.
+
+**Test E2E** ✓ 2026-05-23: sau mỗi game-ended (timeout/resign/disconnect), verify trên https://console.firebase.google.com/project/cchess-dev/firestore/data thấy 2 doc mới.
+
+### (legacy section 7 — original spec)
 
 Mục tiêu:
 
@@ -466,11 +480,11 @@ Khi thêm online:
 - [x] Có room state tối thiểu — `rooms.ts`
 - [x] Hai client join cùng room được — verified 2026-05-21
 - [x] Gửi / nhận move realtime được — verified 2026-05-21 (Step 4)
-- [ ] Server từ chối move sai (Step 5)
-- [ ] Server giữ turn chính xác (Step 5-6)
-- [ ] Có clock server-side (Step 6)
-- [ ] Có `game_ended`
-- [ ] Ghi được kết quả cuối về cloud — `recordRankedGame` callable đã deploy
+- [~] Server từ chối move sai — chỉ check UCI format + turn + clock; piece-movement legality deferred (Step 5)
+- [x] Server giữ turn chính xác — verified 2026-05-23 (socket-based color tracking)
+- [x] Có clock server-side — verified 2026-05-23 (30s testing; per-second timeout check)
+- [x] Có `game_ended` (timeout/resign/disconnect) — verified 2026-05-23
+- [x] Ghi được kết quả cuối về cloud — `persistGame` via Admin SDK ghi 2 record mirror, verified 2026-05-23
 - [ ] Có reconnect cơ bản (Step 8)
 
 ## 18. Sau Sprint 8c mới nên làm gì

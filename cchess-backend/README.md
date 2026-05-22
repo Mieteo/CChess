@@ -90,9 +90,9 @@ Close codes:
 - [x] **Step 2** Auth handshake — server verifies Firebase ID token, gắn socket với `uid`
 - [x] **Step 3** Room (manual create/join, broadcast events) — verified E2E 2026-05-21
 - [x] **Step 4** Move transport — UCI regex check + moveNumber + opponent-move — verified E2E 2026-05-21
-- [ ] **Step 5** Move validation — server runs Xiangqi rules
-- [ ] **Step 6** Server-side clock + timeout
-- [ ] **Step 7** Persistence — write ranked results back to Firestore via Admin SDK
+- [ ] **Step 5** Move validation — server runs Xiangqi rules (deferred — see Sprint 14 ranked launch)
+- [x] **Step 6** Server-side clock + timeout + resign + disconnect-loss — verified E2E 2026-05-23
+- [x] **Step 7** Persistence — Admin SDK writes `users/{uid}/game_records/` on game-ended — verified E2E 2026-05-23
 
 ## Deploy (later)
 

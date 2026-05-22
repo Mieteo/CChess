@@ -7,8 +7,20 @@ import {
   leaveRoom,
   membersOf,
   roomOf,
+  type EndReason,
+  type GameResult,
   type Room,
 } from './rooms';
+import {
+  applyMove,
+  clockSnapshot,
+  colorOfSocket,
+  endMatch,
+  isTimedOut,
+  opponentOf,
+  startMatch,
+} from './match';
+import { persistGame } from './persistence';
 
 // Step 2-3 from 08_HUONG_DAN_BACKEND_WEBSOCKET.md.
 //
@@ -66,6 +78,52 @@ function broadcastToRoom(
     if (s === except) continue;
     send(s, payload);
   }
+}
+
+/// Send a payload to ALL members in the room.
+function broadcastAll(room: Room, payload: Record<string, unknown>) {
+  for (const s of room.members) send(s, payload);
+}
+
+/// Step 6 ticker: check every 1s if current player has run out of time.
+function startClockTicker(room: Room) {
+  if (room.clockTimer) clearInterval(room.clockTimer);
+  room.clockTimer = setInterval(() => {
+    if (room.status !== 'playing') {
+      if (room.clockTimer) clearInterval(room.clockTimer);
+      room.clockTimer = undefined;
+      return;
+    }
+    if (isTimedOut(room)) {
+      const loser = room.currentTurn;
+      const winner: GameResult = loser === 'red' ? 'black-win' : 'red-win';
+      finishGame(room, winner, 'timeout');
+    }
+  }, 1000);
+}
+
+/// End the game cleanly: stop ticker, mark room finished, broadcast game-ended.
+/// Step 7 persistence will hook in here next.
+function finishGame(room: Room, result: GameResult, reason: EndReason) {
+  endMatch(room, result, reason);
+  const payload = {
+    type: 'game-ended',
+    roomId: room.id,
+    result,
+    reason,
+    moves: room.movesUci ?? [],
+    startedAt: room.startedAt,
+    endedAt: room.endedAt,
+    durationMs:
+      room.endedAt && room.startedAt ? room.endedAt - room.startedAt : null,
+    clock: clockSnapshot(room),
+    redUid: room.redUid,
+    blackUid: room.blackUid,
+  };
+  broadcastAll(room, payload);
+  console.log(`[match] ${room.id} ended result=${result} reason=${reason} moves=${room.movesUci?.length ?? 0}`);
+  // Step 7: persist to Firestore (fire-and-forget, errors logged)
+  persistGame(room).catch((e) => console.error('[persist] error:', e));
 }
 
 wss.on('connection', (socket: WebSocket, request: IncomingMessage) => {
@@ -173,6 +231,22 @@ wss.on('connection', (socket: WebSocket, request: IncomingMessage) => {
       });
       broadcastToRoom(room, socket, { type: 'peer-joined', uid });
       console.log(`[room] ${room.id} joined by ${uid} (${room.members.size}/2)`);
+
+      // Step 6: when 2 players are in, start the match
+      if (room.members.size === 2 && room.status === 'playing') {
+        startMatch(room, (s) => sessions.get(s));
+        startClockTicker(room);
+        const startEvent = {
+          type: 'game-start',
+          roomId: room.id,
+          redUid: room.redUid,
+          blackUid: room.blackUid,
+          clock: clockSnapshot(room),
+          startedAt: room.startedAt,
+        };
+        for (const s of room.members) send(s, startEvent);
+        console.log(`[match] ${room.id} started: red=${room.redUid} black=${room.blackUid}`);
+      }
       return;
     }
 
@@ -204,7 +278,7 @@ wss.on('connection', (socket: WebSocket, request: IncomingMessage) => {
       return;
     }
 
-    // ── Step 4: move transport ────────────────────────────────────────
+    // ── Step 4+6: move transport with turn + clock validation ─────────
     if (msg.type === 'move') {
       const room = roomOf(socket);
       if (!room) {
@@ -220,16 +294,58 @@ wss.on('connection', (socket: WebSocket, request: IncomingMessage) => {
         send(socket, { type: 'error', code: 'invalid-uci', uci: rawUci });
         return;
       }
-      room.moveCount++;
-      const moveNumber = room.moveCount;
-      broadcastToRoom(room, socket, {
+      const result = applyMove(room, socket, rawUci);
+      if (!result.ok) {
+        if (result.code === 'time-out') {
+          // Current player just ran out — opponent wins
+          const winner: GameResult =
+            room.currentTurn === 'red' ? 'black-win' : 'red-win';
+          finishGame(room, winner, 'timeout');
+        } else {
+          send(socket, { type: 'error', code: result.code });
+        }
+        return;
+      }
+      // Broadcast to peer with updated clocks
+      const movePayload = {
         type: 'opponent-move',
         uci: rawUci,
         from: uid,
-        moveNumber,
+        color: result.color,
+        moveNumber: result.moveNumber,
+        clock: clockSnapshot(room),
         ts: Date.now(),
+      };
+      broadcastToRoom(room, socket, movePayload);
+      // Also ack to sender with clock info
+      send(socket, {
+        type: 'move-ack',
+        uci: rawUci,
+        moveNumber: result.moveNumber,
+        clock: clockSnapshot(room),
       });
-      console.log(`[room] ${room.id} move #${moveNumber} ${uid} → ${rawUci}`);
+      console.log(`[match] ${room.id} #${result.moveNumber} ${result.color} ${rawUci} (red=${room.clockMsByColor!.red}ms black=${room.clockMsByColor!.black}ms)`);
+      return;
+    }
+
+    // ── Step 6: resign ────────────────────────────────────────────────
+    if (msg.type === 'resign') {
+      const room = roomOf(socket);
+      if (!room) {
+        send(socket, { type: 'error', code: 'not-in-room' });
+        return;
+      }
+      if (room.status !== 'playing') {
+        send(socket, { type: 'error', code: 'not-playing' });
+        return;
+      }
+      const color = colorOfSocket(room, socket);
+      if (!color) {
+        send(socket, { type: 'error', code: 'not-player' });
+        return;
+      }
+      const winner: GameResult = opponentOf(color) === 'red' ? 'red-win' : 'black-win';
+      finishGame(room, winner, 'resign');
       return;
     }
 
@@ -239,12 +355,20 @@ wss.on('connection', (socket: WebSocket, request: IncomingMessage) => {
 
   socket.on('close', (code, reason) => {
     const uid = sessions.get(socket);
-    // Notify room peers if this socket was in a room
-    const before = roomOf(socket);
+    // Step 6: if disconnected mid-game, end the match (disconnecting player loses)
+    const beforeRoom = roomOf(socket);
+    if (beforeRoom && beforeRoom.status === 'playing' && uid) {
+      const color = colorOfSocket(beforeRoom, socket);
+      if (color) {
+        const winner: GameResult = opponentOf(color) === 'red' ? 'red-win' : 'black-win';
+        finishGame(beforeRoom, winner, 'disconnect');
+      }
+    }
+    // Notify remaining peer + remove from room (existing behavior)
     const room = leaveRoom(socket);
-    if (before && room && uid) {
+    if (beforeRoom && room && uid) {
       broadcastToRoom(room, socket, { type: 'peer-left', uid });
-      console.log(`[room] ${before.id} auto-left by ${uid} (disconnect)`);
+      console.log(`[room] ${beforeRoom.id} auto-left by ${uid} (disconnect)`);
     }
     sessions.delete(socket);
     clearTimeout(authTimer);
