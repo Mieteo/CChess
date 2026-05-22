@@ -304,7 +304,7 @@ thì hãy đánh giá lại Durable Objects.
 
 ## 13. Lộ trình triển khai theo bước
 
-> Trạng thái 2026-05-21: code Step 1-3 đã có trong [`cchess-backend/`](cchess-backend/) (Node 20 + TypeScript + `ws` + `firebase-admin`). Step 2 đã test E2E (Android phone qua LAN). Step 3 chưa test 2-peer end-to-end.
+> Trạng thái 2026-05-21: Step 1, 2, 3 đã verified E2E trong [`cchess-backend/`](cchess-backend/) (Node 20 + TypeScript + `ws` + `firebase-admin`). Step 4-7 chưa bắt đầu.
 
 ### ✅ Bước 1 — Echo server
 Mục tiêu:
@@ -326,7 +326,7 @@ Mục tiêu:
 
 **Test**: [cchess/lib/presentation/cloud/backend_test_screen.dart](cchess/lib/presentation/cloud/backend_test_screen.dart) — debug screen, gated `kDebugMode`.
 
-### 🟡 Bước 3 — Room thủ công
+### ✅ Bước 3 — Room thủ công
 Mục tiêu:
 - Tạo room bằng tay
 - Cho 2 user join room
@@ -342,7 +342,7 @@ Protocol messages:
 
 Errors: `room-not-found`, `room-full`, `already-in-room`, `not-in-room`, `missing-room-id`.
 
-**Chưa làm**: test E2E 2 peer (Flutter app + browser console hoặc 2 device).
+**Test E2E** ✓ 2026-05-21: Flutter phone + Chrome console (cùng PC). Verified create-room, join-room, peer-joined, broadcast cả 2 hướng, peer-left khi đóng tab (close code 1005 từ Chrome auto-cleanup OK).
 
 ### Bước 4 - Move transport
 
@@ -461,7 +461,7 @@ Khi thêm online:
 - [x] Client kết nối backend được — `WebSocketChannel.connect`
 - [x] Backend verify Firebase token được — `admin.auth().verifyIdToken`
 - [x] Có room state tối thiểu — `rooms.ts`
-- [ ] Hai client join cùng room được — **code có, chưa test E2E**
+- [x] Hai client join cùng room được — verified 2026-05-21
 - [ ] Gửi / nhận move realtime được (Step 4)
 - [ ] Server từ chối move sai (Step 5)
 - [ ] Server giữ turn chính xác (Step 5-6)

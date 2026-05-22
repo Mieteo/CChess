@@ -88,7 +88,7 @@ Close codes:
 
 - [x] **Step 1** Echo server
 - [x] **Step 2** Auth handshake — server verifies Firebase ID token, gắn socket với `uid`
-- [ ] **Step 3** Room (manual create/join, broadcast events)
+- [x] **Step 3** Room (manual create/join, broadcast events) — verified E2E 2026-05-21
 - [ ] **Step 4** Move transport — client A sends move, server forwards to client B
 - [ ] **Step 5** Move validation — server runs Xiangqi rules
 - [ ] **Step 6** Server-side clock + timeout
