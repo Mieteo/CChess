@@ -41,7 +41,14 @@ class AppConstants {
   static const int dailyHintLimitFree = 3;
   static const int dailyHintLimitVip = 999;
 
-  // Backend WebSocket — LAN IP của PC dev, đặt cố định.
-  // Đổi giá trị này 1 chỗ duy nhất khi LAN IP thay đổi.
-  static const String defaultBackendWsUrl = 'ws://192.168.1.6:8080';
+  // Backend WebSocket endpoint.
+  // - Mặc định = LAN dev (ws://192.168.1.6:8080)
+  // - Override khi build release / prod bằng dart-define:
+  //     flutter build apk --release \
+  //       --dart-define=CCHESS_BACKEND_URL=wss://cchess-backend-XXXX.onrender.com
+  //   (lưu ý: WSS không phải WS — Render serve HTTPS)
+  static const String defaultBackendWsUrl = String.fromEnvironment(
+    'CCHESS_BACKEND_URL',
+    defaultValue: 'ws://192.168.1.6:8080',
+  );
 }

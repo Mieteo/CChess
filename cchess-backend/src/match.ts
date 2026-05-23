@@ -7,6 +7,7 @@
 
 import type { WebSocket } from 'ws';
 import type { Color, EndReason, GameResult, Room } from './rooms';
+import { XiangqiGame, GameStatus, parseUci, EndReason as EngineEndReason } from './engine';
 
 /// Initial total clock per color (in ms). Currently 10 minutes — Fischer
 /// increment will come later. Configurable per room via lobby is the next
@@ -32,13 +33,21 @@ export function startMatch(room: Room, uidOf: (s: WebSocket) => string | undefin
   room.blackSocket = members[1];
   room.redUid = uids[0];
   room.blackUid = uids[1];
-  room.clockMsByColor = { red: INITIAL_CLOCK_MS, black: INITIAL_CLOCK_MS };
+  const clock = room.initialClockMs ?? INITIAL_CLOCK_MS;
+  room.clockMsByColor = { red: clock, black: clock };
   room.currentTurn = 'red';
   const now = Date.now();
   room.turnStartedAt = now;
   room.startedAt = now;
   room.movesUci = [];
   room.status = 'playing';
+  // Step 5: fresh Xiangqi engine for legality validation.
+  room.engine = XiangqiGame.initial();
+}
+
+/// Cast helper — engine is stored as `unknown` on Room to avoid a circular import.
+function engineOf(room: Room): XiangqiGame | null {
+  return (room.engine as XiangqiGame | undefined) ?? null;
 }
 
 /// Determine color by socket identity (the only reliable way when both sockets
@@ -65,17 +74,47 @@ export interface ApplyMoveOk {
 
 export interface ApplyMoveErr {
   ok: false;
-  code: 'not-playing' | 'not-player' | 'not-your-turn' | 'time-out';
+  code: 'not-playing' | 'not-player' | 'not-your-turn' | 'time-out' | 'illegal-move' | 'engine-missing';
 }
 
-/// Apply a UCI move to the room. Caller already validated UCI format.
-/// Returns ok with updated clock, or err code. On `time-out`, caller
-/// must end the match with red-win/black-win for the OTHER color.
-export function applyMove(room: Room, socket: WebSocket, uci: string): ApplyMoveOk | ApplyMoveErr {
+/// Result returned to caller when applyMove ends the game by itself (checkmate
+/// or stalemate). Caller should call finishGame() with the included result.
+export interface AutoFinishResult {
+  result: GameResult;
+  reason: EndReason;
+}
+
+export interface ApplyMoveOkWithFinish extends ApplyMoveOk {
+  autoFinish?: AutoFinishResult;
+}
+
+/// Apply a UCI move to the room. Validates:
+///   - room playing, socket is a player, correct turn
+///   - clock not timed out
+///   - UCI parses to valid coords
+///   - move is LEGAL per Xiangqi rules (Step 5)
+/// Returns ok with updated clock + optional autoFinish (checkmate / stalemate),
+/// or err code. On `time-out`, caller must end the match with red-win/black-win
+/// for the OTHER color.
+export function applyMove(
+  room: Room,
+  socket: WebSocket,
+  uci: string,
+): ApplyMoveOkWithFinish | ApplyMoveErr {
   if (room.status !== 'playing') return { ok: false, code: 'not-playing' };
   const color = colorOfSocket(room, socket);
   if (!color) return { ok: false, code: 'not-player' };
   if (color !== room.currentTurn) return { ok: false, code: 'not-your-turn' };
+
+  const engine = engineOf(room);
+  if (!engine) return { ok: false, code: 'engine-missing' };
+
+  // Parse + legality check BEFORE deducting clock — illegal moves don't cost time.
+  const coords = parseUci(uci);
+  if (!coords) return { ok: false, code: 'illegal-move' };
+  if (!engine.isValidMove(coords.from, coords.to)) {
+    return { ok: false, code: 'illegal-move' };
+  }
 
   const clocks = room.clockMsByColor!;
   const now = Date.now();
@@ -86,17 +125,42 @@ export function applyMove(room: Room, socket: WebSocket, uci: string): ApplyMove
     return { ok: false, code: 'time-out' };
   }
 
+  // Apply on engine (status auto-updates: checkmate/stalemate detection).
+  try {
+    engine.makeMove(coords.from, coords.to);
+  } catch (e) {
+    // Should never happen given isValidMove check above, but defensive.
+    return { ok: false, code: 'illegal-move' };
+  }
+
   room.movesUci!.push(uci);
   room.moveCount++;
   room.currentTurn = opponentOf(color);
   room.turnStartedAt = now;
 
-  return {
+  const ok: ApplyMoveOkWithFinish = {
     ok: true,
     color,
     remainingMs: clocks[color],
     moveNumber: room.moveCount,
   };
+
+  // Auto-finish on checkmate/stalemate
+  if (engine.status !== GameStatus.Playing) {
+    let result: GameResult;
+    if (engine.status === GameStatus.RedWin) result = 'red-win';
+    else if (engine.status === GameStatus.BlackWin) result = 'black-win';
+    else result = 'draw'; // not currently reachable but safe
+    const reason: EndReason =
+      engine.endReason === EngineEndReason.Checkmate
+        ? 'checkmate'
+        : engine.endReason === EngineEndReason.Stalemate
+        ? 'stalemate'
+        : 'resign'; // fallback — won't happen on auto path
+    ok.autoFinish = { result, reason };
+  }
+
+  return ok;
 }
 
 /// Check whether the current player has run out of time. Called by interval timer.

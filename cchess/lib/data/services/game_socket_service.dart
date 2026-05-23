@@ -50,6 +50,7 @@ class GameSocketService {
             case 'room-created':
             case 'room-joined':
             case 'reconnected':
+            case 'match-found':
               _currentRoomId = msg['roomId'] as String?;
               break;
             case 'left-room':
@@ -99,7 +100,19 @@ class GameSocketService {
     _channel?.sink.add(jsonEncode(data));
   }
 
-  void createRoom() => send({'type': 'create-room'});
+  void createRoom({int? clockMs}) => send({
+        'type': 'create-room',
+        if (clockMs != null) 'clockMs': clockMs,
+      });
+
+  /// Step A3: enter matchmaking queue. Server pairs with the longest-waiting
+  /// other player and creates a room automatically.
+  void findMatch({int? clockMs}) => send({
+        'type': 'find-match',
+        if (clockMs != null) 'clockMs': clockMs,
+      });
+
+  void cancelMatching() => send({'type': 'cancel-matching'});
 
   void joinRoom(String roomId) =>
       send({'type': 'join-room', 'roomId': roomId.trim().toUpperCase()});

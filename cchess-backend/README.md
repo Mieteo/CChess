@@ -94,12 +94,41 @@ Close codes:
 - [x] **Step 6** Server-side clock + timeout + resign + disconnect-loss — verified E2E 2026-05-23
 - [x] **Step 7** Persistence — Admin SDK writes `users/{uid}/game_records/` on game-ended — verified E2E 2026-05-23
 
-## Deploy (later)
+## Deploy
 
-For prototype testing:
-- Localhost — Android emulator dùng `ws://10.0.2.2:8080`, máy thật cùng wifi dùng `ws://<máy-host-IP>:8080`
+For local prototype testing:
+- Android emulator: `ws://10.0.2.2:8080`
+- Máy thật cùng wifi: `ws://<host LAN IP>:8080`
 - Ngrok để expose ra Internet: `ngrok http 8080`
 
-For production:
-- **Render / Railway / Fly.io / Cloud Run** — Node.js, support WebSocket dài hạn
-- **KHÔNG** dùng Cloud Functions cho WebSocket — Functions không giữ kết nối lâu hơn vài phút
+### Production — Render.com (Khuyến nghị cho prototype dev)
+
+1. Push repo lên GitHub
+2. Đăng nhập https://render.com → **New +** → **Blueprint**
+3. Chọn repo, Render detect [`render.yaml`](render.yaml)
+4. Render UI prompt nhập secret `FIREBASE_SERVICE_ACCOUNT_JSON`:
+   - Tải `serviceAccount.json` từ Firebase Console
+   - Mở file, **paste toàn bộ JSON** (1 dòng hoặc nhiều dòng đều OK)
+   - Save
+5. Deploy. ~3 phút.
+6. URL public dạng `https://cchess-backend.onrender.com`
+7. Client Flutter đổi `AppConstants.defaultBackendWsUrl` thành `wss://cchess-backend.onrender.com` (chú ý: **wss** chứ không phải ws — Render serve HTTPS)
+
+**Lưu ý Render free tier**: web service ngủ sau 15 phút idle. Lần WS connect đầu tiên sau ngủ mất ~30s wake-up. Upgrade Starter ($7/tháng) nếu cần always-on.
+
+### Production — Railway / Fly.io / Cloud Run
+
+Tương tự, đều support Dockerfile. Setup secrets qua dashboard mỗi platform:
+- Railway: Variables tab
+- Fly.io: `fly secrets set FIREBASE_SERVICE_ACCOUNT_JSON='...'`
+- Cloud Run: Secret Manager hoặc env var
+
+KHÔNG dùng Cloud Functions cho WebSocket — Functions không giữ kết nối lâu hơn vài phút.
+
+### Service account credential — 4 cách load
+
+[`src/auth.ts`](src/auth.ts) thử theo thứ tự:
+1. `FIREBASE_SERVICE_ACCOUNT_JSON` env var — full JSON inline (pattern Render/Railway/Fly)
+2. `GOOGLE_APPLICATION_CREDENTIALS` env var — đường dẫn file (gcloud)
+3. `./serviceAccount.json` cwd (local dev)
+4. Application Default Credentials (Cloud Run / GCE / Cloud Functions)

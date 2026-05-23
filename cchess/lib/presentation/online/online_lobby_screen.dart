@@ -22,6 +22,9 @@ class _OnlineLobbyScreenState extends ConsumerState<OnlineLobbyScreen> {
   bool _busy = false;
   String? _localError;
   bool _reconnectAttempted = false;
+  /// Step A5: clock per side khi tạo phòng. Default 10 phút.
+  int _selectedClockMin = 10;
+  static const List<int> _clockOptions = [3, 5, 10, 15, 30];
 
   OnlineMatchController get _ctrl =>
       ref.read(onlineMatchControllerProvider.notifier);
@@ -90,7 +93,17 @@ class _OnlineLobbyScreenState extends ConsumerState<OnlineLobbyScreen> {
 
   void _createRoom() {
     setState(() => _localError = null);
-    _ctrl.createRoom();
+    _ctrl.createRoom(clockMs: _selectedClockMin * 60 * 1000);
+  }
+
+  void _findMatch() {
+    setState(() => _localError = null);
+    _ctrl.findMatch(clockMs: _selectedClockMin * 60 * 1000);
+  }
+
+  void _cancelMatching() {
+    setState(() => _localError = null);
+    _ctrl.cancelMatching();
   }
 
   void _joinRoom() {
@@ -162,10 +175,32 @@ class _OnlineLobbyScreenState extends ConsumerState<OnlineLobbyScreen> {
                 ),
               ],
               if (state.phase == OnlineMatchPhase.authed) ...[
+                Text('Thời gian mỗi bên',
+                    style: AppTextStyles.captionSm.copyWith(
+                      color: AppColors.parchmentTan,
+                      fontWeight: FontWeight.w700,
+                    )),
+                AppSpacing.vGapXs,
+                Wrap(
+                  spacing: 8,
+                  children: [
+                    for (final m in _clockOptions)
+                      ChoiceChip(
+                        label: Text('$m phút'),
+                        selected: _selectedClockMin == m,
+                        onSelected: _busy
+                            ? null
+                            : (v) {
+                                if (v) setState(() => _selectedClockMin = m);
+                              },
+                      ),
+                  ],
+                ),
+                AppSpacing.vGapBase,
                 ElevatedButton.icon(
-                  icon: const Icon(Icons.add),
-                  label: const Text('Tạo phòng mới'),
-                  onPressed: _busy ? null : _createRoom,
+                  icon: const Icon(Icons.search),
+                  label: Text('Tìm trận tự động ($_selectedClockMin phút)'),
+                  onPressed: _busy ? null : _findMatch,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.accentGold,
                     foregroundColor: AppColors.inkBlack,
@@ -173,7 +208,16 @@ class _OnlineLobbyScreenState extends ConsumerState<OnlineLobbyScreen> {
                   ),
                 ),
                 AppSpacing.vGapBase,
-                const Text('— hoặc vào phòng có sẵn —',
+                const Text('— hoặc tạo / vào phòng riêng —',
+                    textAlign: TextAlign.center),
+                AppSpacing.vGapBase,
+                OutlinedButton.icon(
+                  icon: const Icon(Icons.add),
+                  label: Text('Tạo phòng riêng $_selectedClockMin phút'),
+                  onPressed: _busy ? null : _createRoom,
+                ),
+                AppSpacing.vGapBase,
+                const Text('— vào phòng có sẵn theo ID —',
                     textAlign: TextAlign.center),
                 AppSpacing.vGapBase,
                 Row(
@@ -200,6 +244,25 @@ class _OnlineLobbyScreenState extends ConsumerState<OnlineLobbyScreen> {
                       ),
                     ),
                   ],
+                ),
+              ],
+              if (state.phase == OnlineMatchPhase.matching) ...[
+                AppSpacing.vGapLg,
+                const Center(child: CircularProgressIndicator()),
+                AppSpacing.vGapBase,
+                Center(
+                  child: Text(
+                    'Đang tìm đối thủ…',
+                    style: AppTextStyles.bodyMd,
+                  ),
+                ),
+                AppSpacing.vGapBase,
+                Center(
+                  child: OutlinedButton.icon(
+                    icon: const Icon(Icons.close),
+                    label: const Text('Hủy tìm trận'),
+                    onPressed: _busy ? null : _cancelMatching,
+                  ),
                 ),
               ],
               if (state.phase == OnlineMatchPhase.waitingForPeer) ...[
@@ -280,6 +343,7 @@ class _PhaseBadge extends StatelessWidget {
       OnlineMatchPhase.idle => ('Chưa kết nối', AppColors.parchmentTan, Icons.cloud_off),
       OnlineMatchPhase.connecting => ('Đang kết nối…', AppColors.parchmentTan, Icons.sync),
       OnlineMatchPhase.authed => ('Đã đăng nhập, sẵn sàng', AppColors.tealSuccess, Icons.check_circle),
+      OnlineMatchPhase.matching => ('Đang tìm đối thủ…', AppColors.accentGold, Icons.search),
       OnlineMatchPhase.waitingForPeer => ('Phòng ${roomId ?? "?"} — chờ đối thủ', AppColors.accentGold, Icons.hourglass_top),
       OnlineMatchPhase.playing => ('Đang đánh', AppColors.tealSuccess, Icons.sports_esports),
       OnlineMatchPhase.peerDisconnected => ('Đối thủ mất kết nối — chờ reconnect…', AppColors.accentGold, Icons.wifi_off),

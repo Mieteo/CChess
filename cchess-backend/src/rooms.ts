@@ -1,7 +1,12 @@
 import type { WebSocket } from 'ws';
 
 export type Color = 'red' | 'black';
-export type EndReason = 'timeout' | 'resign' | 'disconnect';
+export type EndReason =
+  | 'timeout'
+  | 'resign'
+  | 'disconnect'
+  | 'checkmate'
+  | 'stalemate';
 export type GameResult = 'red-win' | 'black-win' | 'draw';
 
 export interface Room {
@@ -10,6 +15,10 @@ export interface Room {
   status: 'waiting' | 'playing' | 'finished';
   createdAt: number;
   moveCount: number;
+
+  /// Step A5: initial clock per side (ms). Set when room is created from
+  /// lobby; falls back to engine default if absent.
+  initialClockMs?: number;
 
   // Step 6 game state (populated when status -> 'playing')
   redSocket?: WebSocket;
@@ -26,9 +35,12 @@ export interface Room {
   movesUci?: string[];
   clockTimer?: NodeJS.Timeout;
 
-  // Step 8 reconnect grace period: set when a player disconnects mid-game.
-  // If they reconnect (same uid) within RECONNECT_GRACE_MS, room resumes.
-  // disconnectTimer fires finishGame(disconnect) when grace expires.
+  // Step 5: server-side Xiangqi engine validates every move + detects
+  // checkmate/stalemate. Type is `unknown` here to avoid a circular import;
+  // server.ts/match.ts cast to XiangqiGame.
+  engine?: unknown;
+
+  // Step 8 reconnect grace period.
   disconnectedUid?: string;
   disconnectTimer?: NodeJS.Timeout;
 }
@@ -74,13 +86,14 @@ export function attachReconnectingSocket(
   else if (uid === room.blackUid) room.blackSocket = socket;
 }
 
-export function createRoom(socket: WebSocket): Room {
+export function createRoom(socket: WebSocket, options?: { initialClockMs?: number }): Room {
   const room: Room = {
     id: generateRoomId(),
     members: new Set([socket]),
     status: 'waiting',
     createdAt: Date.now(),
     moveCount: 0,
+    initialClockMs: options?.initialClockMs,
   };
   rooms.set(room.id, room);
   socketToRoom.set(socket, room.id);

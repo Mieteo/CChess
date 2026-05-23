@@ -1,6 +1,6 @@
 # Backend WebSocket — Hoạt động hệ thống
 
-> Tài liệu sống — cập nhật 2026-05-24 sau khi Step 1-4 + 6-8 đã verified E2E.
+> Tài liệu sống — cập nhật 2026-05-24 sau khi Step 1-8 đã code + Step 5 (Xiangqi rule validation) + ELO calculation tích hợp.
 > Bổ sung cho [`08_HUONG_DAN_BACKEND_WEBSOCKET.md`](08_HUONG_DAN_BACKEND_WEBSOCKET.md): doc 08 là **thiết kế + lộ trình**, doc này là **mô tả thực tế** code đang chạy trong [`cchess-backend/`](cchess-backend/).
 
 ## 1. Mục tiêu
@@ -34,7 +34,15 @@ src/
 ├── auth.ts           ← Firebase Admin init + verifyIdToken
 ├── rooms.ts          ← Room storage + state machine helpers
 ├── match.ts          ← Game lifecycle (startMatch, applyMove, clock, end)
-└── persistence.ts    ← Admin SDK Firestore writes on game-ended
+├── persistence.ts    ← Admin SDK Firestore writes + ELO transaction
+├── elo.ts            ← Standard Elo formula (K=32)
+└── engine/           ← Xiangqi rule validation (port từ Dart)
+    ├── piece.ts
+    ├── position.ts
+    ├── board.ts
+    ├── moveRules.ts
+    ├── game.ts
+    └── index.ts
 ```
 
 Mỗi file < 250 dòng, single-responsibility. `server.ts` orchestrate, các file kia là pure helpers.
@@ -236,7 +244,9 @@ Client gửi `{type:'move', uci:'e2e4'}`. Server:
    {type:'move-ack', uci, moveNumber, clock}
    ```
 
-**Lưu ý Step 5 deferred**: server CHƯA validate luật cờ (Mã đi chữ L, Tướng không ra cung, ...). Client tự enforce qua `XiangqiGame.isValidMove`. Hacker thay client có thể gửi move trái luật — server nhận. Đây là TODO cho Sprint 14 ranked launch.
+**Step 5 đã làm**: `applyMove` parse UCI rồi gọi `engine.isValidMove(from, to)` + `engine.makeMove(from, to)`. Engine TypeScript trong [`engine/`](cchess-backend/src/engine/) là port 1:1 từ Dart `chess_engine` (Mã chân chẹt, Tượng mắt, Xe/Pháo bắn, Tướng đối mặt, isInCheck filter, ...). Nước trái luật → reject với `code:'illegal-move'`.
+
+Khi engine.status đổi sang `RedWin`/`BlackWin`/`Draw` (checkmate hoặc stalemate), `applyMove` trả thêm `autoFinish` → caller gọi `finishGame` với reason `'checkmate'` hoặc `'stalemate'`.
 
 ### 6.3. Clock + timeout
 
@@ -378,7 +388,18 @@ Mỗi document chứa:
 
 Schema mirror với local `GameRecord` model (Hive) — sau này có thể sync 2 chiều.
 
-**Chưa làm**: ELO update. Cần Step 5 (validate luật cờ) + công thức Elo. Sprint 14.
+**ELO update đã làm (Step A2)**: trong cùng transaction, server:
+
+1. Đọc `eloChess` hiện tại của cả 2 player
+2. Tính delta qua `computeElo(redOld, blackOld, result)` trong [elo.ts](cchess-backend/src/elo.ts) — chuẩn Elo K=32
+3. Update `users/{uid}.eloChess` + tăng `totalGames` + `wins`/`losses`/`draws` qua `FieldValue.increment`
+4. Ghi `eloChange`/`eloBefore`/`eloAfter` vào mỗi record perspective
+
+ELO delta được gửi kèm trong `game-ended` payload (`elo: { red: {old,new,delta}, black: {old,new,delta} }`) — client hiển thị trong result dialog với mũi tên + màu (tealSuccess nếu lên, vermilionRed nếu xuống).
+
+Client splash sync (`cloud_sync_service._mergeCloudIntoLocal`) đã update để pull `eloChess`/`eloCup`/`totalGames`/`wins`/`losses`/`draws` từ cloud (server-authoritative). Bot/local games có `eloDelta=0` không ghi cloud nên không có conflict.
+
+**Chưa làm**: separate "casual ELO" (bot games) vs "ranked ELO". Hiện cả 2 dùng chung field `eloChess` nhưng bot không write → safe. Sprint 13+ khi có Cờ Úp variant sẽ tách rõ.
 
 ---
 
@@ -412,7 +433,7 @@ Schema mirror với local `GameRecord` model (Hive) — sau này có thể sync 
 | `peer-disconnected` | `{uid, graceMs}` | Khi 1 bên disconnect mid-game |
 | `peer-reconnected` | `{uid}` | Khi player rớt mạng vào lại |
 | `reconnected` | `{roomId, yourColor, redUid, blackUid, moves, currentTurn, clock, startedAt}` | Snapshot cho client vừa reconnect |
-| `game-ended` | `{roomId, result, reason, moves, startedAt, endedAt, durationMs, clock, redUid, blackUid}` | Cuối ván |
+| `game-ended` | `{roomId, result, reason, moves, startedAt, endedAt, durationMs, clock, redUid, blackUid, elo}` | Cuối ván. `elo` = `{red:{old,new,delta}, black:{old,new,delta}}` hoặc `null` nếu persist fail. `reason` có thể là `checkmate`/`stalemate` (Step 5 auto-detect) hoặc `timeout`/`resign`/`disconnect`. |
 | `left-room` | `{roomId}` | Ack leave-room cho người gửi |
 | `peer-left` | `{uid}` | Cho remaining member khi peer rời (lobby) |
 | `peer-message` | `{from, payload, ts}` | Generic broadcast tới peer |
@@ -439,6 +460,8 @@ Schema mirror với local `GameRecord` model (Hive) — sau này có thể sync 
 | `not-playing` | Cố move khi room không ở status playing |
 | `not-player` | Socket không phải redSocket cũng không phải blackSocket |
 | `not-your-turn` | Cố move khi không phải lượt mình |
+| `illegal-move` | Move không hợp lệ theo luật Xiangqi (Step 5 engine reject) |
+| `engine-missing` | Internal: room.engine null (không nên xảy ra sau startMatch) |
 | `time-out` | (internal) Trả về từ applyMove khi clock cạn — caller xử lý |
 | `game-not-active` | reconnect-room nhưng room.status không phải playing |
 | `not-disconnected-player` | reconnect-room nhưng uid không khớp disconnectedUid |

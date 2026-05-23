@@ -7,30 +7,37 @@ let initialized = false;
 /// Initialize Firebase Admin once for the process.
 ///
 /// Tries to load credentials in this order:
-///   1. GOOGLE_APPLICATION_CREDENTIALS env var (gcloud convention).
-///   2. ./serviceAccount.json (project root, gitignored).
-///   3. Application Default Credentials (gcloud auth login on dev,
-///      attached service account when deployed to Cloud Run/GCE).
+///   1. FIREBASE_SERVICE_ACCOUNT_JSON env var — full JSON inline (Render/Railway pattern).
+///   2. GOOGLE_APPLICATION_CREDENTIALS env var — path to JSON file (gcloud convention).
+///   3. ./serviceAccount.json (project root, gitignored, local dev).
+///   4. Application Default Credentials (Cloud Run / GCE / Cloud Functions).
 export function initFirebaseAdmin(): void {
   if (initialized) return;
 
+  const inlineJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
   const envPath = process.env.GOOGLE_APPLICATION_CREDENTIALS;
   const localPath = resolve(process.cwd(), 'serviceAccount.json');
 
-  if (envPath && existsSync(envPath)) {
+  if (inlineJson && inlineJson.length > 0) {
+    let parsed;
+    try {
+      parsed = JSON.parse(inlineJson);
+    } catch (e) {
+      throw new Error(
+        `FIREBASE_SERVICE_ACCOUNT_JSON is not valid JSON: ${e instanceof Error ? e.message : e}`,
+      );
+    }
+    admin.initializeApp({ credential: admin.credential.cert(parsed) });
+    console.log('[admin] initialized from FIREBASE_SERVICE_ACCOUNT_JSON env');
+  } else if (envPath && existsSync(envPath)) {
     const json = JSON.parse(readFileSync(envPath, 'utf-8'));
-    admin.initializeApp({
-      credential: admin.credential.cert(json),
-    });
+    admin.initializeApp({ credential: admin.credential.cert(json) });
     console.log(`[admin] initialized from GOOGLE_APPLICATION_CREDENTIALS=${envPath}`);
   } else if (existsSync(localPath)) {
     const json = JSON.parse(readFileSync(localPath, 'utf-8'));
-    admin.initializeApp({
-      credential: admin.credential.cert(json),
-    });
+    admin.initializeApp({ credential: admin.credential.cert(json) });
     console.log(`[admin] initialized from ${localPath}`);
   } else {
-    // Application Default Credentials — works when deployed to GCP.
     admin.initializeApp();
     console.log('[admin] initialized via Application Default Credentials');
   }

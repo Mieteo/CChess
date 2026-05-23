@@ -10,6 +10,8 @@ enum OnlineMatchPhase {
   idle,
   connecting,
   authed,
+  /// Step A3: in matchmaking queue, waiting to be paired.
+  matching,
   waitingForPeer,
   playing,
   /// Step 8: opponent disconnected, waiting for them to reconnect.
@@ -38,6 +40,7 @@ class OnlineMatchState {
     this.lastEventLog = const <String>[],
     this.peerDisconnectedAtMs,
     this.peerDisconnectGraceMs,
+    this.eloUpdate,
   });
 
   final OnlineMatchPhase phase;
@@ -57,6 +60,10 @@ class OnlineMatchState {
   /// Combined with [peerDisconnectGraceMs] gives the countdown deadline.
   final int? peerDisconnectedAtMs;
   final int? peerDisconnectGraceMs;
+  /// Step A2: Elo change after game-ended. Shape:
+  ///   { 'red': {old, new, delta}, 'black': {old, new, delta} }
+  /// Null when server didn't (yet) compute ELO (vd persist failed).
+  final Map<String, dynamic>? eloUpdate;
 
   bool get isMyTurn => myColor != null && currentTurn == myColor;
   bool get isPlaying =>
@@ -80,6 +87,7 @@ class OnlineMatchState {
     List<String>? lastEventLog,
     int? peerDisconnectedAtMs,
     int? peerDisconnectGraceMs,
+    Map<String, dynamic>? eloUpdate,
     bool clearError = false,
     bool clearPeerDisconnect = false,
   }) {
@@ -103,6 +111,7 @@ class OnlineMatchState {
       peerDisconnectGraceMs: clearPeerDisconnect
           ? null
           : (peerDisconnectGraceMs ?? this.peerDisconnectGraceMs),
+      eloUpdate: eloUpdate ?? this.eloUpdate,
     );
   }
 }
@@ -140,12 +149,12 @@ class OnlineMatchController extends StateNotifier<OnlineMatchState> {
     }
   }
 
-  void createRoom() {
+  void createRoom({int? clockMs}) {
     if (state.phase != OnlineMatchPhase.authed) {
       _setError('Chưa sẵn sàng (phase=${state.phase.name})');
       return;
     }
-    _socket.createRoom();
+    _socket.createRoom(clockMs: clockMs);
   }
 
   void joinRoom(String roomId) {
@@ -175,6 +184,19 @@ class OnlineMatchController extends StateNotifier<OnlineMatchState> {
     if (saved == null) return false;
     reconnectRoom(saved);
     return true;
+  }
+
+  /// Step A3: enter matchmaking queue. Server pairs FIFO.
+  void findMatch({int? clockMs}) {
+    if (state.phase != OnlineMatchPhase.authed) {
+      _setError('Chưa sẵn sàng (phase=${state.phase.name})');
+      return;
+    }
+    _socket.findMatch(clockMs: clockMs);
+  }
+
+  void cancelMatching() {
+    _socket.cancelMatching();
   }
 
   /// Called by UI when user taps from→to. Validates locally via XiangqiGame,
@@ -255,6 +277,27 @@ class OnlineMatchController extends StateNotifier<OnlineMatchState> {
         state = state.copyWith(
           phase: OnlineMatchPhase.waitingForPeer,
           roomId: msg['roomId'] as String?,
+          lastEventLog: newLog,
+        );
+        break;
+      case 'matching':
+        state = state.copyWith(
+          phase: OnlineMatchPhase.matching,
+          lastEventLog: newLog,
+        );
+        break;
+      case 'match-found':
+        // Server đã add socket vào room. game-start sẽ tới ngay sau.
+        state = state.copyWith(
+          phase: OnlineMatchPhase.waitingForPeer,
+          roomId: msg['roomId'] as String?,
+          opponentUid: msg['opponent'] as String?,
+          lastEventLog: newLog,
+        );
+        break;
+      case 'matching-canceled':
+        state = state.copyWith(
+          phase: OnlineMatchPhase.authed,
           lastEventLog: newLog,
         );
         break;
@@ -408,6 +451,7 @@ class OnlineMatchController extends StateNotifier<OnlineMatchState> {
       phase: OnlineMatchPhase.ended,
       result: msg['result'] as String?,
       endReason: msg['reason'] as String?,
+      eloUpdate: msg['elo'] as Map<String, dynamic>?,
       lastEventLog: log,
       clearPeerDisconnect: true,
     );

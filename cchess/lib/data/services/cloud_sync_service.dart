@@ -110,15 +110,26 @@ class CloudSyncService {
     Map<String, dynamic> cloud,
     UserProfile fallback,
   ) {
-    // Sprint 8b strategy:
+    // Sprint 12 strategy (updated after Step A2 ELO):
     // - Whitelist fields (displayName, region, avatarUrl, onboardingCompleted):
     //   cloud is source of truth (client writes via UserRemoteRepository).
-    // - Sensitive fields (eloChess, coins, ...): keep local. Cloud has
-    //   placeholder defaults until server-authoritative writes wire up.
+    // - Ranked stats (eloChess, eloCup, totalGames, wins, losses, draws):
+    //   cloud is source of truth — server backend updates these via Admin SDK
+    //   after every ranked game ends (see cchess-backend/src/persistence.ts).
+    //   Bot/local games keep eloDelta=0 so they never write here.
+    // - Currency + VIP (coins, gems, creditScore, isVip, vipExpiresAt):
+    //   keep local for now. Will become cloud-driven when Shop launches
+    //   (Sprint 16) + IAP (Sprint 17).
     // - createdAt / lastActiveAt: cloud is source of truth (server timestamps).
     DateTime asDate(String key, DateTime fallbackValue) {
       final v = cloud[key];
       if (v is Timestamp) return v.toDate();
+      return fallbackValue;
+    }
+
+    int asInt(String key, int fallbackValue) {
+      final v = cloud[key];
+      if (v is num) return v.toInt();
       return fallbackValue;
     }
 
@@ -127,12 +138,12 @@ class CloudSyncService {
       displayName: (cloud['displayName'] as String?) ?? fallback.displayName,
       region: (cloud['region'] as String?) ?? fallback.region,
       avatarUrl: cloud['avatarUrl'] as String?,
-      eloChess: fallback.eloChess,
-      eloCup: fallback.eloCup,
-      totalGames: fallback.totalGames,
-      wins: fallback.wins,
-      losses: fallback.losses,
-      draws: fallback.draws,
+      eloChess: asInt('eloChess', fallback.eloChess),
+      eloCup: asInt('eloCup', fallback.eloCup),
+      totalGames: asInt('totalGames', fallback.totalGames),
+      wins: asInt('wins', fallback.wins),
+      losses: asInt('losses', fallback.losses),
+      draws: asInt('draws', fallback.draws),
       coins: fallback.coins,
       gems: fallback.gems,
       creditScore: fallback.creditScore,

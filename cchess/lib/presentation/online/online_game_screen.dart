@@ -314,12 +314,58 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
     } else {
       title = 'Kết quả: ${state.result}';
     }
+
+    // Step A2: extract my-side ELO change if available
+    Widget? eloWidget;
+    final eloUpdate = state.eloUpdate;
+    if (eloUpdate != null && myColor != null) {
+      final myEloSide = myColor == PieceColor.red
+          ? eloUpdate['red'] as Map<String, dynamic>?
+          : eloUpdate['black'] as Map<String, dynamic>?;
+      if (myEloSide != null) {
+        final delta = (myEloSide['delta'] as num?)?.toInt() ?? 0;
+        final newElo = (myEloSide['new'] as num?)?.toInt();
+        final isUp = delta > 0;
+        final isFlat = delta == 0;
+        final color = isFlat
+            ? AppColors.parchmentTan
+            : (isUp ? AppColors.tealSuccess : AppColors.vermilionRed);
+        final sign = isUp ? '+' : '';
+        eloWidget = Padding(
+          padding: const EdgeInsets.only(top: AppSpacing.sm),
+          child: Row(
+            children: [
+              Icon(
+                isFlat
+                    ? Icons.remove
+                    : (isUp ? Icons.trending_up : Icons.trending_down),
+                color: color,
+                size: 18,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                'ELO: $sign$delta${newElo != null ? "  →  $newElo" : ""}',
+                style: AppTextStyles.headingMd.copyWith(color: color),
+              ),
+            ],
+          ),
+        );
+      }
+    }
+
     await showDialog<void>(
       context: context,
       barrierDismissible: false,
       builder: (ctx) => AlertDialog(
         title: Text(title),
-        content: Text('Lý do: ${state.endReason ?? "—"}'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Lý do: ${state.endReason ?? "—"}'),
+            if (eloWidget != null) eloWidget,
+          ],
+        ),
         actions: [
           TextButton(
             onPressed: () async {

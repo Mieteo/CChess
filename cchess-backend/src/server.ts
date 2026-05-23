@@ -24,6 +24,11 @@ import {
   startMatch,
 } from './match';
 import { persistGame } from './persistence';
+import {
+  dequeue as mmDequeue,
+  enqueue as mmEnqueue,
+  tryMatch as mmTryMatch,
+} from './matchmaking';
 
 // Step 2-3 from 08_HUONG_DAN_BACKEND_WEBSOCKET.md.
 //
@@ -93,6 +98,51 @@ function broadcastAll(room: Room, payload: Record<string, unknown>) {
   for (const s of room.members) send(s, payload);
 }
 
+/// Step 6 + matchmaking shared: start the game once a room has 2 players.
+/// Sets status='playing', initializes engine + clocks, broadcasts per-socket
+/// game-start with yourColor field.
+function startGameForRoom(room: Room): void {
+  room.status = 'playing';
+  startMatch(room, (s) => sessions.get(s));
+  startClockTicker(room);
+  const baseStartEvent = {
+    type: 'game-start',
+    roomId: room.id,
+    redUid: room.redUid,
+    blackUid: room.blackUid,
+    clock: clockSnapshot(room),
+    startedAt: room.startedAt,
+  };
+  for (const s of room.members) {
+    const yourColor = s === room.redSocket ? 'red' : 'black';
+    send(s, { ...baseStartEvent, yourColor });
+  }
+  console.log(
+    `[match] ${room.id} started: red=${room.redUid} black=${room.blackUid} clock=${room.clockMsByColor?.red ?? '?'}ms`,
+  );
+}
+
+/// Step A3 matchmaking: when 2 sockets are paired, set up a room then call
+/// startGameForRoom. Sends explicit `match-found` to both first so they know
+/// matchmaking succeeded.
+function pairAndStartMatch(
+  a: { socket: WebSocket; uid: string; clockMs?: number },
+  b: { socket: WebSocket; uid: string; clockMs?: number },
+): void {
+  const clockMs = a.clockMs ?? b.clockMs;
+  const room = createRoom(a.socket, { initialClockMs: clockMs });
+  // Attach B as 2nd member. attachReconnectingSocket also registers B in
+  // socketToRoom; the redSocket/blackSocket fields it sets are overwritten
+  // by startMatch a moment later (based on members iteration order).
+  attachReconnectingSocket(b.socket, room, b.uid);
+  send(a.socket, { type: 'match-found', roomId: room.id, opponent: b.uid });
+  send(b.socket, { type: 'match-found', roomId: room.id, opponent: a.uid });
+  console.log(
+    `[matchmaking] paired ${a.uid} ↔ ${b.uid} → room ${room.id}`,
+  );
+  startGameForRoom(room);
+}
+
 /// Step 6 ticker: check every 1s if current player has run out of time.
 function startClockTicker(room: Room) {
   if (room.clockTimer) clearInterval(room.clockTimer);
@@ -110,28 +160,52 @@ function startClockTicker(room: Room) {
   }, 1000);
 }
 
-/// End the game cleanly: stop ticker, mark room finished, broadcast game-ended.
-/// Step 7 persistence will hook in here next.
-function finishGame(room: Room, result: GameResult, reason: EndReason) {
+/// End the game cleanly: stop ticker, mark room finished, persist + ELO,
+/// then broadcast game-ended (with ELO deltas included when available).
+function finishGame(room: Room, result: GameResult, reason: EndReason): void {
   endMatch(room, result, reason);
-  const payload = {
-    type: 'game-ended',
-    roomId: room.id,
-    result,
-    reason,
-    moves: room.movesUci ?? [],
-    startedAt: room.startedAt,
-    endedAt: room.endedAt,
-    durationMs:
-      room.endedAt && room.startedAt ? room.endedAt - room.startedAt : null,
-    clock: clockSnapshot(room),
-    redUid: room.redUid,
-    blackUid: room.blackUid,
-  };
-  broadcastAll(room, payload);
-  console.log(`[match] ${room.id} ended result=${result} reason=${reason} moves=${room.movesUci?.length ?? 0}`);
-  // Step 7: persist to Firestore (fire-and-forget, errors logged)
-  persistGame(room).catch((e) => console.error('[persist] error:', e));
+
+  // Run persistence + ELO update, then broadcast. Even if persistence fails,
+  // we still broadcast (game IS ended) — just without ELO numbers.
+  void (async () => {
+    const persisted = await persistGame(room).catch((e) => {
+      console.error('[persist] error:', e);
+      return null;
+    });
+    const elo = persisted?.elo
+      ? {
+          red: {
+            old: persisted.elo.redOld,
+            new: persisted.elo.redNew,
+            delta: persisted.elo.redDelta,
+          },
+          black: {
+            old: persisted.elo.blackOld,
+            new: persisted.elo.blackNew,
+            delta: persisted.elo.blackDelta,
+          },
+        }
+      : null;
+    const payload = {
+      type: 'game-ended',
+      roomId: room.id,
+      result,
+      reason,
+      moves: room.movesUci ?? [],
+      startedAt: room.startedAt,
+      endedAt: room.endedAt,
+      durationMs:
+        room.endedAt && room.startedAt ? room.endedAt - room.startedAt : null,
+      clock: clockSnapshot(room),
+      redUid: room.redUid,
+      blackUid: room.blackUid,
+      elo,
+    };
+    broadcastAll(room, payload);
+    console.log(
+      `[match] ${room.id} ended result=${result} reason=${reason} moves=${room.movesUci?.length ?? 0}${elo ? ` | elo red ${elo.red.old}→${elo.red.new} black ${elo.black.old}→${elo.black.new}` : ''}`,
+    );
+  })();
 }
 
 interface HeartbeatSocket extends WebSocket {
@@ -237,14 +311,55 @@ wss.on('connection', (socket: WebSocket, request: IncomingMessage) => {
     }
 
     // ── Room operations ───────────────────────────────────────────────
+    // ── Step A3 matchmaking ──────────────────────────────────────────
+    if (msg.type === 'find-match') {
+      if (roomOf(socket)) {
+        send(socket, { type: 'error', code: 'already-in-room' });
+        return;
+      }
+      const rawClock = (msg as { clockMs?: number }).clockMs;
+      const clockMs =
+        typeof rawClock === 'number' && rawClock >= 60_000 && rawClock <= 3_600_000
+          ? rawClock
+          : undefined;
+      const size = mmEnqueue(socket, uid, clockMs);
+      send(socket, { type: 'matching', queueSize: size });
+      console.log(`[matchmaking] ${uid} enqueued (queue size=${size})`);
+      const pair = mmTryMatch();
+      if (pair) {
+        const [a, b] = pair;
+        pairAndStartMatch(a, b);
+      }
+      return;
+    }
+
+    if (msg.type === 'cancel-matching') {
+      const removed = mmDequeue(socket);
+      send(socket, { type: 'matching-canceled', removed });
+      console.log(`[matchmaking] ${uid} canceled (was queued=${removed})`);
+      return;
+    }
+
     if (msg.type === 'create-room') {
       if (roomOf(socket)) {
         send(socket, { type: 'error', code: 'already-in-room' });
         return;
       }
-      const room = createRoom(socket);
-      send(socket, { type: 'room-created', roomId: room.id });
-      console.log(`[room] ${room.id} created by ${uid}`);
+      // Step A5: optional initial clock from lobby (clamp to sane range)
+      const rawClock = (msg as { clockMs?: number }).clockMs;
+      const clockMs =
+        typeof rawClock === 'number' && rawClock >= 60_000 && rawClock <= 3_600_000
+          ? rawClock
+          : undefined;
+      const room = createRoom(socket, { initialClockMs: clockMs });
+      send(socket, {
+        type: 'room-created',
+        roomId: room.id,
+        initialClockMs: room.initialClockMs,
+      });
+      console.log(
+        `[room] ${room.id} created by ${uid} (clock=${clockMs ?? 'default'}ms)`,
+      );
       return;
     }
 
@@ -319,23 +434,7 @@ wss.on('connection', (socket: WebSocket, request: IncomingMessage) => {
 
       // Step 6: when 2 players are in, start the match
       if (room.members.size === 2 && room.status === 'playing') {
-        startMatch(room, (s) => sessions.get(s));
-        startClockTicker(room);
-        const baseStartEvent = {
-          type: 'game-start',
-          roomId: room.id,
-          redUid: room.redUid,
-          blackUid: room.blackUid,
-          clock: clockSnapshot(room),
-          startedAt: room.startedAt,
-        };
-        // Send per-socket so each side knows ITS color (needed when both
-        // sockets share the same Firebase uid during solo testing).
-        for (const s of room.members) {
-          const yourColor = s === room.redSocket ? 'red' : 'black';
-          send(s, { ...baseStartEvent, yourColor });
-        }
-        console.log(`[match] ${room.id} started: red=${room.redUid} black=${room.blackUid}`);
+        startGameForRoom(room);
       }
       return;
     }
@@ -399,16 +498,14 @@ wss.on('connection', (socket: WebSocket, request: IncomingMessage) => {
       const result = applyMove(room, socket, rawUci);
       if (!result.ok) {
         if (result.code === 'time-out') {
-          // Current player just ran out — opponent wins
           const winner: GameResult =
             room.currentTurn === 'red' ? 'black-win' : 'red-win';
           finishGame(room, winner, 'timeout');
         } else {
-          send(socket, { type: 'error', code: result.code });
+          send(socket, { type: 'error', code: result.code, uci: rawUci });
         }
         return;
       }
-      // Broadcast to peer with updated clocks
       const movePayload = {
         type: 'opponent-move',
         uci: rawUci,
@@ -419,7 +516,6 @@ wss.on('connection', (socket: WebSocket, request: IncomingMessage) => {
         ts: Date.now(),
       };
       broadcastToRoom(room, socket, movePayload);
-      // Also ack to sender with clock info
       send(socket, {
         type: 'move-ack',
         uci: rawUci,
@@ -427,6 +523,11 @@ wss.on('connection', (socket: WebSocket, request: IncomingMessage) => {
         clock: clockSnapshot(room),
       });
       console.log(`[match] ${room.id} #${result.moveNumber} ${result.color} ${rawUci} (red=${room.clockMsByColor!.red}ms black=${room.clockMsByColor!.black}ms)`);
+
+      // Step 5: auto-finish on checkmate / stalemate
+      if (result.autoFinish) {
+        finishGame(room, result.autoFinish.result, result.autoFinish.reason);
+      }
       return;
     }
 
@@ -502,6 +603,7 @@ wss.on('connection', (socket: WebSocket, request: IncomingMessage) => {
       console.log(`[room] ${beforeRoom.id} auto-left by ${uid} (disconnect)`);
     }
     sessions.delete(socket);
+    mmDequeue(socket); // remove from matchmaking queue if present
     clearTimeout(authTimer);
     console.log(
       `[ws] closed code=${code} reason=${reason.toString()} uid=${uid ?? 'unauthed'}`,
