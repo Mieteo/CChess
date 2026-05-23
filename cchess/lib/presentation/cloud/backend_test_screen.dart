@@ -25,7 +25,7 @@ class _BackendTestScreenState extends ConsumerState<BackendTestScreen> {
   /// - `10.0.2.2:8080` → Android emulator host loopback
   /// - `localhost:8080` → iOS simulator / desktop
   /// - For physical phone, replace với LAN IP của máy chạy backend
-  final _urlCtrl = TextEditingController(text: 'ws://10.0.2.2:8080');
+  final _urlCtrl = TextEditingController(text: AppConstants.defaultBackendWsUrl);
   final _roomIdCtrl = TextEditingController();
   final _uciCtrl = TextEditingController(text: 'e2e4');
 
@@ -165,7 +165,7 @@ class _BackendTestScreenState extends ConsumerState<BackendTestScreen> {
                 style: const TextStyle(fontSize: 13),
                 decoration: const InputDecoration(
                   labelText: 'WebSocket URL',
-                  helperText: 'ws://10.0.2.2:8080 (emu) | ws://<LAN IP>:8080 (phone)',
+                  helperText: 'default từ AppConstants.defaultBackendWsUrl',
                   prefixIcon: Icon(Icons.link, size: 18),
                   isDense: true,
                 ),

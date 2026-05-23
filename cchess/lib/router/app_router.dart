@@ -8,6 +8,8 @@ import '../presentation/achievements/achievements_screen.dart';
 import '../presentation/bot_game/bot_select_screen.dart';
 import '../presentation/cloud/backend_test_screen.dart';
 import '../presentation/cloud/cloud_test_screen.dart';
+import '../presentation/online/online_game_screen.dart';
+import '../presentation/online/online_lobby_screen.dart';
 import '../presentation/community/community_screen.dart';
 import '../presentation/game/game_screen.dart';
 import '../presentation/history/game_history_screen.dart';
@@ -51,6 +53,14 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppConstants.routeBackendTest,
         builder: (context, state) => const BackendTestScreen(),
+      ),
+      GoRoute(
+        path: AppConstants.routeOnlineLobby,
+        builder: (context, state) => const OnlineLobbyScreen(),
+      ),
+      GoRoute(
+        path: AppConstants.routeOnlineGame,
+        builder: (context, state) => const OnlineGameScreen(),
       ),
       GoRoute(
         path: '${AppConstants.routeProfile}/edit',

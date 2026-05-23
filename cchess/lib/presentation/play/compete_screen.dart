@@ -32,11 +32,11 @@ class CompeteScreen extends StatelessWidget {
         AppSpacing.vGapLg,
         _CompeteOption(
           title: 'Xếp Hạng Online',
-          subtitle: 'Tính ELO, ghép theo trình độ',
+          subtitle: 'Phòng riêng theo room ID — chưa có matchmaking',
           icon: Icons.public,
           color: AppColors.accentGold,
-          badge: 'Sprint 8',
-          onTap: () {},
+          badge: 'Beta',
+          onTap: () => context.push(AppConstants.routeOnlineLobby),
         ),
         AppSpacing.vGapMd,
         _CompeteOption(

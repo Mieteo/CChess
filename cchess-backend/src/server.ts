@@ -2,7 +2,9 @@ import { createServer, IncomingMessage } from 'http';
 import { WebSocketServer, WebSocket } from 'ws';
 import { initFirebaseAdmin, verifyIdToken } from './auth';
 import {
+  attachReconnectingSocket,
   createRoom,
+  getRoomById,
   joinRoom,
   leaveRoom,
   membersOf,
@@ -18,6 +20,7 @@ import {
   endMatch,
   isTimedOut,
   opponentOf,
+  RECONNECT_GRACE_MS,
   startMatch,
 } from './match';
 import { persistGame } from './persistence';
@@ -41,6 +44,11 @@ import { persistGame } from './persistence';
 
 const PORT = Number(process.env.PORT ?? 8080);
 const AUTH_TIMEOUT_MS = 10_000;
+
+// Step 6 disconnect detection: ping every 5s, terminate if no pong by next tick.
+// Catches half-open TCP (mobile app killed/backgrounded without sending FIN).
+// 5s = detection within 5-10s. Production may want 10-15s for less ping noise.
+const HEARTBEAT_INTERVAL_MS = 5_000;
 
 // Xiangqi UCI: 9 cols (a-i) × 10 rows (0-9). Format check only — Step 5 will
 // add legality (turn, piece existence, rule compliance).
@@ -126,9 +134,39 @@ function finishGame(room: Room, result: GameResult, reason: EndReason) {
   persistGame(room).catch((e) => console.error('[persist] error:', e));
 }
 
+interface HeartbeatSocket extends WebSocket {
+  isAlive?: boolean;
+}
+
+const heartbeatInterval = setInterval(() => {
+  wss.clients.forEach((s) => {
+    const sock = s as HeartbeatSocket;
+    if (sock.isAlive === false) {
+      console.log('[ws] heartbeat timeout → terminate');
+      sock.terminate(); // fires 'close' event → finishGame path
+      return;
+    }
+    sock.isAlive = false;
+    try {
+      sock.ping();
+    } catch {
+      // ignore — terminate will be called next tick
+    }
+  });
+}, HEARTBEAT_INTERVAL_MS);
+
+wss.on('close', () => clearInterval(heartbeatInterval));
+
 wss.on('connection', (socket: WebSocket, request: IncomingMessage) => {
   const remote = request.socket.remoteAddress;
   console.log(`[ws] connected from ${remote}`);
+
+  // Heartbeat: client must respond to ping within ~HEARTBEAT_INTERVAL_MS.
+  const hbSock = socket as HeartbeatSocket;
+  hbSock.isAlive = true;
+  socket.on('pong', () => {
+    hbSock.isAlive = true;
+  });
 
   send(socket, {
     type: 'welcome',
@@ -210,6 +248,53 @@ wss.on('connection', (socket: WebSocket, request: IncomingMessage) => {
       return;
     }
 
+    // ── Step 8: reconnect to in-progress room ────────────────────────
+    if (msg.type === 'reconnect-room') {
+      const roomId =
+        typeof msg.roomId === 'string' ? msg.roomId.toUpperCase() : '';
+      if (!roomId) {
+        send(socket, { type: 'error', code: 'missing-room-id' });
+        return;
+      }
+      const room = getRoomById(roomId);
+      if (!room) {
+        send(socket, { type: 'error', code: 'room-not-found' });
+        return;
+      }
+      if (room.status !== 'playing') {
+        send(socket, { type: 'error', code: 'game-not-active' });
+        return;
+      }
+      if (room.disconnectedUid !== uid) {
+        send(socket, { type: 'error', code: 'not-disconnected-player' });
+        return;
+      }
+      // Swap socket into room (replaces dead socket reference)
+      attachReconnectingSocket(socket, room, uid);
+      // Cancel grace timer + clear disconnect marker
+      if (room.disconnectTimer) {
+        clearTimeout(room.disconnectTimer);
+        room.disconnectTimer = undefined;
+      }
+      room.disconnectedUid = undefined;
+
+      const yourColor = uid === room.redUid ? 'red' : 'black';
+      send(socket, {
+        type: 'reconnected',
+        roomId: room.id,
+        yourColor,
+        redUid: room.redUid,
+        blackUid: room.blackUid,
+        moves: room.movesUci ?? [],
+        currentTurn: room.currentTurn,
+        clock: clockSnapshot(room),
+        startedAt: room.startedAt,
+      });
+      broadcastToRoom(room, socket, { type: 'peer-reconnected', uid });
+      console.log(`[match] ${room.id} ${yourColor} (${uid}) reconnected`);
+      return;
+    }
+
     if (msg.type === 'join-room') {
       const roomId = typeof msg.roomId === 'string' ? msg.roomId : '';
       if (!roomId) {
@@ -236,7 +321,7 @@ wss.on('connection', (socket: WebSocket, request: IncomingMessage) => {
       if (room.members.size === 2 && room.status === 'playing') {
         startMatch(room, (s) => sessions.get(s));
         startClockTicker(room);
-        const startEvent = {
+        const baseStartEvent = {
           type: 'game-start',
           roomId: room.id,
           redUid: room.redUid,
@@ -244,7 +329,12 @@ wss.on('connection', (socket: WebSocket, request: IncomingMessage) => {
           clock: clockSnapshot(room),
           startedAt: room.startedAt,
         };
-        for (const s of room.members) send(s, startEvent);
+        // Send per-socket so each side knows ITS color (needed when both
+        // sockets share the same Firebase uid during solo testing).
+        for (const s of room.members) {
+          const yourColor = s === room.redSocket ? 'red' : 'black';
+          send(s, { ...baseStartEvent, yourColor });
+        }
         console.log(`[match] ${room.id} started: red=${room.redUid} black=${room.blackUid}`);
       }
       return;
@@ -252,13 +342,25 @@ wss.on('connection', (socket: WebSocket, request: IncomingMessage) => {
 
     if (msg.type === 'leave-room') {
       const before = roomOf(socket);
-      const room = leaveRoom(socket);
-      if (!before || !room) {
+      if (!before) {
         send(socket, { type: 'error', code: 'not-in-room' });
         return;
       }
+      // If game was playing, treat client-initiated leave as a disconnect:
+      // ends the game with the OTHER side winning + persists + notifies peer.
+      if (before.status === 'playing') {
+        const color = colorOfSocket(before, socket);
+        if (color) {
+          const winner: GameResult =
+            opponentOf(color) === 'red' ? 'red-win' : 'black-win';
+          finishGame(before, winner, 'disconnect');
+        }
+      }
+      const room = leaveRoom(socket);
       send(socket, { type: 'left-room', roomId: before.id });
-      broadcastToRoom(room, socket, { type: 'peer-left', uid });
+      if (room) {
+        broadcastToRoom(room, socket, { type: 'peer-left', uid });
+      }
       console.log(`[room] ${before.id} left by ${uid}`);
       return;
     }
@@ -355,18 +457,47 @@ wss.on('connection', (socket: WebSocket, request: IncomingMessage) => {
 
   socket.on('close', (code, reason) => {
     const uid = sessions.get(socket);
-    // Step 6: if disconnected mid-game, end the match (disconnecting player loses)
     const beforeRoom = roomOf(socket);
-    if (beforeRoom && beforeRoom.status === 'playing' && uid) {
+    const wasPlaying = beforeRoom?.status === 'playing';
+
+    // Step 8: enter reconnect grace instead of immediate finishGame.
+    // If same uid reconnects via reconnect-room within RECONNECT_GRACE_MS,
+    // the room resumes; otherwise the grace timer fires finishGame(disconnect).
+    if (beforeRoom && wasPlaying && uid) {
       const color = colorOfSocket(beforeRoom, socket);
       if (color) {
-        const winner: GameResult = opponentOf(color) === 'red' ? 'red-win' : 'black-win';
-        finishGame(beforeRoom, winner, 'disconnect');
+        beforeRoom.disconnectedUid = uid;
+        if (beforeRoom.disconnectTimer) {
+          clearTimeout(beforeRoom.disconnectTimer);
+        }
+        beforeRoom.disconnectTimer = setTimeout(() => {
+          const stillDisconnected = beforeRoom.disconnectedUid === uid;
+          const stillPlaying = beforeRoom.status === 'playing';
+          console.log(
+            `[match] ${beforeRoom.id} grace timer fired: stillDisconnected=${stillDisconnected} stillPlaying=${stillPlaying} status=${beforeRoom.status}`,
+          );
+          if (stillDisconnected && stillPlaying) {
+            const winner: GameResult =
+              opponentOf(color) === 'red' ? 'red-win' : 'black-win';
+            finishGame(beforeRoom, winner, 'disconnect');
+          }
+        }, RECONNECT_GRACE_MS);
+        broadcastToRoom(beforeRoom, socket, {
+          type: 'peer-disconnected',
+          uid,
+          graceMs: RECONNECT_GRACE_MS,
+        });
+        console.log(
+          `[match] ${beforeRoom.id} ${color} (${uid}) disconnected, grace ${RECONNECT_GRACE_MS}ms`,
+        );
       }
     }
-    // Notify remaining peer + remove from room (existing behavior)
-    const room = leaveRoom(socket);
-    if (beforeRoom && room && uid) {
+
+    // Remove socket from maps. Preserve room status when grace is in progress
+    // so the reconnect-room handler + grace timer can still operate on a
+    // 'playing' room.
+    const room = leaveRoom(socket, { preserveStatus: wasPlaying });
+    if (beforeRoom && room && uid && !wasPlaying) {
       broadcastToRoom(room, socket, { type: 'peer-left', uid });
       console.log(`[room] ${beforeRoom.id} auto-left by ${uid} (disconnect)`);
     }

@@ -503,6 +503,7 @@ Khi backend tối thiểu đã ổn, hãy triển khai tiếp:
 - `05_KE_HOACH_DU_AN.md`
 - `06_KIEN_TRUC_BACKEND_THUC_DUNG.md`
 - `07_HUONG_DAN_THIET_LAP_FIREBASE.md`
+- [`09_BACKEND_SERVER_HOAT_DONG.md`](09_BACKEND_SERVER_HOAT_DONG.md) — **mô tả thực tế server đang chạy** (Step 1-7 hiện trạng, protocol đầy đủ, lịch sử fix). Doc 08 này là design/roadmap; doc 09 là as-built.
 
 ## 20. Tài liệu chính thức nên đọc thêm
 

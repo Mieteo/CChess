@@ -25,6 +25,12 @@ export interface Room {
   endReason?: EndReason;
   movesUci?: string[];
   clockTimer?: NodeJS.Timeout;
+
+  // Step 8 reconnect grace period: set when a player disconnects mid-game.
+  // If they reconnect (same uid) within RECONNECT_GRACE_MS, room resumes.
+  // disconnectTimer fires finishGame(disconnect) when grace expires.
+  disconnectedUid?: string;
+  disconnectTimer?: NodeJS.Timeout;
 }
 
 const rooms = new Map<string, Room>();
@@ -48,6 +54,24 @@ export function generateRoomId(): string {
 export function roomOf(socket: WebSocket): Room | undefined {
   const id = socketToRoom.get(socket);
   return id ? rooms.get(id) : undefined;
+}
+
+export function getRoomById(roomId: string): Room | undefined {
+  return rooms.get(roomId);
+}
+
+/// Step 8: rebind a fresh socket to an existing room (reconnect path).
+/// Caller is responsible for verifying uid matches one of redUid/blackUid
+/// and that disconnectedUid was set. This just updates the maps.
+export function attachReconnectingSocket(
+  socket: WebSocket,
+  room: Room,
+  uid: string,
+): void {
+  room.members.add(socket);
+  socketToRoom.set(socket, room.id);
+  if (uid === room.redUid) room.redSocket = socket;
+  else if (uid === room.blackUid) room.blackSocket = socket;
 }
 
 export function createRoom(socket: WebSocket): Room {
@@ -82,7 +106,15 @@ export function joinRoom(socket: WebSocket, roomId: string): JoinResult {
 
 /// Returns the room the socket was in, or undefined if it wasn't in any.
 /// Caller is responsible for notifying the room's other peers.
-export function leaveRoom(socket: WebSocket): Room | undefined {
+///
+/// When `preserveStatus` is true (used by the disconnect-during-game path),
+/// neither `room.status` nor the room itself is changed — only the socket
+/// is removed from the maps. This lets the grace period + reconnect flow
+/// keep operating against an in-progress room.
+export function leaveRoom(
+  socket: WebSocket,
+  options?: { preserveStatus?: boolean },
+): Room | undefined {
   const id = socketToRoom.get(socket);
   if (!id) return undefined;
   const room = rooms.get(id);
@@ -92,6 +124,9 @@ export function leaveRoom(socket: WebSocket): Room | undefined {
   }
   room.members.delete(socket);
   socketToRoom.delete(socket);
+  if (options?.preserveStatus) {
+    return room;
+  }
   if (room.members.size === 0) {
     rooms.delete(room.id);
     return room;

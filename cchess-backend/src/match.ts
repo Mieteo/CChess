@@ -8,9 +8,15 @@
 import type { WebSocket } from 'ws';
 import type { Color, EndReason, GameResult, Room } from './rooms';
 
-/// Initial total clock per color (in ms). 30s for fast testing.
-/// Production should use 15 min + Fischer increment or similar.
-export const INITIAL_CLOCK_MS = 30_000;
+/// Initial total clock per color (in ms). Currently 10 minutes — Fischer
+/// increment will come later. Configurable per room via lobby is the next
+/// UX iteration.
+export const INITIAL_CLOCK_MS = 600_000;
+
+/// Step 8 reconnect: grace window after a player disconnects mid-game.
+/// If they reconnect with the same uid within this window, the room is
+/// resumed; otherwise the game ends with reason='disconnect'.
+export const RECONNECT_GRACE_MS = 60_000;
 
 /// Called when 2nd player joins → status becomes 'playing'.
 /// Members are iterated in insertion order; first joiner = red.

@@ -49,9 +49,11 @@ class GameSocketService {
               break;
             case 'room-created':
             case 'room-joined':
+            case 'reconnected':
               _currentRoomId = msg['roomId'] as String?;
               break;
             case 'left-room':
+            case 'game-ended':
               _currentRoomId = null;
               break;
           }
@@ -101,6 +103,12 @@ class GameSocketService {
 
   void joinRoom(String roomId) =>
       send({'type': 'join-room', 'roomId': roomId.trim().toUpperCase()});
+
+  /// Step 8: try to resume an in-progress room after a brief disconnect.
+  /// Server verifies uid matches the one stored as `disconnectedUid` and
+  /// that we're still within the grace window.
+  void reconnectRoom(String roomId) =>
+      send({'type': 'reconnect-room', 'roomId': roomId.trim().toUpperCase()});
 
   void leaveRoom() => send({'type': 'leave-room'});
 

@@ -29,6 +29,8 @@ class AppConstants {
   static const String routeOpenings = '/openings';
   static const String routeCloudTest = '/cloud-test';
   static const String routeBackendTest = '/backend-test';
+  static const String routeOnlineLobby = '/online-lobby';
+  static const String routeOnlineGame = '/online-game';
 
   // Storage keys.
   static const String boxSettings = 'cchess_settings';
@@ -38,4 +40,8 @@ class AppConstants {
   // Hint usage caps.
   static const int dailyHintLimitFree = 3;
   static const int dailyHintLimitVip = 999;
+
+  // Backend WebSocket — LAN IP của PC dev, đặt cố định.
+  // Đổi giá trị này 1 chỗ duy nhất khi LAN IP thay đổi.
+  static const String defaultBackendWsUrl = 'ws://192.168.1.6:8080';
 }

@@ -41,8 +41,11 @@ class ChessBoard extends StatelessWidget {
           behavior: HitTestBehavior.opaque,
           onTapDown: (details) {
             if (onTap == null) return;
-            final pos = _maybeFlip(details.localPosition, size);
-            final cell = BoardPainter.offsetToCell(size, pos);
+            // Get the visual painter cell directly. When the board is flipped
+            // we convert that DISPLAY cell back to its BOARD coordinate.
+            // (Previously also `_maybeFlip`-ed the pixel — that double-flip
+            // returned the wrong board position when flipped.)
+            final cell = BoardPainter.offsetToCell(size, details.localPosition);
             if (cell == null) return;
             var (row, col) = cell;
             if (flipped) {
