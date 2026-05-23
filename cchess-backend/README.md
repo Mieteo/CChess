@@ -105,7 +105,7 @@ For local prototype testing:
 
 1. Push repo lên GitHub
 2. Đăng nhập https://render.com → **New +** → **Blueprint**
-3. Chọn repo, Render detect [`render.yaml`](render.yaml)
+3. Chọn repo, Render detect [`../render.yaml`](../render.yaml) (ở root repo — Render chỉ scan root, không scan sub-folder)
 4. Render UI prompt nhập secret `FIREBASE_SERVICE_ACCOUNT_JSON`:
    - Tải `serviceAccount.json` từ Firebase Console
    - Mở file, **paste toàn bộ JSON** (1 dòng hoặc nhiều dòng đều OK)

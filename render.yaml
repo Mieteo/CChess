@@ -1,0 +1,31 @@
+# Render.com infrastructure-as-code — đặt ở ROOT repo (Render chỉ scan root).
+#
+# Backend code thực tế nằm ở ./cchess-backend/, paths dưới đã trỏ tới đó.
+#
+# Deploy:
+#   1. Push file này (+ cchess-backend/) lên GitHub
+#   2. Render dashboard → New + → Blueprint → chọn repo
+#   3. Render đọc render.yaml + tạo service
+#   4. Render UI prompt nhập secret FIREBASE_SERVICE_ACCOUNT_JSON
+#      (paste toàn bộ nội dung serviceAccount.json từ Firebase Console)
+#
+# Free tier note: web service ngủ sau 15 min idle. First WS connect sau
+# wake ~30s. Upgrade Starter ($7/mo) nếu cần always-on.
+
+services:
+  - type: web
+    name: cchess-backend
+    env: docker
+    rootDir: cchess-backend
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    plan: free
+    region: singapore # gần Việt Nam nhất
+    healthCheckPath: /health
+    envVars:
+      - key: PORT
+        value: 8080
+      - key: FIREBASE_SERVICE_ACCOUNT_JSON
+        sync: false # Render dashboard sẽ prompt nhập secret này
+      - key: NODE_ENV
+        value: production
