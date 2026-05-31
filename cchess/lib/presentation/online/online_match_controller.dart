@@ -10,17 +10,46 @@ enum OnlineMatchPhase {
   idle,
   connecting,
   authed,
+
   /// Step A3: in matchmaking queue, waiting to be paired.
   matching,
   waitingForPeer,
   playing,
+  spectating,
+
   /// Step 8: opponent disconnected, waiting for them to reconnect.
   /// Game is still alive on server; will auto-resume if they come back.
   peerDisconnected,
+
   /// Step 8: I just attempted reconnect-room and am waiting for snapshot.
   reconnecting,
   ended,
   error,
+}
+
+class OnlineChatMessage {
+  const OnlineChatMessage({
+    required this.id,
+    required this.fromUid,
+    required this.text,
+    required this.sentAtMs,
+  });
+
+  final String id;
+  final String fromUid;
+  final String text;
+  final int sentAtMs;
+
+  static OnlineChatMessage? fromServer(Map<String, dynamic> msg) {
+    final id = msg['id'] as String?;
+    final from = msg['from'] as String?;
+    final text = msg['text'] as String?;
+    final ts = (msg['ts'] as num?)?.toInt();
+    if (id == null || from == null || text == null || ts == null) {
+      return null;
+    }
+    return OnlineChatMessage(id: id, fromUid: from, text: text, sentAtMs: ts);
+  }
 }
 
 class OnlineMatchState {
@@ -28,8 +57,12 @@ class OnlineMatchState {
     this.phase = OnlineMatchPhase.idle,
     this.serverUrl,
     this.roomId,
+    this.myUid,
     this.myColor,
     this.opponentUid,
+    this.redUid,
+    this.blackUid,
+    this.spectatorCount = 0,
     this.game,
     this.redClockMs = 30000,
     this.blackClockMs = 30000,
@@ -41,13 +74,18 @@ class OnlineMatchState {
     this.peerDisconnectedAtMs,
     this.peerDisconnectGraceMs,
     this.eloUpdate,
+    this.chatMessages = const <OnlineChatMessage>[],
   });
 
   final OnlineMatchPhase phase;
   final String? serverUrl;
   final String? roomId;
+  final String? myUid;
   final PieceColor? myColor;
   final String? opponentUid;
+  final String? redUid;
+  final String? blackUid;
+  final int spectatorCount;
   final XiangqiGame? game;
   final int redClockMs;
   final int blackClockMs;
@@ -56,27 +94,36 @@ class OnlineMatchState {
   final String? endReason; // 'timeout' | 'resign' | 'disconnect'
   final String? errorMessage;
   final List<String> lastEventLog;
+
   /// Step 8: timestamp when peer disconnect was received (local ms).
   /// Combined with [peerDisconnectGraceMs] gives the countdown deadline.
   final int? peerDisconnectedAtMs;
   final int? peerDisconnectGraceMs;
+
   /// Step A2: Elo change after game-ended. Shape:
   ///   { 'red': {old, new, delta}, 'black': {old, new, delta} }
   /// Null when server didn't (yet) compute ELO (vd persist failed).
   final Map<String, dynamic>? eloUpdate;
+  final List<OnlineChatMessage> chatMessages;
 
   bool get isMyTurn => myColor != null && currentTurn == myColor;
   bool get isPlaying =>
       phase == OnlineMatchPhase.playing ||
       phase == OnlineMatchPhase.peerDisconnected;
+  bool get isSpectating => phase == OnlineMatchPhase.spectating;
+  bool get canChat => isPlaying || isSpectating;
   bool get isEnded => phase == OnlineMatchPhase.ended;
 
   OnlineMatchState copyWith({
     OnlineMatchPhase? phase,
     String? serverUrl,
     String? roomId,
+    String? myUid,
     PieceColor? myColor,
     String? opponentUid,
+    String? redUid,
+    String? blackUid,
+    int? spectatorCount,
     XiangqiGame? game,
     int? redClockMs,
     int? blackClockMs,
@@ -88,6 +135,7 @@ class OnlineMatchState {
     int? peerDisconnectedAtMs,
     int? peerDisconnectGraceMs,
     Map<String, dynamic>? eloUpdate,
+    List<OnlineChatMessage>? chatMessages,
     bool clearError = false,
     bool clearPeerDisconnect = false,
   }) {
@@ -95,8 +143,12 @@ class OnlineMatchState {
       phase: phase ?? this.phase,
       serverUrl: serverUrl ?? this.serverUrl,
       roomId: roomId ?? this.roomId,
+      myUid: myUid ?? this.myUid,
       myColor: myColor ?? this.myColor,
       opponentUid: opponentUid ?? this.opponentUid,
+      redUid: redUid ?? this.redUid,
+      blackUid: blackUid ?? this.blackUid,
+      spectatorCount: spectatorCount ?? this.spectatorCount,
       game: game ?? this.game,
       redClockMs: redClockMs ?? this.redClockMs,
       blackClockMs: blackClockMs ?? this.blackClockMs,
@@ -112,6 +164,7 @@ class OnlineMatchState {
           ? null
           : (peerDisconnectGraceMs ?? this.peerDisconnectGraceMs),
       eloUpdate: eloUpdate ?? this.eloUpdate,
+      chatMessages: chatMessages ?? this.chatMessages,
     );
   }
 }
@@ -122,7 +175,7 @@ class OnlineMatchState {
 /// user actions (createRoom, sendMove, resign) or server events.
 class OnlineMatchController extends StateNotifier<OnlineMatchState> {
   OnlineMatchController(this._socket, this._reconnectStore)
-      : super(const OnlineMatchState());
+    : super(const OnlineMatchState());
 
   final GameSocketService _socket;
   final ReconnectStore _reconnectStore;
@@ -165,6 +218,14 @@ class OnlineMatchController extends StateNotifier<OnlineMatchState> {
     _socket.joinRoom(roomId);
   }
 
+  void spectateRoom(String roomId) {
+    if (state.phase != OnlineMatchPhase.authed) {
+      _setError('Chưa sẵn sàng (phase=${state.phase.name})');
+      return;
+    }
+    _socket.spectateRoom(roomId);
+  }
+
   /// Step 8: attempt to resume a saved room. Lobby calls this on load if
   /// `ReconnectStore.readFresh()` returned a value.
   void reconnectRoom(String roomId) {
@@ -186,7 +247,7 @@ class OnlineMatchController extends StateNotifier<OnlineMatchState> {
     return true;
   }
 
-  /// Step A3: enter matchmaking queue. Server pairs FIFO.
+  /// Step A3: enter matchmaking queue. Server pairs by ELO tolerance.
   void findMatch({int? clockMs}) {
     if (state.phase != OnlineMatchPhase.authed) {
       _setError('Chưa sẵn sàng (phase=${state.phase.name})');
@@ -227,13 +288,28 @@ class OnlineMatchController extends StateNotifier<OnlineMatchState> {
     _socket.resign();
   }
 
+  void sendChatMessage(String text) {
+    if (!state.canChat) return;
+    final trimmed = text.replaceAll(RegExp(r'\s+'), ' ').trim();
+    if (trimmed.isEmpty) return;
+    if (trimmed.length > 120) {
+      state = state.copyWith(errorMessage: 'Tin nhắn tối đa 120 ký tự.');
+      return;
+    }
+    _socket.sendChatMessage(trimmed);
+  }
+
   /// User-initiated leave. Clears persistent reconnect state — they've
   /// explicitly chosen to abandon the match. Use this for "Về Đối Đầu" etc.
   Future<void> leave() async {
     _sub?.cancel();
     _sub = null;
-    if (_socket.isInRoom && !state.isPlaying) {
-      _socket.leaveRoom();
+    if (_socket.isInRoom) {
+      if (state.isSpectating) {
+        _socket.stopSpectating();
+      } else if (!state.isPlaying) {
+        _socket.leaveRoom();
+      }
     }
     await _socket.disconnect();
     await _reconnectStore.clear();
@@ -253,15 +329,13 @@ class OnlineMatchController extends StateNotifier<OnlineMatchState> {
 
   void _onMessage(Map<String, dynamic> msg) {
     final logEntry = msg.toString();
-    final newLog = [
-      logEntry,
-      ...state.lastEventLog,
-    ].take(20).toList();
+    final newLog = [logEntry, ...state.lastEventLog].take(20).toList();
 
     switch (msg['type']) {
       case 'authed':
         state = state.copyWith(
           phase: OnlineMatchPhase.authed,
+          myUid: msg['uid'] as String?,
           lastEventLog: newLog,
           clearError: true,
         );
@@ -308,27 +382,54 @@ class OnlineMatchController extends StateNotifier<OnlineMatchState> {
       case 'game-start':
         _onGameStart(msg, newLog);
         break;
+      case 'spectate-started':
+        _onSpectateStarted(msg, newLog);
+        break;
+      case 'spectate-stopped':
+        state = OnlineMatchState(
+          phase: OnlineMatchPhase.authed,
+          serverUrl: state.serverUrl,
+          myUid: state.myUid,
+          lastEventLog: newLog,
+        );
+        break;
+      case 'spectator-joined':
+      case 'spectator-left':
+        state = state.copyWith(
+          spectatorCount:
+              (msg['spectatorCount'] as num?)?.toInt() ?? state.spectatorCount,
+          lastEventLog: newLog,
+        );
+        break;
       case 'move-ack':
         _onMoveAck(msg, newLog);
         break;
       case 'opponent-move':
         _onOpponentMove(msg, newLog);
         break;
+      case 'chat-message':
+        _onChatMessage(msg, newLog);
+        break;
       case 'game-ended':
         _onGameEnded(msg, newLog);
         break;
       case 'peer-disconnected':
-        state = state.copyWith(
-          phase: OnlineMatchPhase.peerDisconnected,
-          peerDisconnectedAtMs: DateTime.now().millisecondsSinceEpoch,
-          peerDisconnectGraceMs:
-              (msg['graceMs'] as num?)?.toInt() ?? 60000,
-          lastEventLog: newLog,
-        );
+        if (state.isSpectating) {
+          state = state.copyWith(lastEventLog: newLog);
+        } else {
+          state = state.copyWith(
+            phase: OnlineMatchPhase.peerDisconnected,
+            peerDisconnectedAtMs: DateTime.now().millisecondsSinceEpoch,
+            peerDisconnectGraceMs: (msg['graceMs'] as num?)?.toInt() ?? 60000,
+            lastEventLog: newLog,
+          );
+        }
         break;
       case 'peer-reconnected':
         state = state.copyWith(
-          phase: OnlineMatchPhase.playing,
+          phase: state.isSpectating
+              ? OnlineMatchPhase.spectating
+              : OnlineMatchPhase.playing,
           lastEventLog: newLog,
           clearError: true,
           clearPeerDisconnect: true,
@@ -357,13 +458,18 @@ class OnlineMatchController extends StateNotifier<OnlineMatchState> {
     final roomId = msg['roomId'] as String?;
     state = state.copyWith(
       phase: OnlineMatchPhase.playing,
+      roomId: roomId,
       game: XiangqiGame.initial(),
       myColor: myColor,
       opponentUid: opponentUid,
+      redUid: redUid,
+      blackUid: blackUid,
+      spectatorCount: 0,
       currentTurn: PieceColor.red,
       redClockMs: (clock?['red'] as num?)?.toInt() ?? state.redClockMs,
       blackClockMs: (clock?['black'] as num?)?.toInt() ?? state.blackClockMs,
       lastEventLog: log,
+      chatMessages: const <OnlineChatMessage>[],
       clearError: true,
     );
     // Persist for Step 8 reconnect
@@ -394,16 +500,76 @@ class OnlineMatchController extends StateNotifier<OnlineMatchState> {
     final currentTurn = currentTurnStr == 'black'
         ? PieceColor.black
         : (currentTurnStr == 'red' ? PieceColor.red : game.turn);
+    final chat =
+        (msg['chat'] as List?)
+            ?.whereType<Map>()
+            .map(
+              (m) => OnlineChatMessage.fromServer(Map<String, dynamic>.from(m)),
+            )
+            .whereType<OnlineChatMessage>()
+            .toList() ??
+        const <OnlineChatMessage>[];
     state = state.copyWith(
       phase: OnlineMatchPhase.playing,
+      roomId: msg['roomId'] as String?,
       game: game,
       myColor: myColor,
       opponentUid: opponentUid,
+      redUid: redUid,
+      blackUid: blackUid,
+      spectatorCount:
+          (msg['spectatorCount'] as num?)?.toInt() ?? state.spectatorCount,
       currentTurn: currentTurn,
       redClockMs: (clock?['red'] as num?)?.toInt() ?? state.redClockMs,
       blackClockMs: (clock?['black'] as num?)?.toInt() ?? state.blackClockMs,
+      chatMessages: chat,
       lastEventLog: log,
       clearError: true,
+    );
+  }
+
+  void _onSpectateStarted(Map<String, dynamic> msg, List<String> log) {
+    final moves =
+        (msg['moves'] as List?)?.whereType<String>().toList() ?? const [];
+    final game = XiangqiGame.initial();
+    for (final uci in moves) {
+      final coords = Move.parseUciCoords(uci);
+      if (coords == null) continue;
+      try {
+        game.makeMove(coords.$1, coords.$2);
+      } catch (_) {
+        break;
+      }
+    }
+    final clock = msg['clock'] as Map<String, dynamic>?;
+    final currentTurnStr = msg['currentTurn'] as String?;
+    final currentTurn = currentTurnStr == 'black'
+        ? PieceColor.black
+        : (currentTurnStr == 'red' ? PieceColor.red : game.turn);
+    final chat =
+        (msg['chat'] as List?)
+            ?.whereType<Map>()
+            .map(
+              (m) => OnlineChatMessage.fromServer(Map<String, dynamic>.from(m)),
+            )
+            .whereType<OnlineChatMessage>()
+            .toList() ??
+        const <OnlineChatMessage>[];
+
+    state = OnlineMatchState(
+      phase: OnlineMatchPhase.spectating,
+      serverUrl: state.serverUrl,
+      roomId: msg['roomId'] as String?,
+      myUid: state.myUid,
+      redUid: msg['redUid'] as String?,
+      blackUid: msg['blackUid'] as String?,
+      spectatorCount: (msg['spectatorCount'] as num?)?.toInt() ?? 1,
+      game: game,
+      redClockMs: (clock?['red'] as num?)?.toInt() ?? state.redClockMs,
+      blackClockMs: (clock?['black'] as num?)?.toInt() ?? state.blackClockMs,
+      currentTurn: currentTurn,
+      lastEventLog: log,
+      chatMessages: chat,
     );
   }
 
@@ -445,11 +611,43 @@ class OnlineMatchController extends StateNotifier<OnlineMatchState> {
     );
   }
 
+  void _onChatMessage(Map<String, dynamic> msg, List<String> log) {
+    final roomId = msg['roomId'] as String?;
+    if (roomId != null && state.roomId != null && roomId != state.roomId) {
+      state = state.copyWith(lastEventLog: log);
+      return;
+    }
+    final message = OnlineChatMessage.fromServer(msg);
+    if (message == null) {
+      state = state.copyWith(lastEventLog: log);
+      return;
+    }
+    final exists = state.chatMessages.any((m) => m.id == message.id);
+    final next = exists
+        ? state.chatMessages
+        : <OnlineChatMessage>[...state.chatMessages, message];
+    final trimmed = next.length > 50 ? next.sublist(next.length - 50) : next;
+    state = state.copyWith(
+      chatMessages: trimmed,
+      lastEventLog: log,
+      clearError: true,
+    );
+  }
+
   /// Handle server `error` messages. When the error indicates server REJECTED
   /// our optimistic move (`illegal-move`, `not-your-turn`, `time-out`), roll
   /// back the local game state so client and server stay in sync.
   void _onError(Map<String, dynamic> msg, List<String> log) {
     final code = msg['code'] as String?;
+    if (code == 'invalid-chat' || code == 'chat-rate-limited') {
+      state = state.copyWith(
+        errorMessage: code == 'invalid-chat'
+            ? 'Tin nhắn không hợp lệ hoặc quá dài.'
+            : 'Bạn gửi chat quá nhanh.',
+        lastEventLog: log,
+      );
+      return;
+    }
     final shouldUndo = code == 'illegal-move' || code == 'not-your-turn';
     final game = state.game;
     if (shouldUndo && game != null) {
@@ -487,10 +685,7 @@ class OnlineMatchController extends StateNotifier<OnlineMatchState> {
   }
 
   void _setError(String msg) {
-    state = state.copyWith(
-      phase: OnlineMatchPhase.error,
-      errorMessage: msg,
-    );
+    state = state.copyWith(phase: OnlineMatchPhase.error, errorMessage: msg);
   }
 
   @override
@@ -500,10 +695,10 @@ class OnlineMatchController extends StateNotifier<OnlineMatchState> {
   }
 }
 
-final onlineMatchControllerProvider = StateNotifierProvider<
-    OnlineMatchController, OnlineMatchState>((ref) {
-  return OnlineMatchController(
-    ref.read(gameSocketServiceProvider),
-    ref.read(reconnectStoreProvider),
-  );
-});
+final onlineMatchControllerProvider =
+    StateNotifierProvider<OnlineMatchController, OnlineMatchState>((ref) {
+      return OnlineMatchController(
+        ref.read(gameSocketServiceProvider),
+        ref.read(reconnectStoreProvider),
+      );
+    });

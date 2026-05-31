@@ -5,10 +5,12 @@ import {
   attachReconnectingSocket,
   createRoom,
   getRoomById,
+  isSpectator,
   joinRoom,
   leaveRoom,
   membersOf,
   roomOf,
+  spectateRoom,
   type EndReason,
   type GameResult,
   type Room,
@@ -58,6 +60,9 @@ const HEARTBEAT_INTERVAL_MS = 5_000;
 // Xiangqi UCI: 9 cols (a-i) × 10 rows (0-9). Format check only — Step 5 will
 // add legality (turn, piece existence, rule compliance).
 const UCI_REGEX = /^[a-i][0-9][a-i][0-9]$/;
+const CHAT_MAX_CHARS = 120;
+const CHAT_RATE_LIMIT_MS = 1_500;
+const CHAT_HISTORY_LIMIT = 50;
 
 initFirebaseAdmin();
 
@@ -87,7 +92,7 @@ function broadcastToRoom(
   except: WebSocket | null,
   payload: Record<string, unknown>,
 ) {
-  for (const s of room.members) {
+  for (const s of socketsOf(room)) {
     if (s === except) continue;
     send(s, payload);
   }
@@ -95,7 +100,35 @@ function broadcastToRoom(
 
 /// Send a payload to ALL members in the room.
 function broadcastAll(room: Room, payload: Record<string, unknown>) {
-  for (const s of room.members) send(s, payload);
+  for (const s of socketsOf(room)) send(s, payload);
+}
+
+function socketsOf(room: Room): WebSocket[] {
+  return [...room.members, ...room.spectators];
+}
+
+function normalizeChatText(raw: unknown): string | null {
+  if (typeof raw !== 'string') return null;
+  const text = raw.replace(/\s+/g, ' ').trim();
+  if (text.length === 0 || text.length > CHAT_MAX_CHARS) return null;
+  return text;
+}
+
+function pushChatMessage(room: Room, uid: string, text: string) {
+  const ts = Date.now();
+  const history = room.chatMessages ?? [];
+  const message = {
+    id: `${room.id}_${ts}_${history.length}`,
+    from: uid,
+    text,
+    ts,
+  };
+  history.push(message);
+  if (history.length > CHAT_HISTORY_LIMIT) {
+    history.splice(0, history.length - CHAT_HISTORY_LIMIT);
+  }
+  room.chatMessages = history;
+  return message;
 }
 
 /// Step 6 + matchmaking shared: start the game once a room has 2 players.
@@ -423,12 +456,68 @@ wss.on('connection', (socket: WebSocket, request: IncomingMessage) => {
         redUid: room.redUid,
         blackUid: room.blackUid,
         moves: room.movesUci ?? [],
+        chat: room.chatMessages ?? [],
         currentTurn: room.currentTurn,
         clock: clockSnapshot(room),
         startedAt: room.startedAt,
       });
       broadcastToRoom(room, socket, { type: 'peer-reconnected', uid });
       console.log(`[match] ${room.id} ${yourColor} (${uid}) reconnected`);
+      return;
+    }
+
+    if (msg.type === 'spectate-room') {
+      const roomId =
+        typeof msg.roomId === 'string' ? msg.roomId.toUpperCase() : '';
+      if (!roomId) {
+        send(socket, { type: 'error', code: 'missing-room-id' });
+        return;
+      }
+      const result = spectateRoom(socket, roomId);
+      if (!result.ok) {
+        send(socket, { type: 'error', code: result.code });
+        return;
+      }
+      const room = result.room;
+      send(socket, {
+        type: 'spectate-started',
+        roomId: room.id,
+        redUid: room.redUid,
+        blackUid: room.blackUid,
+        moves: room.movesUci ?? [],
+        chat: room.chatMessages ?? [],
+        currentTurn: room.currentTurn,
+        clock: clockSnapshot(room),
+        startedAt: room.startedAt,
+        spectatorCount: room.spectators.size,
+      });
+      broadcastToRoom(room, socket, {
+        type: 'spectator-joined',
+        uid,
+        spectatorCount: room.spectators.size,
+      });
+      console.log(`[spectate] ${uid} watching ${room.id}`);
+      return;
+    }
+
+    if (msg.type === 'stop-spectating') {
+      const room = roomOf(socket);
+      if (!room) {
+        send(socket, { type: 'error', code: 'not-in-room' });
+        return;
+      }
+      if (!isSpectator(room, socket)) {
+        send(socket, { type: 'error', code: 'not-spectator' });
+        return;
+      }
+      leaveRoom(socket);
+      send(socket, { type: 'spectate-stopped', roomId: room.id });
+      broadcastToRoom(room, socket, {
+        type: 'spectator-left',
+        uid,
+        spectatorCount: room.spectators.size,
+      });
+      console.log(`[spectate] ${uid} stopped watching ${room.id}`);
       return;
     }
 
@@ -467,9 +556,10 @@ wss.on('connection', (socket: WebSocket, request: IncomingMessage) => {
         send(socket, { type: 'error', code: 'not-in-room' });
         return;
       }
+      const wasSpectator = isSpectator(before, socket);
       // If game was playing, treat client-initiated leave as a disconnect:
       // ends the game with the OTHER side winning + persists + notifies peer.
-      if (before.status === 'playing') {
+      if (before.status === 'playing' && !wasSpectator) {
         const color = colorOfSocket(before, socket);
         if (color) {
           const winner: GameResult =
@@ -479,8 +569,15 @@ wss.on('connection', (socket: WebSocket, request: IncomingMessage) => {
       }
       const room = leaveRoom(socket);
       send(socket, { type: 'left-room', roomId: before.id });
-      if (room) {
+      if (room && !wasSpectator) {
         broadcastToRoom(room, socket, { type: 'peer-left', uid });
+      }
+      if (room && wasSpectator) {
+        broadcastToRoom(room, socket, {
+          type: 'spectator-left',
+          uid,
+          spectatorCount: room.spectators.size,
+        });
       }
       console.log(`[room] ${before.id} left by ${uid}`);
       return;
@@ -497,6 +594,49 @@ wss.on('connection', (socket: WebSocket, request: IncomingMessage) => {
         from: uid,
         payload: msg.payload,
         ts: Date.now(),
+      });
+      return;
+    }
+
+    if (msg.type === 'chat-message') {
+      const room = roomOf(socket);
+      if (!room) {
+        send(socket, { type: 'error', code: 'not-in-room' });
+        return;
+      }
+      if (room.status === 'finished') {
+        send(socket, { type: 'error', code: 'not-playing' });
+        return;
+      }
+      const text = normalizeChatText(msg.text);
+      if (!text) {
+        send(socket, {
+          type: 'error',
+          code: 'invalid-chat',
+          maxChars: CHAT_MAX_CHARS,
+        });
+        return;
+      }
+      const now = Date.now();
+      const lastByUid = room.lastChatAtByUid ?? {};
+      const last = lastByUid[uid] ?? 0;
+      const retryMs = CHAT_RATE_LIMIT_MS - (now - last);
+      if (retryMs > 0) {
+        send(socket, {
+          type: 'error',
+          code: 'chat-rate-limited',
+          retryMs,
+        });
+        return;
+      }
+      lastByUid[uid] = now;
+      room.lastChatAtByUid = lastByUid;
+
+      const chat = pushChatMessage(room, uid, text);
+      broadcastAll(room, {
+        type: 'chat-message',
+        roomId: room.id,
+        ...chat,
       });
       return;
     }
@@ -582,11 +722,12 @@ wss.on('connection', (socket: WebSocket, request: IncomingMessage) => {
     const uid = sessions.get(socket);
     const beforeRoom = roomOf(socket);
     const wasPlaying = beforeRoom?.status === 'playing';
+    const wasSpectator = beforeRoom ? isSpectator(beforeRoom, socket) : false;
 
     // Step 8: enter reconnect grace instead of immediate finishGame.
     // If same uid reconnects via reconnect-room within RECONNECT_GRACE_MS,
     // the room resumes; otherwise the grace timer fires finishGame(disconnect).
-    if (beforeRoom && wasPlaying && uid) {
+    if (beforeRoom && wasPlaying && uid && !wasSpectator) {
       const color = colorOfSocket(beforeRoom, socket);
       if (color) {
         beforeRoom.disconnectedUid = uid;
@@ -620,9 +761,17 @@ wss.on('connection', (socket: WebSocket, request: IncomingMessage) => {
     // so the reconnect-room handler + grace timer can still operate on a
     // 'playing' room.
     const room = leaveRoom(socket, { preserveStatus: wasPlaying });
-    if (beforeRoom && room && uid && !wasPlaying) {
+    if (beforeRoom && room && uid && !wasPlaying && !wasSpectator) {
       broadcastToRoom(room, socket, { type: 'peer-left', uid });
       console.log(`[room] ${beforeRoom.id} auto-left by ${uid} (disconnect)`);
+    }
+    if (beforeRoom && room && uid && wasSpectator) {
+      broadcastToRoom(room, socket, {
+        type: 'spectator-left',
+        uid,
+        spectatorCount: room.spectators.size,
+      });
+      console.log(`[spectate] ${uid} auto-left ${beforeRoom.id}`);
     }
     sessions.delete(socket);
     mmDequeue(socket); // remove from matchmaking queue if present

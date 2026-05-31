@@ -51,9 +51,11 @@ class GameSocketService {
             case 'room-joined':
             case 'reconnected':
             case 'match-found':
+            case 'spectate-started':
               _currentRoomId = msg['roomId'] as String?;
               break;
             case 'left-room':
+            case 'spectate-stopped':
             case 'game-ended':
               _currentRoomId = null;
               break;
@@ -100,22 +102,29 @@ class GameSocketService {
     _channel?.sink.add(jsonEncode(data));
   }
 
-  void createRoom({int? clockMs}) => send({
-        'type': 'create-room',
-        if (clockMs != null) 'clockMs': clockMs,
-      });
+  void createRoom({int? clockMs}) {
+    final message = <String, dynamic>{'type': 'create-room'};
+    if (clockMs != null) message['clockMs'] = clockMs;
+    send(message);
+  }
 
-  /// Step A3: enter matchmaking queue. Server pairs with the longest-waiting
-  /// other player and creates a room automatically.
-  void findMatch({int? clockMs}) => send({
-        'type': 'find-match',
-        if (clockMs != null) 'clockMs': clockMs,
-      });
+  /// Step A3: enter matchmaking queue. Server pairs by ELO tolerance that
+  /// widens as players wait, then creates a room automatically.
+  void findMatch({int? clockMs}) {
+    final message = <String, dynamic>{'type': 'find-match'};
+    if (clockMs != null) message['clockMs'] = clockMs;
+    send(message);
+  }
 
   void cancelMatching() => send({'type': 'cancel-matching'});
 
   void joinRoom(String roomId) =>
       send({'type': 'join-room', 'roomId': roomId.trim().toUpperCase()});
+
+  void spectateRoom(String roomId) =>
+      send({'type': 'spectate-room', 'roomId': roomId.trim().toUpperCase()});
+
+  void stopSpectating() => send({'type': 'stop-spectating'});
 
   /// Step 8: try to resume an in-progress room after a brief disconnect.
   /// Server verifies uid matches the one stored as `disconnectedUid` and
@@ -128,13 +137,13 @@ class GameSocketService {
   void broadcast(Map<String, dynamic> payload) =>
       send({'type': 'broadcast', 'payload': payload});
 
+  void sendChatMessage(String text) =>
+      send({'type': 'chat-message', 'text': text.trim()});
+
   /// Step 4: send a Xiangqi move in UCI format (e.g. "e2e4").
-  /// Server validates format + turn + clock (Step 6); piece-movement
-  /// legality is still client-trusted until Step 5 (full rule port).
-  void sendMove(String uci) => send({
-        'type': 'move',
-        'uci': uci.trim().toLowerCase(),
-      });
+  /// Server validates format + turn + clock + Xiangqi legality.
+  void sendMove(String uci) =>
+      send({'type': 'move', 'uci': uci.trim().toLowerCase()});
 
   /// Step 6: resign current game. Sender loses; server broadcasts `game-ended`.
   void resign() => send({'type': 'resign'});

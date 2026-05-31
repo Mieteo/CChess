@@ -1,7 +1,7 @@
-// Step A3: simple FIFO matchmaking queue.
+// Step A3: ELO-aware matchmaking queue.
 //
-// MVP: pair the 2 longest-waiting players regardless of ELO. Production
-// would bucket by rating band and widen tolerance over wait time.
+// Pair players whose ratings fit an expanding tolerance window. The
+// longest-waiting player is checked first, and tolerance widens over time.
 
 import type { WebSocket } from 'ws';
 

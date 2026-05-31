@@ -1,9 +1,6 @@
-// Step 6: clock + game lifecycle helpers for an active room.
-// Step 5 (full Xiangqi rule validation) is deferred — we only track:
-//   - whose turn it is
-//   - per-color remaining clock
-//   - timeout
-//   - resign + disconnect ending the game
+// Step 5-8: game lifecycle helpers for an active room.
+// This module owns turn/clock state, server-side Xiangqi move validation,
+// timeout, resign, reconnect grace, and auto-finish detection.
 
 import type { WebSocket } from 'ws';
 import type { Color, EndReason, GameResult, Room } from './rooms';

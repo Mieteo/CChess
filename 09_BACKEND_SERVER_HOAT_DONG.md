@@ -1,6 +1,6 @@
 # Backend WebSocket — Hoạt động hệ thống
 
-> Tài liệu sống — cập nhật 2026-05-24 sau khi Step 1-8 đã code + Step 5 (Xiangqi rule validation) + ELO calculation tích hợp.
+> Tài liệu sống — cập nhật 2026-05-31 sau khi Step 1-8 đã code + Step 5 (Xiangqi rule validation) + ELO calculation + A5 chat cơ bản + A6 Spectate cơ bản tích hợp.
 > Bổ sung cho [`08_HUONG_DAN_BACKEND_WEBSOCKET.md`](08_HUONG_DAN_BACKEND_WEBSOCKET.md): doc 08 là **thiết kế + lộ trình**, doc này là **mô tả thực tế** code đang chạy trong [`cchess-backend/`](cchess-backend/).
 
 ## 1. Mục tiêu
@@ -324,7 +324,7 @@ Server `reconnect-room`:
 5. `clearTimeout(disconnectTimer)`, `disconnectedUid = undefined`
 6. Gửi **snapshot** cho reconnecting client:
    ```json
-   {type:'reconnected', roomId, yourColor, redUid, blackUid, moves, currentTurn, clock, startedAt}
+   {type:'reconnected', roomId, yourColor, redUid, blackUid, moves, chat, currentTurn, clock, startedAt}
    ```
 7. Broadcast `{type:'peer-reconnected', uid}` cho peer kia
 
@@ -413,9 +413,12 @@ Client splash sync (`cloud_sync_service._mergeCloudIntoLocal`) đã update để
 | `create-room` | `{}` | Authed, chưa trong room | Tạo room mới |
 | `join-room` | `{roomId}` | Authed, chưa trong room | Vào room có sẵn (size < 2) |
 | `reconnect-room` | `{roomId}` | Authed | Step 8: vào lại room đang grace |
+| `spectate-room` | `{roomId}` | Authed, room đang playing | A6: vào xem ván theo room ID; socket vào `room.spectators`, không có quyền move/resign |
+| `stop-spectating` | `{}` | Đang spectate | Rời khỏi danh sách spectator, không ảnh hưởng 2 player |
 | `leave-room` | `{}` | Đang trong room | Rời (nếu đang playing → tương đương disconnect) |
 | `move` | `{uci}` | Đang playing, đúng lượt | Đi 1 nước UCI |
 | `resign` | `{}` | Đang playing | Đầu hàng |
+| `chat-message` | `{text}` | Đang trong room chưa finished | Chat text trong ván. Server trim/collapse whitespace, giới hạn 120 ký tự, rate limit 1.5s/user, lưu tối đa 50 tin trong room memory. |
 | `broadcast` | `{payload}` | Đang trong room | Generic message gửi peer (chưa dùng cho game real) |
 
 ### 9.2. Server → Client
@@ -429,11 +432,16 @@ Client splash sync (`cloud_sync_service._mergeCloudIntoLocal`) đã update để
 | `peer-joined` | `{uid}` | Cho member cũ khi 2nd join |
 | `game-start` | `{roomId, redUid, blackUid, yourColor, clock, startedAt}` | Per-socket khi đủ 2 người |
 | `move-ack` | `{uci, moveNumber, clock}` | Cho người vừa đi |
-| `opponent-move` | `{uci, from, color, moveNumber, clock, ts}` | Cho peer |
+| `opponent-move` | `{uci, from, color, moveNumber, clock, ts}` | Cho peer và spectators |
 | `peer-disconnected` | `{uid, graceMs}` | Khi 1 bên disconnect mid-game |
 | `peer-reconnected` | `{uid}` | Khi player rớt mạng vào lại |
-| `reconnected` | `{roomId, yourColor, redUid, blackUid, moves, currentTurn, clock, startedAt}` | Snapshot cho client vừa reconnect |
+| `reconnected` | `{roomId, yourColor, redUid, blackUid, moves, chat, currentTurn, clock, startedAt}` | Snapshot cho client vừa reconnect, gồm move list và chat history ngắn trong room |
+| `spectate-started` | `{roomId, redUid, blackUid, moves, chat, currentTurn, clock, startedAt, spectatorCount}` | Snapshot cho viewer mới vào xem |
+| `spectate-stopped` | `{roomId}` | Ack stop-spectating cho viewer |
+| `spectator-joined` | `{uid, spectatorCount}` | Broadcast khi có viewer mới |
+| `spectator-left` | `{uid, spectatorCount}` | Broadcast khi viewer rời/đóng socket |
 | `game-ended` | `{roomId, result, reason, moves, startedAt, endedAt, durationMs, clock, redUid, blackUid, elo}` | Cuối ván. `elo` = `{red:{old,new,delta}, black:{old,new,delta}}` hoặc `null` nếu persist fail. `reason` có thể là `checkmate`/`stalemate` (Step 5 auto-detect) hoặc `timeout`/`resign`/`disconnect`. |
+| `chat-message` | `{roomId, id, from, text, ts}` | Khi player/viewer gửi chat hợp lệ; server broadcast lại cho players + spectators, bao gồm sender. |
 | `left-room` | `{roomId}` | Ack leave-room cho người gửi |
 | `peer-left` | `{uid}` | Cho remaining member khi peer rời (lobby) |
 | `peer-message` | `{from, payload, ts}` | Generic broadcast tới peer |
@@ -454,7 +462,10 @@ Client splash sync (`cloud_sync_service._mergeCloudIntoLocal`) đã update để
 | `room-not-found` | RoomId không tồn tại trong `rooms` map |
 | `room-full` | Cố join room đã có 2 người |
 | `already-in-room` | Cố create/join khi đã trong room |
+| `not-spectator` | Gửi `stop-spectating` nhưng socket không phải spectator |
 | `not-in-room` | Cố move/broadcast/resign khi không trong room |
+| `invalid-chat` | Chat rỗng, không phải string, hoặc dài hơn 120 ký tự |
+| `chat-rate-limited` | Gửi chat nhanh hơn 1.5s/tin/user trong cùng room |
 | `no-opponent` | Cố move khi room < 2 người |
 | `invalid-uci` | UCI fail regex |
 | `not-playing` | Cố move khi room không ở status playing |
@@ -463,7 +474,7 @@ Client splash sync (`cloud_sync_service._mergeCloudIntoLocal`) đã update để
 | `illegal-move` | Move không hợp lệ theo luật Xiangqi (Step 5 engine reject) |
 | `engine-missing` | Internal: room.engine null (không nên xảy ra sau startMatch) |
 | `time-out` | (internal) Trả về từ applyMove khi clock cạn — caller xử lý |
-| `game-not-active` | reconnect-room nhưng room.status không phải playing |
+| `game-not-active` | reconnect-room/spectate-room nhưng room.status không phải playing |
 | `not-disconnected-player` | reconnect-room nhưng uid không khớp disconnectedUid |
 
 ### 9.4. Close codes (WebSocket)
@@ -485,10 +496,11 @@ Client splash sync (`cloud_sync_service._mergeCloudIntoLocal`) đã update để
 1. **Sessions map = socket → uid**: 1-1. 1 socket chỉ map 1 uid. Cùng uid có thể có nhiều socket (vd solo test, multi-tab).
 2. **socketToRoom = socket → roomId**: max 1 room per socket.
 3. **`room.members` ⊆ socketToRoom keys**: mọi socket trong members phải có entry trong socketToRoom (cùng roomId).
-4. **`room.status = 'playing'` ⇒ `redSocket` + `blackSocket` + `redUid` + `blackUid` đều set**: thiết lập trong `startMatch`.
-5. **`room.disconnectedUid` set ⇒ `room.disconnectTimer` set**: cả 2 cùng tồn tại hoặc cùng null.
-6. **Color identification dùng socket reference, không phải uid**: cùng uid vẫn distinct 2 sockets (solo test case).
-7. **`leaveRoom(preserveStatus:true)` chỉ remove khỏi maps**: không đổi status, không xóa room. Chỉ dùng trong disconnect-during-game path.
+4. **`room.spectators` tách khỏi `room.members`**: viewers nhận broadcast/snapshot nhưng không tham gia startGame, move, resign, reconnect-loss.
+5. **`room.status = 'playing'` ⇒ `redSocket` + `blackSocket` + `redUid` + `blackUid` đều set**: thiết lập trong `startMatch`.
+6. **`room.disconnectedUid` set ⇒ `room.disconnectTimer` set**: cả 2 cùng tồn tại hoặc cùng null.
+7. **Color identification dùng socket reference, không phải uid**: cùng uid vẫn distinct 2 sockets (solo test case).
+8. **`leaveRoom(preserveStatus:true)` chỉ remove khỏi maps**: không đổi status, không xóa room. Chỉ dùng trong disconnect-during-game path.
 
 ### 10.2. Edge case đã handle
 
@@ -502,16 +514,19 @@ Client splash sync (`cloud_sync_service._mergeCloudIntoLocal`) đã update để
 | Reconnect đúng uid | Snapshot restore moves → resume |
 | Reconnect sai uid | error `not-disconnected-player` |
 | Reconnect quá 60s | Server đã `finishGame(disconnect)` rồi → error `game-not-active` |
+| Spectator xem room đang chơi | Nhận `spectate-started` gồm moves/chat/clock/currentTurn, sau đó nhận move/chat/game-ended broadcast |
+| Spectator gửi move/resign | Bị reject `not-player` vì không có `redSocket`/`blackSocket` |
+| Spectator rời/đóng app | Chỉ remove khỏi `room.spectators`, broadcast `spectator-left`, không đổi trạng thái ván |
 | Cả 2 disconnect đồng thời | `disconnectedUid` bị overwrite bởi người disconnect sau; người trước reconnect sẽ fail. Sprint 12+ refinement. |
 | Server restart giữa ván | Tất cả rooms mất, clients nhận socket close → reconnect attempt fail → user thấy lobby error. Acceptable cho dev. Production cần persistence layer ở backend. |
 
 ### 10.3. Edge case chưa handle (TODO)
 
 - **2 player disconnect cùng lúc**: chỉ track 1 `disconnectedUid`. Cần Map<uid, timer>.
-- **Spectator**: chưa có (Sprint 12 mục A6).
+- **Spectator public discovery**: spectate theo room ID đã có; chưa có danh sách ván đang chơi, invite/share link, moderation cho viewer public.
 - **Server restart graceful**: chưa save room state. Khi restart, ván đang chơi mất.
-- **Chat / emoji trong ván**: Generic `broadcast` đã có khung nhưng UI chưa wire.
-- **ELO update**: chờ Step 5 validate luật + công thức Elo.
+- **Chat / emoji nâng cao**: text chat cơ bản đã có; emoji preset/whitelist, mute/report chưa làm.
+- **Room state persistence**: move/chat history hiện vẫn ở memory, restart backend là mất ván.
 
 ---
 

@@ -17,11 +17,14 @@ class OnlineLobbyScreen extends ConsumerStatefulWidget {
 }
 
 class _OnlineLobbyScreenState extends ConsumerState<OnlineLobbyScreen> {
-  final _urlCtrl = TextEditingController(text: AppConstants.defaultBackendWsUrl);
+  final _urlCtrl = TextEditingController(
+    text: AppConstants.defaultBackendWsUrl,
+  );
   final _roomIdCtrl = TextEditingController();
   bool _busy = false;
   String? _localError;
   bool _reconnectAttempted = false;
+
   /// Step A5: clock per side khi tạo phòng. Default 10 phút.
   int _selectedClockMin = 10;
   static const List<int> _clockOptions = [3, 5, 10, 15, 30];
@@ -88,8 +91,8 @@ class _OnlineLobbyScreenState extends ConsumerState<OnlineLobbyScreen> {
   }
 
   Future<void> _connect() => _run(() async {
-        await _ctrl.connect(_urlCtrl.text.trim());
-      });
+    await _ctrl.connect(_urlCtrl.text.trim());
+  });
 
   void _createRoom() {
     setState(() => _localError = null);
@@ -116,6 +119,16 @@ class _OnlineLobbyScreenState extends ConsumerState<OnlineLobbyScreen> {
     _ctrl.joinRoom(id);
   }
 
+  void _spectateRoom() {
+    final id = _roomIdCtrl.text.trim().toUpperCase();
+    if (id.isEmpty) {
+      setState(() => _localError = 'Nhập room ID');
+      return;
+    }
+    setState(() => _localError = null);
+    _ctrl.spectateRoom(id);
+  }
+
   Future<void> _leave() async {
     await _ctrl.leave();
     if (mounted) context.go(AppConstants.routeCompete);
@@ -125,10 +138,12 @@ class _OnlineLobbyScreenState extends ConsumerState<OnlineLobbyScreen> {
   Widget build(BuildContext context) {
     final state = ref.watch(onlineMatchControllerProvider);
 
-    // Auto-navigate when game starts
+    // Auto-navigate when game starts, or when spectate snapshot arrives.
     ref.listen<OnlineMatchState>(onlineMatchControllerProvider, (prev, next) {
-      if (next.phase == OnlineMatchPhase.playing &&
-          prev?.phase != OnlineMatchPhase.playing) {
+      final enteredBoard =
+          next.phase == OnlineMatchPhase.playing ||
+          next.phase == OnlineMatchPhase.spectating;
+      if (enteredBoard && prev?.phase != next.phase) {
         context.push(AppConstants.routeOnlineGame);
       }
     });
@@ -157,8 +172,7 @@ class _OnlineLobbyScreenState extends ConsumerState<OnlineLobbyScreen> {
                   controller: _urlCtrl,
                   decoration: const InputDecoration(
                     labelText: 'Backend URL',
-                    helperText:
-                        'default từ AppConstants.defaultBackendWsUrl',
+                    helperText: 'default từ AppConstants.defaultBackendWsUrl',
                     prefixIcon: Icon(Icons.link),
                   ),
                 ),
@@ -175,11 +189,13 @@ class _OnlineLobbyScreenState extends ConsumerState<OnlineLobbyScreen> {
                 ),
               ],
               if (state.phase == OnlineMatchPhase.authed) ...[
-                Text('Thời gian mỗi bên',
-                    style: AppTextStyles.captionSm.copyWith(
-                      color: AppColors.parchmentTan,
-                      fontWeight: FontWeight.w700,
-                    )),
+                Text(
+                  'Thời gian mỗi bên',
+                  style: AppTextStyles.captionSm.copyWith(
+                    color: AppColors.parchmentTan,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
                 AppSpacing.vGapXs,
                 Wrap(
                   spacing: 8,
@@ -208,8 +224,10 @@ class _OnlineLobbyScreenState extends ConsumerState<OnlineLobbyScreen> {
                   ),
                 ),
                 AppSpacing.vGapBase,
-                const Text('— hoặc tạo / vào phòng riêng —',
-                    textAlign: TextAlign.center),
+                const Text(
+                  '— hoặc tạo / vào phòng riêng —',
+                  textAlign: TextAlign.center,
+                ),
                 AppSpacing.vGapBase,
                 OutlinedButton.icon(
                   icon: const Icon(Icons.add),
@@ -217,30 +235,40 @@ class _OnlineLobbyScreenState extends ConsumerState<OnlineLobbyScreen> {
                   onPressed: _busy ? null : _createRoom,
                 ),
                 AppSpacing.vGapBase,
-                const Text('— vào phòng có sẵn theo ID —',
-                    textAlign: TextAlign.center),
+                const Text(
+                  '— vào phòng có sẵn theo ID —',
+                  textAlign: TextAlign.center,
+                ),
                 AppSpacing.vGapBase,
+                TextField(
+                  controller: _roomIdCtrl,
+                  textCapitalization: TextCapitalization.characters,
+                  decoration: const InputDecoration(
+                    labelText: 'Room ID',
+                    helperText: '6 ký tự',
+                    prefixIcon: Icon(Icons.meeting_room_outlined),
+                  ),
+                ),
+                AppSpacing.vGapSm,
                 Row(
                   children: [
                     Expanded(
-                      child: TextField(
-                        controller: _roomIdCtrl,
-                        textCapitalization: TextCapitalization.characters,
-                        decoration: const InputDecoration(
-                          labelText: 'Room ID',
-                          helperText: '6 ký tự',
-                          prefixIcon: Icon(Icons.meeting_room_outlined),
+                      child: ElevatedButton.icon(
+                        icon: const Icon(Icons.login),
+                        label: const Text('Vào'),
+                        onPressed: _busy ? null : _joinRoom,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.woodDark,
+                          foregroundColor: Colors.white,
                         ),
                       ),
                     ),
                     AppSpacing.hGapSm,
-                    ElevatedButton.icon(
-                      icon: const Icon(Icons.login),
-                      label: const Text('Vào'),
-                      onPressed: _busy ? null : _joinRoom,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.woodDark,
-                        foregroundColor: Colors.white,
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        icon: const Icon(Icons.visibility_outlined),
+                        label: const Text('Xem'),
+                        onPressed: _busy ? null : _spectateRoom,
                       ),
                     ),
                   ],
@@ -251,10 +279,7 @@ class _OnlineLobbyScreenState extends ConsumerState<OnlineLobbyScreen> {
                 const Center(child: CircularProgressIndicator()),
                 AppSpacing.vGapBase,
                 Center(
-                  child: Text(
-                    'Đang tìm đối thủ…',
-                    style: AppTextStyles.bodyMd,
-                  ),
+                  child: Text('Đang tìm đối thủ…', style: AppTextStyles.bodyMd),
                 ),
                 AppSpacing.vGapBase,
                 Center(
@@ -313,8 +338,9 @@ class _OnlineLobbyScreenState extends ConsumerState<OnlineLobbyScreen> {
                 AppSpacing.vGapBase,
                 Text(
                   _localError!,
-                  style: AppTextStyles.captionSm
-                      .copyWith(color: Colors.redAccent),
+                  style: AppTextStyles.captionSm.copyWith(
+                    color: Colors.redAccent,
+                  ),
                 ),
               ],
               const Spacer(),
@@ -340,15 +366,56 @@ class _PhaseBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final (label, color, icon) = switch (phase) {
-      OnlineMatchPhase.idle => ('Chưa kết nối', AppColors.parchmentTan, Icons.cloud_off),
-      OnlineMatchPhase.connecting => ('Đang kết nối…', AppColors.parchmentTan, Icons.sync),
-      OnlineMatchPhase.authed => ('Đã đăng nhập, sẵn sàng', AppColors.tealSuccess, Icons.check_circle),
-      OnlineMatchPhase.matching => ('Đang tìm đối thủ…', AppColors.accentGold, Icons.search),
-      OnlineMatchPhase.waitingForPeer => ('Phòng ${roomId ?? "?"} — chờ đối thủ', AppColors.accentGold, Icons.hourglass_top),
-      OnlineMatchPhase.playing => ('Đang đánh', AppColors.tealSuccess, Icons.sports_esports),
-      OnlineMatchPhase.peerDisconnected => ('Đối thủ mất kết nối — chờ reconnect…', AppColors.accentGold, Icons.wifi_off),
-      OnlineMatchPhase.reconnecting => ('Đang reconnect vào ván cũ…', AppColors.accentGold, Icons.refresh),
-      OnlineMatchPhase.ended => ('Ván kết thúc', AppColors.parchmentTan, Icons.flag),
+      OnlineMatchPhase.idle => (
+        'Chưa kết nối',
+        AppColors.parchmentTan,
+        Icons.cloud_off,
+      ),
+      OnlineMatchPhase.connecting => (
+        'Đang kết nối…',
+        AppColors.parchmentTan,
+        Icons.sync,
+      ),
+      OnlineMatchPhase.authed => (
+        'Đã đăng nhập, sẵn sàng',
+        AppColors.tealSuccess,
+        Icons.check_circle,
+      ),
+      OnlineMatchPhase.matching => (
+        'Đang tìm đối thủ…',
+        AppColors.accentGold,
+        Icons.search,
+      ),
+      OnlineMatchPhase.waitingForPeer => (
+        'Phòng ${roomId ?? "?"} — chờ đối thủ',
+        AppColors.accentGold,
+        Icons.hourglass_top,
+      ),
+      OnlineMatchPhase.playing => (
+        'Đang đánh',
+        AppColors.tealSuccess,
+        Icons.sports_esports,
+      ),
+      OnlineMatchPhase.spectating => (
+        'Đang xem phòng ${roomId ?? "?"}',
+        AppColors.tealSuccess,
+        Icons.visibility,
+      ),
+      OnlineMatchPhase.peerDisconnected => (
+        'Đối thủ mất kết nối — chờ reconnect…',
+        AppColors.accentGold,
+        Icons.wifi_off,
+      ),
+      OnlineMatchPhase.reconnecting => (
+        'Đang reconnect vào ván cũ…',
+        AppColors.accentGold,
+        Icons.refresh,
+      ),
+      OnlineMatchPhase.ended => (
+        'Ván kết thúc',
+        AppColors.parchmentTan,
+        Icons.flag,
+      ),
       OnlineMatchPhase.error => ('Lỗi', Colors.redAccent, Icons.error),
     };
     return Container(
@@ -363,7 +430,10 @@ class _PhaseBadge extends StatelessWidget {
           Icon(icon, color: color, size: 20),
           const SizedBox(width: 8),
           Expanded(
-            child: Text(label, style: AppTextStyles.bodyMd.copyWith(color: color)),
+            child: Text(
+              label,
+              style: AppTextStyles.bodyMd.copyWith(color: color),
+            ),
           ),
         ],
       ),

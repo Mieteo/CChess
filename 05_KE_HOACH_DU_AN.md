@@ -1,6 +1,6 @@
 # 📊 KẾ HOẠCH & TIẾN ĐỘ DỰ ÁN — CChess
 
-> Tài liệu sống — cập nhật ngày **2026-05-21** sau commit `040e895` (Backend Step 2 auth handshake).
+> Tài liệu sống — cập nhật ngày **2026-05-31** sau Sprint 12 group 1 polish + A5 chat cơ bản + A6 Spectate cơ bản.
 > Mục đích: tổng kết **đã làm**, **chưa làm**, **đang chờ phụ thuộc** theo từng Sprint.
 > Tham chiếu chéo: [`01_FEATURE_SPECIFICATION.md`](01_FEATURE_SPECIFICATION.md), [`02_PROMPT_UI_UX.md`](02_PROMPT_UI_UX.md), [`03_PROMPT_FEATURES_ROADMAP.md`](03_PROMPT_FEATURES_ROADMAP.md), [`07_HUONG_DAN_THIET_LAP_FIREBASE.md`](07_HUONG_DAN_THIET_LAP_FIREBASE.md), [`08_HUONG_DAN_BACKEND_WEBSOCKET.md`](08_HUONG_DAN_BACKEND_WEBSOCKET.md), [`09_BACKEND_SERVER_HOAT_DONG.md`](09_BACKEND_SERVER_HOAT_DONG.md).
 
@@ -35,7 +35,7 @@
 | 9 | Game History + Replay AI | 🟢 | Local Hive + push `game_records` lên cloud subcollection ✓; backend cũng ghi mirror record có ELO change cho ván ranked |
 | 10 | Achievements + Daily Quests | 🟢 | Engine + UI xong, chờ Cloud Functions trigger server-side khi ván ranked đạt mốc |
 | 11 | Opening Library (Khai cuộc Đại sư) | 🟢 | Seed cứng 5 khai cuộc, chờ CMS |
-| 12 | Online Matchmaking + Spectate (A1, A6) | 🟡 | **A1 Ranked done** (matchmaking FIFO + per-room clock + ELO + reconnect + deploy production); A6 Spectate chưa làm |
+| 12 | Online Matchmaking + Spectate (A1, A5, A6) | 🟡 | **A1 Ranked done**; **A5 chat cơ bản done**; **A6 Spectate cơ bản done**; còn polish/test tự động |
 | 13 | Cờ Úp + Cờ Casual (A3, A2) | 🔒 | Chờ engine variant + invite-by-link flow |
 | 14 | Community (Bạn bè, Leaderboard, CLB) | 🔒 | Chờ S12 |
 | 15 | AI Coach (B3) + AI Replay nâng cao (B5) | ⬜ | Cần Pikafish FFI |
@@ -45,8 +45,8 @@
 
 > **Trục thời gian cập nhật (cuối 5/2026):**
 > - Sprint 8 hoàn thành 3 lát: 8a (Firebase Auth + Firestore + rules deployed), 8b (sync local↔cloud + Cloud Functions deployed Blaze), 8c (backend Node.js WebSocket production-deployed Render).
-> - **Sprint 12 phase 1 A1 hoàn thành 2026-05-24**: matchmaking FIFO + per-room clock (3/5/10/15/30 phút) + Xiangqi rule validation server-side + ELO Elo K=32 + reconnect grace 60s + Firestore persistence mirror records. Verified ván 10 phút giữa 2 thiết bị Android thật qua Internet (Render free tier endpoint).
-> - Sprint 9–11 đã unblock (cloud sync chạy). Sprint 12 phase 2 (Spectate A6, Chat A5, ELO bucket matchmaking) chưa làm.
+> - **Sprint 12 phase 1 A1 hoàn thành 2026-05-24**: matchmaking tự động + per-room clock (3/5/10/15/30 phút) + Xiangqi rule validation server-side + ELO Elo K=32 + reconnect grace 60s + Firestore persistence mirror records. Verified ván 10 phút giữa 2 thiết bị Android thật qua Internet (Render free tier endpoint). Group 1 polish 2026-05-31 đã nâng matchmaking lên ELO bucket/tolerance.
+> - Sprint 9–11 đã unblock (cloud sync chạy). Sprint 12 group 1 polish đã xong 2026-05-31: ELO bucket matchmaking, rollback khi server reject move, profile auto-refresh sau game-ended. Sprint 12 phase 2 đã có A5 chat text và A6 Spectate cơ bản theo room ID.
 
 ---
 
@@ -165,22 +165,21 @@
 
 ---
 
-### 🟡 Sprint 8c — Backend WebSocket scaffold
+### ✅ Sprint 8c — Backend WebSocket scaffold
 **Đã làm:**
 - Project mới: [`cchess-backend/`](cchess-backend/) — Node 20 + TypeScript + `ws` + `firebase-admin`.
 - **Step 1** echo server: [server.ts](cchess-backend/src/server.ts) ✓ verified.
 - **Step 2** auth handshake: [auth.ts](cchess-backend/src/auth.ts) — verify Firebase ID token, gắn `uid` vào socket, 10s timeout ✓ verified (Android phone qua LAN + Firebase Admin SDK).
 - **Step 3** rooms: [rooms.ts](cchess-backend/src/rooms.ts) — create/join/leave/broadcast với 6-ký-tự roomId, auto-cleanup on disconnect ✓ verified E2E (Flutter phone + Chrome console cùng PC, cả 2 hướng broadcast + peer-left khi đóng tab).
 - **Step 4** move transport: server.ts handler `move` → UCI regex `^[a-i][0-9][a-i][0-9]$` + room đủ 2 người + forward sang peer kèm `moveNumber` tăng dần ✓ verified E2E.
-- **Step 6** clock + game lifecycle: [match.ts](cchess-backend/src/match.ts) — 30s per side (testing), `game-start` khi đủ 2 người, turn validation theo socket reference (không phải uid — hỗ trợ solo-test 1 user 2 socket), per-second timer kiểm tra timeout, `resign` message, disconnect = thua. ✓ verified E2E.
-- **Step 7** persistence: [persistence.ts](cchess-backend/src/persistence.ts) — Admin SDK ghi 2 record mirror vào `users/{redUid}/game_records/{gameId}` và `users/{blackUid}/game_records/{gameId}` mỗi khi game-ended. ✓ verified E2E.
-- Flutter client: [game_socket_service.dart](cchess/lib/data/services/game_socket_service.dart) + [backend_test_screen.dart](cchess/lib/presentation/cloud/backend_test_screen.dart) (debug-only). UI compact với log Expanded; `_safeAdd` guard chống "Cannot add event after closing" race condition; nút Move + Resign.
+- **Step 5** move validation server-side: TypeScript Xiangqi engine port từ Dart, reject `illegal-move`, auto-finish checkmate/stalemate.
+- **Step 6** clock + game lifecycle: [match.ts](cchess-backend/src/match.ts) — clock theo lựa chọn lobby, `game-start` khi đủ 2 người, turn validation theo socket reference, timeout/resign/disconnect. ✓ verified E2E.
+- **Step 7** persistence + ELO: [persistence.ts](cchess-backend/src/persistence.ts) — Admin SDK ghi 2 record mirror, update `eloChess` + counters trong transaction.
+- **Step 8** reconnect: grace 60s, `reconnect-room`, snapshot move/chat, peer-disconnect banner.
+- **Deploy**: Render production endpoint `https://cchess-backend.onrender.com`; client dùng `wss://...` qua `CCHESS_BACKEND_URL`.
+- Flutter client: [game_socket_service.dart](cchess/lib/data/services/game_socket_service.dart), [online_lobby_screen.dart](cchess/lib/presentation/online/online_lobby_screen.dart), [online_game_screen.dart](cchess/lib/presentation/online/online_game_screen.dart), [online_match_controller.dart](cchess/lib/presentation/online/online_match_controller.dart).
 
-**Chưa làm:**
-- Step 5 move validation server-side (deferred per Path C — port Xiangqi rules khi cần Sprint 14 ranked).
-- Step 8 reconnect (grace period khi mạng chập chờn).
-- Wire backend vào GameScreen thật (thay thế UI Backend Test debug bằng game flow online thật).
-- Production hosting (Render/Railway/Fly.io). Hiện chỉ localhost.
+**Chưa làm:** server restart graceful / room persistence backend, double-disconnect refinement, test tự động online flow.
 
 ---
 
@@ -228,7 +227,7 @@
 **Phase 1 hoàn thành 2026-05-24** (A1 Cờ Tướng Online Ranked):
 - ✅ Step 1-8 backend (echo + auth + rooms + move transport + clock + reconnect + persistence)
 - ✅ Step 5 Xiangqi rule validation server-side (engine port từ Dart sang TypeScript)
-- ✅ Matchmaking FIFO queue
+- ✅ Matchmaking ELO bucket/tolerance queue
 - ✅ Per-room clock config (3/5/10/15/30 phút) chọn từ lobby
 - ✅ ELO tính chuẩn Elo K=32, ghi cloud cùng game_records mirror cho cả 2 player
 - ✅ Reconnect grace 60s sau disconnect, snapshot phục hồi
@@ -236,11 +235,11 @@
 - ✅ Verified ván 10 phút giữa 2 phone Android thật qua Internet (Mieteo/CChess repo)
 
 **Phase 2 còn lại**:
-- A6 Spectate mode — viewer cũng join WS room, không có quyền move
-- A5 Chat in-game — wire UI `game_action_bar.dart` vào generic `broadcast` channel
-- ELO bucket-based matchmaking (hiện FIFO purely; cần widen tolerance theo wait time)
+- ✅ A6 Spectate cơ bản — viewer join bằng room ID, nhận snapshot moves/chat/clock, xem board read-only, không có quyền move/resign
+- A6 polish — public room list / share link / spectator UX nâng cao nếu mở cộng đồng
+- A5 Chat polish — đã có `chat-message` protocol + UI bottom sheet + rate limit; còn emoji whitelist/preset nhanh nếu cần
 - Render free tier ngủ sau 15 phút → upgrade Starter $7/tháng khi launch thật
-- Client polish: undo on `illegal-move` reject, Profile auto-refresh ELO sau game-ended (hiện cần cold restart)
+- Online hardening: double-disconnect, graceful server restart, test tự động cho reconnect/chat
 
 ### 🔒 Sprint 13 — Biến thể: Cờ Úp (A3), Cờ Casual (A2) (cần S12)
 - Engine biến thể Cờ Úp (random úp quân, mở khi đi nước đầu của quân đó).
@@ -283,8 +282,8 @@
 | A1 | Cờ Tướng Online Ranked | ✅ | **MVP done 2026-05-24** — matchmaking, ELO, ranked verified prod Render |
 | A2 | Cờ Casual + mời bạn | 🔒 | 13 |
 | A3 | Cờ Úp | 🔒 | 13 |
-| A5 | Chat + emoji + AI hint trong ván | 🟡 | UI có khung, generic broadcast channel sẵn ở backend |
-| A6 | Spectate | 🟡 | Phase 2 — cần `spectate-room` handler + viewer protocol |
+| A5 | Chat + emoji + AI hint trong ván | 🟡 | Chat text cơ bản done — `chat-message` WS + bottom sheet; emoji/AI hint còn lại |
+| A6 | Spectate | 🟡 | Phase 2 — cơ bản done với `spectate-room`/`stop-spectating`, read-only board; còn public room list/share link |
 | A7 | Đấu Bot AI | ✅ | 5 |
 | B1 | Khóa học vỡ lòng | 🟡 | UI placeholder, content chưa có |
 | B2 | Khóa học video | ⬜ | sau S15 |
@@ -329,18 +328,15 @@
 
 ### 7.1. Polish ngắn (1-3 giờ mỗi item) — củng cố A1 trước khi mở rộng
 
-1. **Client undo on `illegal-move` reject** — khi server từ chối move (hacker hoặc bug client), client phải rollback `XiangqiGame` về trước móve để state không lệch. Hiện chỉ log error.
-2. **Profile auto-refresh sau game-ended** — gọi `CloudSyncService.refresh()` (cần thêm method) để user thấy ELO mới ngay, không phải cold restart app.
-3. **ELO bucket matchmaking** — thay FIFO purely bằng grouping ±100 ELO + widen tolerance theo thời gian chờ. Tránh chenh lệch ELO quá lớn.
-4. **Tests cho online flow** — unit test `OnlineMatchController` (mock socket events), integration test backend `match.ts` apply move + clock + reconnect.
-5. **Render upgrade Starter** ($7/tháng) — bỏ sleep 15 phút, lúc nào có user thật phải bỏ.
+1. **Tests cho online flow** — unit test `OnlineMatchController` (mock socket events), integration test backend `match.ts` apply move + clock + reconnect + chat.
+2. **Render upgrade Starter** ($7/tháng) — bỏ sleep 15 phút, lúc nào có user thật phải bỏ.
 
 ### 7.2. Sprint 12 phase 2 (2-3 tuần) — hoàn thiện online
 
-6. **A6 Spectate mode** — viewer message types (`spectate-room`/`stop-spectating`), view-only payload (game state + clock, không có move quyền), UI riêng để xem ván người khác.
-7. **A5 Chat in-game** — wire `game_action_bar.dart` (UI có sẵn) vào generic `broadcast` channel; thêm rate limit + emoji whitelist.
-8. **Push notification "tới lượt bạn"** — khi user background app + đến lượt, send FCM message tới device. Cần backend wire Cloud Messaging + client `firebase_messaging` setup.
-9. **Friends list (C1) — Sprint 14 prep** — Firestore schema `friendships`, sync presence (online/offline via Realtime Database).
+3. **A6 Spectate polish** — public room list/share link, spectator count UI rõ hơn, test tự động cho quyền read-only.
+4. **A5 Chat polish** — emoji preset/whitelist, mute/report sau này nếu mở public.
+5. **Push notification "tới lượt bạn"** — khi user background app + đến lượt, send FCM message tới device. Cần backend wire Cloud Messaging + client `firebase_messaging` setup.
+6. **Friends list (C1) — Sprint 14 prep** — Firestore schema `friendships`, sync presence (online/offline via Realtime Database).
 
 ### 7.3. Sprint 13 (1-2 tuần) — biến thể game
 
@@ -356,4 +352,4 @@
 
 ---
 
-*Cập nhật bởi Claude Code 2026-05-24 sau khi A1 Ranked MVP deploy production Render verified ván thật. Commits chính: Sprint 12 phase 1 (online lobby/game), Step 5 engine port, ELO calc, matchmaking, deploy prep. Lần cập nhật kế tiếp đề xuất: sau khi hoàn thành phase 2 (Spectate + Chat) hoặc khi quyết định start Sprint 13 Cờ Úp.*
+*Cập nhật 2026-05-31 sau khi A1 Ranked đã test thật, group 1 polish đã merge, A5 chat text và A6 Spectate cơ bản được triển khai. Lần cập nhật kế tiếp đề xuất: sau A6 polish/public room list hoặc khi chốt Sprint 13 Cờ Úp/Casual.*

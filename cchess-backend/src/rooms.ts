@@ -9,9 +9,18 @@ export type EndReason =
   | 'stalemate';
 export type GameResult = 'red-win' | 'black-win' | 'draw';
 
+export interface ChatMessage {
+  id: string;
+  from: string;
+  text: string;
+  ts: number;
+}
+
 export interface Room {
   id: string;
+  // Two player sockets only. Spectators are tracked separately.
   members: Set<WebSocket>;
+  spectators: Set<WebSocket>;
   status: 'waiting' | 'playing' | 'finished';
   createdAt: number;
   moveCount: number;
@@ -43,6 +52,10 @@ export interface Room {
   // Step 8 reconnect grace period.
   disconnectedUid?: string;
   disconnectTimer?: NodeJS.Timeout;
+
+  // Sprint 12 A5: short in-memory chat history for reconnect/session UI.
+  chatMessages?: ChatMessage[];
+  lastChatAtByUid?: Record<string, number>;
 }
 
 const rooms = new Map<string, Room>();
@@ -86,14 +99,34 @@ export function attachReconnectingSocket(
   else if (uid === room.blackUid) room.blackSocket = socket;
 }
 
+export type SpectateResult =
+  | { ok: true; room: Room }
+  | {
+      ok: false;
+      code: 'room-not-found' | 'already-in-room' | 'game-not-active';
+    };
+
+export function spectateRoom(socket: WebSocket, roomId: string): SpectateResult {
+  if (socketToRoom.has(socket)) return { ok: false, code: 'already-in-room' };
+  const room = rooms.get(roomId);
+  if (!room) return { ok: false, code: 'room-not-found' };
+  if (room.status !== 'playing') return { ok: false, code: 'game-not-active' };
+  room.spectators.add(socket);
+  socketToRoom.set(socket, room.id);
+  return { ok: true, room };
+}
+
 export function createRoom(socket: WebSocket, options?: { initialClockMs?: number }): Room {
   const room: Room = {
     id: generateRoomId(),
     members: new Set([socket]),
+    spectators: new Set(),
     status: 'waiting',
     createdAt: Date.now(),
     moveCount: 0,
     initialClockMs: options?.initialClockMs,
+    chatMessages: [],
+    lastChatAtByUid: {},
   };
   rooms.set(room.id, room);
   socketToRoom.set(socket, room.id);
@@ -135,17 +168,28 @@ export function leaveRoom(
     socketToRoom.delete(socket);
     return undefined;
   }
+  const wasSpectator = room.spectators.delete(socket);
+  if (wasSpectator) {
+    socketToRoom.delete(socket);
+    if (room.members.size === 0 && room.spectators.size === 0) {
+      rooms.delete(room.id);
+    }
+    return room;
+  }
   room.members.delete(socket);
   socketToRoom.delete(socket);
   if (options?.preserveStatus) {
     return room;
   }
-  if (room.members.size === 0) {
+  if (room.members.size === 0 && room.spectators.size === 0) {
     rooms.delete(room.id);
     return room;
   }
-  room.status = 'waiting';
   return room;
+}
+
+export function isSpectator(room: Room, socket: WebSocket): boolean {
+  return room.spectators.has(socket);
 }
 
 export function membersOf(room: Room, uidLookup: (s: WebSocket) => string | undefined): string[] {

@@ -26,6 +26,7 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
   Position? _selected;
   List<Position> _validTargets = const [];
   Timer? _countdownTimer;
+  final _chatCtrl = TextEditingController();
 
   OnlineMatchController get _ctrl =>
       ref.read(onlineMatchControllerProvider.notifier);
@@ -39,6 +40,7 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
   @override
   void dispose() {
     _countdownTimer?.cancel();
+    _chatCtrl.dispose();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -163,30 +165,67 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
       if (next.phase == OnlineMatchPhase.ended &&
           prev?.phase != OnlineMatchPhase.ended) {
         _showResultDialog(next);
-        // Step Group-1 polish: ELO + win/loss counters đã update trên cloud,
-        // pull về local để Profile screen hiển thị ngay sau dialog dismiss.
-        () async {
-          await ref.read(cloudSyncServiceProvider).refreshFromCloud();
-          if (mounted) {
-            await ref.read(profileControllerProvider.notifier).refresh();
-          }
-        }();
+        if (next.myColor != null) {
+          // Step Group-1 polish: ELO + win/loss counters đã update trên cloud,
+          // pull về local để Profile screen hiển thị ngay sau dialog dismiss.
+          () async {
+            await ref.read(cloudSyncServiceProvider).refreshFromCloud();
+            if (mounted) {
+              await ref.read(profileControllerProvider.notifier).refresh();
+            }
+          }();
+        }
       }
     });
 
     final game = state.game;
-    final flipped = state.myColor == PieceColor.black;
+    final isSpectating = state.isSpectating;
+    final flipped = !isSpectating && state.myColor == PieceColor.black;
     final checkedKing = _findCheckedKing(game);
+    final topColor = isSpectating
+        ? PieceColor.black
+        : (state.myColor == PieceColor.red ? PieceColor.black : PieceColor.red);
+    final bottomColor = isSpectating
+        ? PieceColor.red
+        : (state.myColor ?? PieceColor.red);
+    final topLabel = isSpectating
+        ? 'Đen ${_shortUid(state.blackUid)}'
+        : (state.opponentUid != null
+              ? _shortUid(state.opponentUid)
+              : 'Đối thủ');
+    final bottomLabel = isSpectating ? 'Đỏ ${_shortUid(state.redUid)}' : 'Bạn';
 
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
         backgroundColor: AppColors.woodDark,
-        title: Text('Online ${state.roomId ?? ""}'),
+        title: Text(
+          isSpectating
+              ? 'Xem ván ${state.roomId ?? ""}'
+              : 'Online ${state.roomId ?? ""}',
+        ),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
-          onPressed: () => context.go(AppConstants.routeCompete),
+          onPressed: () async {
+            if (isSpectating) {
+              await _ctrl.leave();
+            }
+            if (context.mounted) context.go(AppConstants.routeCompete);
+          },
         ),
+        actions: [
+          if (isSpectating)
+            Padding(
+              padding: const EdgeInsets.only(right: AppSpacing.sm),
+              child: Row(
+                children: [
+                  const Icon(Icons.visibility_outlined, size: 18),
+                  const SizedBox(width: 4),
+                  Text('${state.spectatorCount}'),
+                ],
+              ),
+            ),
+        ],
       ),
       body: SafeArea(
         child: Padding(
@@ -194,17 +233,12 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
           child: Column(
             children: [
               _PlayerStrip(
-                label: state.opponentUid != null
-                    ? state.opponentUid!.substring(0, 8)
-                    : 'Đối thủ',
-                color: state.myColor == PieceColor.red
-                    ? PieceColor.black
-                    : PieceColor.red,
-                clockMs: state.myColor == PieceColor.red
-                    ? state.blackClockMs
-                    : state.redClockMs,
-                isMyTurn: state.currentTurn != null &&
-                    state.currentTurn != state.myColor,
+                label: topLabel,
+                color: topColor,
+                clockMs: topColor == PieceColor.red
+                    ? state.redClockMs
+                    : state.blackClockMs,
+                isMyTurn: state.currentTurn == topColor,
               ),
               AppSpacing.vGapSm,
               if (game != null)
@@ -228,68 +262,88 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
                 ),
               AppSpacing.vGapSm,
               _PlayerStrip(
-                label: 'Bạn',
-                color: state.myColor ?? PieceColor.red,
-                clockMs: state.myColor == PieceColor.red
+                label: bottomLabel,
+                color: bottomColor,
+                clockMs: bottomColor == PieceColor.red
                     ? state.redClockMs
                     : state.blackClockMs,
-                isMyTurn: state.isMyTurn,
+                isMyTurn: state.currentTurn == bottomColor,
               ),
               AppSpacing.vGapSm,
               Row(
                 children: [
                   Expanded(
                     child: OutlinedButton.icon(
-                      icon: const Icon(Icons.flag_outlined),
-                      label: const Text('Xin thua'),
-                      onPressed: state.isPlaying ? _confirmResign : null,
+                      icon: const Icon(Icons.chat_bubble_outline),
+                      label: Text(
+                        'Chat${state.chatMessages.isNotEmpty ? " (${state.chatMessages.length})" : ""}',
+                      ),
+                      onPressed: state.canChat ? _showChatSheet : null,
                     ),
                   ),
+                  if (!isSpectating) ...[
+                    AppSpacing.hGapSm,
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        icon: const Icon(Icons.flag_outlined),
+                        label: const Text('Xin thua'),
+                        onPressed: state.isPlaying ? _confirmResign : null,
+                      ),
+                    ),
+                  ],
                 ],
               ),
               if (state.phase == OnlineMatchPhase.peerDisconnected) ...[
                 AppSpacing.vGapSm,
-                Builder(builder: (_) {
-                  final sec = _remainingGraceSec(state);
-                  final String label;
-                  if (sec == null) {
-                    label = 'Đối thủ mất kết nối — chờ reconnect…';
-                  } else if (sec > 0) {
-                    label = 'Đối thủ mất kết nối — còn ${sec}s để reconnect';
-                  } else {
-                    // Local countdown finished; server's grace timer fires
-                    // ~ within seconds. Avoid showing a stale "0s".
-                    label = 'Hết thời gian chờ — đang xác nhận kết quả…';
-                  }
-                  return Container(
-                    padding: const EdgeInsets.all(AppSpacing.sm),
-                    decoration: BoxDecoration(
-                      color: AppColors.accentGold.withValues(alpha: 0.18),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: AppColors.accentGold),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.wifi_off,
-                            size: 16, color: AppColors.accentGold),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            label,
-                            style: AppTextStyles.captionSm
-                                .copyWith(color: AppColors.accentGold),
+                Builder(
+                  builder: (_) {
+                    final sec = _remainingGraceSec(state);
+                    final String label;
+                    if (sec == null) {
+                      label = 'Đối thủ mất kết nối — chờ reconnect…';
+                    } else if (sec > 0) {
+                      label = 'Đối thủ mất kết nối — còn ${sec}s để reconnect';
+                    } else {
+                      // Local countdown finished; server's grace timer fires
+                      // ~ within seconds. Avoid showing a stale "0s".
+                      label = 'Hết thời gian chờ — đang xác nhận kết quả…';
+                    }
+                    return Container(
+                      padding: const EdgeInsets.all(AppSpacing.sm),
+                      decoration: BoxDecoration(
+                        color: AppColors.accentGold.withValues(alpha: 0.18),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: AppColors.accentGold),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(
+                            Icons.wifi_off,
+                            size: 16,
+                            color: AppColors.accentGold,
                           ),
-                        ),
-                      ],
-                    ),
-                  );
-                }),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              label,
+                              style: AppTextStyles.captionSm.copyWith(
+                                color: AppColors.accentGold,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
               ],
               if (state.errorMessage != null) ...[
                 AppSpacing.vGapSm,
                 Text(
                   state.errorMessage!,
-                  style: AppTextStyles.captionSm.copyWith(color: Colors.redAccent),
+                  style: AppTextStyles.captionSm.copyWith(
+                    color: Colors.redAccent,
+                  ),
                 ),
               ],
             ],
@@ -312,17 +366,138 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
     return null;
   }
 
+  String _shortUid(String? uid) {
+    if (uid == null || uid.isEmpty) return '—';
+    return uid.length > 8 ? uid.substring(0, 8) : uid;
+  }
+
+  void _showChatSheet() {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.surfaceContainerHigh,
+      builder: (ctx) {
+        return Consumer(
+          builder: (ctx, ref, _) {
+            final state = ref.watch(onlineMatchControllerProvider);
+            final bottomInset = MediaQuery.of(ctx).viewInsets.bottom;
+            return Padding(
+              padding: EdgeInsets.only(bottom: bottomInset),
+              child: SafeArea(
+                child: FractionallySizedBox(
+                  heightFactor: 0.62,
+                  child: Padding(
+                    padding: const EdgeInsets.all(AppSpacing.base),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Row(
+                          children: [
+                            Text(
+                              'Chat ván đấu',
+                              style: AppTextStyles.headingMd,
+                            ),
+                            const Spacer(),
+                            IconButton(
+                              icon: const Icon(Icons.close),
+                              onPressed: () => Navigator.pop(ctx),
+                            ),
+                          ],
+                        ),
+                        AppSpacing.vGapSm,
+                        Expanded(
+                          child: state.chatMessages.isEmpty
+                              ? Center(
+                                  child: Text(
+                                    'Chưa có tin nhắn',
+                                    style: AppTextStyles.captionSm.copyWith(
+                                      color: AppColors.onSurfaceVariant,
+                                    ),
+                                  ),
+                                )
+                              : ListView.separated(
+                                  reverse: true,
+                                  itemCount: state.chatMessages.length,
+                                  separatorBuilder: (context, _) =>
+                                      AppSpacing.vGapXs,
+                                  itemBuilder: (context, index) {
+                                    final message =
+                                        state.chatMessages[state
+                                                .chatMessages
+                                                .length -
+                                            1 -
+                                            index];
+                                    final isMine =
+                                        message.fromUid == state.myUid;
+                                    return _ChatBubble(
+                                      message: message,
+                                      isMine: isMine,
+                                    );
+                                  },
+                                ),
+                        ),
+                        AppSpacing.vGapSm,
+                        Row(
+                          children: [
+                            Expanded(
+                              child: TextField(
+                                controller: _chatCtrl,
+                                maxLength: 120,
+                                minLines: 1,
+                                maxLines: 3,
+                                textInputAction: TextInputAction.send,
+                                decoration: const InputDecoration(
+                                  hintText: 'Nhắn trong ván...',
+                                  counterText: '',
+                                  prefixIcon: Icon(Icons.chat_outlined),
+                                ),
+                                onSubmitted: (_) => _sendChatMessage(),
+                              ),
+                            ),
+                            AppSpacing.hGapSm,
+                            IconButton.filled(
+                              icon: const Icon(Icons.send),
+                              onPressed: state.canChat
+                                  ? _sendChatMessage
+                                  : null,
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _sendChatMessage() {
+    final text = _chatCtrl.text;
+    _ctrl.sendChatMessage(text);
+    _chatCtrl.clear();
+  }
+
   Future<void> _showResultDialog(OnlineMatchState state) async {
     final myColor = state.myColor;
     String title;
     if (state.result == 'draw') {
       title = 'Hòa';
     } else if (myColor != null) {
-      final iWon = (state.result == 'red-win' && myColor == PieceColor.red) ||
+      final iWon =
+          (state.result == 'red-win' && myColor == PieceColor.red) ||
           (state.result == 'black-win' && myColor == PieceColor.black);
       title = iWon ? 'Bạn thắng!' : 'Bạn thua';
     } else {
-      title = 'Kết quả: ${state.result}';
+      title = switch (state.result) {
+        'red-win' => 'Đỏ thắng',
+        'black-win' => 'Đen thắng',
+        'draw' => 'Hòa',
+        _ => 'Kết quả: ${state.result}',
+      };
     }
 
     // Step A2: extract my-side ELO change if available
@@ -363,6 +538,9 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
       }
     }
 
+    final resultContent = <Widget>[Text('Lý do: ${state.endReason ?? "—"}')];
+    if (eloWidget != null) resultContent.add(eloWidget);
+
     await showDialog<void>(
       context: context,
       barrierDismissible: false,
@@ -371,10 +549,7 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Lý do: ${state.endReason ?? "—"}'),
-            if (eloWidget != null) eloWidget,
-          ],
+          children: resultContent,
         ),
         actions: [
           TextButton(
@@ -413,8 +588,9 @@ class _PlayerStrip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final accent =
-        color == PieceColor.red ? AppColors.vermilionRed : AppColors.inkBlack;
+    final accent = color == PieceColor.red
+        ? AppColors.vermilionRed
+        : AppColors.inkBlack;
     return Container(
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.base,
@@ -447,6 +623,73 @@ class _PlayerStrip extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _ChatBubble extends StatelessWidget {
+  const _ChatBubble({required this.message, required this.isMine});
+
+  final OnlineChatMessage message;
+  final bool isMine;
+
+  String _timeLabel(int ms) {
+    final dt = DateTime.fromMillisecondsSinceEpoch(ms);
+    final hh = dt.hour.toString().padLeft(2, '0');
+    final mm = dt.minute.toString().padLeft(2, '0');
+    return '$hh:$mm';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bg = isMine
+        ? AppColors.accentGold.withValues(alpha: 0.22)
+        : AppColors.surfaceContainer;
+    final border = isMine ? AppColors.accentGold : AppColors.outlineVariant;
+    final align = isMine ? CrossAxisAlignment.end : CrossAxisAlignment.start;
+    final shortUid = message.fromUid.length > 8
+        ? message.fromUid.substring(0, 8)
+        : message.fromUid;
+
+    return Column(
+      crossAxisAlignment: align,
+      children: [
+        Container(
+          constraints: const BoxConstraints(maxWidth: 280),
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.sm,
+            vertical: AppSpacing.xs,
+          ),
+          decoration: BoxDecoration(
+            color: bg,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: border.withValues(alpha: 0.65)),
+          ),
+          child: Column(
+            crossAxisAlignment: align,
+            children: [
+              Text(
+                isMine ? 'Bạn' : shortUid,
+                style: AppTextStyles.captionSm.copyWith(
+                  color: isMine
+                      ? AppColors.accentGold
+                      : AppColors.onSurfaceVariant,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(message.text, style: AppTextStyles.bodyMd),
+              const SizedBox(height: 2),
+              Text(
+                _timeLabel(message.sentAtMs),
+                style: AppTextStyles.captionSm.copyWith(
+                  color: AppColors.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }

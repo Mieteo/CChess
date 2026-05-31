@@ -56,9 +56,7 @@ class ChessBoard extends StatelessWidget {
           },
           child: Stack(
             children: [
-              Positioned.fill(
-                child: CustomPaint(painter: BoardPainter()),
-              ),
+              Positioned.fill(child: CustomPaint(painter: BoardPainter())),
               if (lastMove != null) ...[
                 _intersectionMarker(
                   size,
@@ -91,8 +89,7 @@ class ChessBoard extends StatelessWidget {
                     diameter: pieceSize,
                     selected: selected == pos,
                     inCheck: checkedKing == pos,
-                    lastMoveHighlight:
-                        lastMove != null && lastMove!.to == pos,
+                    lastMoveHighlight: lastMove != null && lastMove!.to == pos,
                   ),
                   animateMove: lastMove != null && lastMove!.to == pos,
                 ),
@@ -101,11 +98,6 @@ class ChessBoard extends StatelessWidget {
         );
       },
     );
-  }
-
-  Offset _maybeFlip(Offset local, Size size) {
-    if (!flipped) return local;
-    return Offset(size.width - local.dx, size.height - local.dy);
   }
 
   Position _displayPos(Position p) {
@@ -119,7 +111,11 @@ class ChessBoard extends StatelessWidget {
     Widget child, {
     bool animateMove = false,
   }) {
-    final center = BoardPainter.cellToOffset(size, displayPos.row, displayPos.col);
+    final center = BoardPainter.cellToOffset(
+      size,
+      displayPos.row,
+      displayPos.col,
+    );
     final pieceSize = BoardPainter.pieceDiameter(size);
     final half = pieceSize / 2;
     // For Stack children that hold non-piece widgets (ValidMoveDot) the dot
@@ -152,7 +148,11 @@ class ChessBoard extends StatelessWidget {
     Color color,
     double pieceSize,
   ) {
-    final center = BoardPainter.cellToOffset(size, displayPos.row, displayPos.col);
+    final center = BoardPainter.cellToOffset(
+      size,
+      displayPos.row,
+      displayPos.col,
+    );
     final markerSize = pieceSize * 0.92;
     return Positioned(
       left: center.dx - markerSize / 2,
