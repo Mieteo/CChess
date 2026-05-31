@@ -37,6 +37,46 @@ class CloudSyncService {
   final ProfileRepository local;
   final UserRemoteRepository remote;
 
+  /// Lightweight refresh — assumes user is already signed in.
+  /// Re-reads `users/{uid}` from Firestore, merges into local Hive,
+  /// and returns the latest profile. Useful for post-game-ended ELO refresh.
+  /// Caller should invoke `ProfileController.refresh()` afterwards if the
+  /// in-memory profile state needs to mirror the new Hive value.
+  Future<CloudSyncResult> refreshFromCloud() async {
+    final user = auth.currentUser;
+    final localProfile = await local.loadOrCreate();
+    if (user == null) {
+      return CloudSyncResult(
+        profile: localProfile,
+        outcome: CloudSyncOutcome.offline,
+      );
+    }
+    final uid = user.uid;
+    try {
+      final cloud = await remote.read(uid);
+      if (cloud == null) {
+        return CloudSyncResult(
+          profile: localProfile,
+          outcome: CloudSyncOutcome.offline,
+          uid: uid,
+        );
+      }
+      final merged = _mergeCloudIntoLocal(uid, cloud, localProfile);
+      await local.save(merged);
+      return CloudSyncResult(
+        profile: merged,
+        outcome: CloudSyncOutcome.pulledFromCloud,
+        uid: uid,
+      );
+    } on FirebaseException {
+      return CloudSyncResult(
+        profile: localProfile,
+        outcome: CloudSyncOutcome.offline,
+        uid: uid,
+      );
+    }
+  }
+
   Future<CloudSyncResult> syncOnStart() async {
     final localProfile = await local.loadOrCreate();
 

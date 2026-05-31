@@ -338,8 +338,7 @@ class OnlineMatchController extends StateNotifier<OnlineMatchState> {
         _onReconnected(msg, newLog);
         break;
       case 'error':
-        _setError('${msg['code']} ${msg['message'] ?? ''}'.trim());
-        state = state.copyWith(lastEventLog: newLog);
+        _onError(msg, newLog);
         break;
       default:
         state = state.copyWith(lastEventLog: newLog);
@@ -444,6 +443,30 @@ class OnlineMatchController extends StateNotifier<OnlineMatchState> {
       blackClockMs: (clock?['black'] as num?)?.toInt() ?? state.blackClockMs,
       lastEventLog: log,
     );
+  }
+
+  /// Handle server `error` messages. When the error indicates server REJECTED
+  /// our optimistic move (`illegal-move`, `not-your-turn`, `time-out`), roll
+  /// back the local game state so client and server stay in sync.
+  void _onError(Map<String, dynamic> msg, List<String> log) {
+    final code = msg['code'] as String?;
+    final shouldUndo = code == 'illegal-move' || code == 'not-your-turn';
+    final game = state.game;
+    if (shouldUndo && game != null) {
+      final undone = game.undoMove();
+      if (undone != null) {
+        state = state.copyWith(
+          currentTurn: game.turn,
+          errorMessage: code == 'illegal-move'
+              ? 'Server từ chối nước (trái luật) — đã rollback.'
+              : 'Server báo chưa tới lượt — đã rollback.',
+          lastEventLog: log,
+        );
+        return;
+      }
+    }
+    _setError('${msg['code']} ${msg['message'] ?? ''}'.trim());
+    state = state.copyWith(lastEventLog: log);
   }
 
   void _onGameEnded(Map<String, dynamic> msg, List<String> log) {

@@ -6,10 +6,12 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/chess_engine/chess_engine.dart';
 import '../../core/constants/app_constants.dart';
+import '../../data/services/cloud_sync_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_spacing.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/chess/chess_board.dart';
+import '../profile/profile_controller.dart';
 import 'online_match_controller.dart';
 
 class OnlineGameScreen extends ConsumerStatefulWidget {
@@ -156,11 +158,19 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
     // Start/stop countdown ticker based on current phase
     _ensureCountdown(state.phase == OnlineMatchPhase.peerDisconnected);
 
-    // Pop screen when game ends + show result dialog
+    // Pop screen when game ends + show result dialog + refresh profile from cloud
     ref.listen<OnlineMatchState>(onlineMatchControllerProvider, (prev, next) {
       if (next.phase == OnlineMatchPhase.ended &&
           prev?.phase != OnlineMatchPhase.ended) {
         _showResultDialog(next);
+        // Step Group-1 polish: ELO + win/loss counters đã update trên cloud,
+        // pull về local để Profile screen hiển thị ngay sau dialog dismiss.
+        () async {
+          await ref.read(cloudSyncServiceProvider).refreshFromCloud();
+          if (mounted) {
+            await ref.read(profileControllerProvider.notifier).refresh();
+          }
+        }();
       }
     });
 

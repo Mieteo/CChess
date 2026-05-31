@@ -231,6 +231,18 @@ const heartbeatInterval = setInterval(() => {
 
 wss.on('close', () => clearInterval(heartbeatInterval));
 
+// Step A3 polish: re-check matchmaking queue every 5s so waiting players
+// get paired when their tolerance grows (no new enqueue needed).
+const matchmakingInterval = setInterval(() => {
+  let pair = mmTryMatch();
+  while (pair) {
+    const [a, b] = pair;
+    pairAndStartMatch(a, b);
+    pair = mmTryMatch();
+  }
+}, 5_000);
+wss.on('close', () => clearInterval(matchmakingInterval));
+
 wss.on('connection', (socket: WebSocket, request: IncomingMessage) => {
   const remote = request.socket.remoteAddress;
   console.log(`[ws] connected from ${remote}`);
@@ -322,9 +334,19 @@ wss.on('connection', (socket: WebSocket, request: IncomingMessage) => {
         typeof rawClock === 'number' && rawClock >= 60_000 && rawClock <= 3_600_000
           ? rawClock
           : undefined;
-      const size = mmEnqueue(socket, uid, clockMs);
-      send(socket, { type: 'matching', queueSize: size });
-      console.log(`[matchmaking] ${uid} enqueued (queue size=${size})`);
+      // Fetch current ELO from Firestore so bucket matchmaking can pair fairly
+      let elo = 1000;
+      try {
+        const { getFirestore } = await import('firebase-admin/firestore');
+        const snap = await getFirestore().collection('users').doc(uid).get();
+        const e = snap.data()?.eloChess as number | undefined;
+        if (typeof e === 'number') elo = e;
+      } catch (e) {
+        console.warn(`[matchmaking] failed to fetch ELO for ${uid}, using default 1000:`, e);
+      }
+      const size = mmEnqueue(socket, uid, elo, clockMs);
+      send(socket, { type: 'matching', queueSize: size, elo });
+      console.log(`[matchmaking] ${uid} enqueued (queue size=${size}, elo=${elo})`);
       const pair = mmTryMatch();
       if (pair) {
         const [a, b] = pair;

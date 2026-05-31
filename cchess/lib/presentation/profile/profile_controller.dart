@@ -24,6 +24,10 @@ class ProfileController extends StateNotifier<AsyncValue<UserProfile>> {
     }
   }
 
+  /// Re-read the profile from local Hive — call AFTER an external write
+  /// (vd `CloudSyncService.refreshFromCloud()`) so the in-memory state matches.
+  Future<void> refresh() => _load();
+
   Future<void> update(UserProfile Function(UserProfile) mutator) async {
     final current = state.valueOrNull;
     if (current == null) return;
