@@ -35,7 +35,7 @@
 | 9 | Game History + Replay AI | 🟢 | Local Hive + push `game_records` lên cloud subcollection ✓; backend cũng ghi mirror record có ELO change cho ván ranked |
 | 10 | Achievements + Daily Quests | 🟢 | Engine + UI xong, chờ Cloud Functions trigger server-side khi ván ranked đạt mốc |
 | 11 | Opening Library (Khai cuộc Đại sư) | 🟢 | Seed cứng 5 khai cuộc, chờ CMS |
-| 12 | Online Matchmaking + Spectate (A1, A5, A6) | 🟡 | **A1 Ranked done**; **A5 chat cơ bản done**; **A6 Spectate cơ bản done**; còn polish/test tự động |
+| 12 | Online Matchmaking + Spectate (A1, A5, A6) | 🟡 | **A1 Ranked done**; **A5 chat cơ bản done**; **A6 Spectate cơ bản + active room list done**; còn share link/test tự động |
 | 13 | Cờ Úp + Cờ Casual (A3, A2) | 🔒 | Chờ engine variant + invite-by-link flow |
 | 14 | Community (Bạn bè, Leaderboard, CLB) | 🔒 | Chờ S12 |
 | 15 | AI Coach (B3) + AI Replay nâng cao (B5) | ⬜ | Cần Pikafish FFI |
@@ -46,7 +46,7 @@
 > **Trục thời gian cập nhật (cuối 5/2026):**
 > - Sprint 8 hoàn thành 3 lát: 8a (Firebase Auth + Firestore + rules deployed), 8b (sync local↔cloud + Cloud Functions deployed Blaze), 8c (backend Node.js WebSocket production-deployed Render).
 > - **Sprint 12 phase 1 A1 hoàn thành 2026-05-24**: matchmaking tự động + per-room clock (3/5/10/15/30 phút) + Xiangqi rule validation server-side + ELO Elo K=32 + reconnect grace 60s + Firestore persistence mirror records. Verified ván 10 phút giữa 2 thiết bị Android thật qua Internet (Render free tier endpoint). Group 1 polish 2026-05-31 đã nâng matchmaking lên ELO bucket/tolerance.
-> - Sprint 9–11 đã unblock (cloud sync chạy). Sprint 12 group 1 polish đã xong 2026-05-31: ELO bucket matchmaking, rollback khi server reject move, profile auto-refresh sau game-ended. Sprint 12 phase 2 đã có A5 chat text và A6 Spectate cơ bản theo room ID.
+> - Sprint 9–11 đã unblock (cloud sync chạy). Sprint 12 group 1 polish đã xong 2026-05-31: ELO bucket matchmaking, rollback khi server reject move, profile auto-refresh sau game-ended. Sprint 12 phase 2 đã có A5 chat text, A6 Spectate theo room ID và danh sách ván đang diễn ra.
 
 ---
 
@@ -236,7 +236,9 @@
 
 **Phase 2 còn lại**:
 - ✅ A6 Spectate cơ bản — viewer join bằng room ID, nhận snapshot moves/chat/clock, xem board read-only, không có quyền move/resign
-- A6 polish — public room list / share link / spectator UX nâng cao nếu mở cộng đồng
+- ✅ A6 polish bước 1 — `list-active-rooms` + lobby hiển thị ván đang diễn ra để xem nhanh
+- ✅ A6 test tự động bước 1 — backend `rooms.test.ts` cover spectator read-only, spectator leave, active room filtering
+- A6 polish còn lại — share link / spectator UX nâng cao / moderation nếu mở cộng đồng
 - A5 Chat polish — đã có `chat-message` protocol + UI bottom sheet + rate limit; còn emoji whitelist/preset nhanh nếu cần
 - Render free tier ngủ sau 15 phút → upgrade Starter $7/tháng khi launch thật
 - Online hardening: double-disconnect, graceful server restart, test tự động cho reconnect/chat
@@ -283,7 +285,7 @@
 | A2 | Cờ Casual + mời bạn | 🔒 | 13 |
 | A3 | Cờ Úp | 🔒 | 13 |
 | A5 | Chat + emoji + AI hint trong ván | 🟡 | Chat text cơ bản done — `chat-message` WS + bottom sheet; emoji/AI hint còn lại |
-| A6 | Spectate | 🟡 | Phase 2 — cơ bản done với `spectate-room`/`stop-spectating`, read-only board; còn public room list/share link |
+| A6 | Spectate | 🟡 | Phase 2 — cơ bản done với `spectate-room`/`stop-spectating`, read-only board, active room list, backend read-only tests; còn share link |
 | A7 | Đấu Bot AI | ✅ | 5 |
 | B1 | Khóa học vỡ lòng | 🟡 | UI placeholder, content chưa có |
 | B2 | Khóa học video | ⬜ | sau S15 |
@@ -312,7 +314,7 @@
 
 - **Tổng file Dart `lib/`:** ~85 file (+presentation/online/, +data/services/reconnect_store/, +data/services/game_socket_service/, +data/services/cloud_sync_service/, +data/services/google_auth_service/).
 - **Backend TypeScript:** ~1000 dòng (server.ts + auth.ts + rooms.ts + match.ts + persistence.ts + elo.ts + matchmaking.ts + engine/ port).
-- **Tổng dòng test:** 1.306 dòng / 12 file test (chưa tăng — chưa có test cho online flow).
+- **Tổng dòng test:** Flutter 1.306 dòng / 12 file test; backend đã bắt đầu có `rooms.test.ts` cho A6 spectate/read-only.
 - **Sprint hoàn thành (1 chiều):** 10/18 (1–7 + 8a + 8b + 8c).
 - **Sprint code xong, sync một phần:** 3/18 (S9, S10, S11).
 - **Sprint MVP done phase 1:** 1/18 (S12 — A1 Ranked production).
@@ -333,7 +335,7 @@
 
 ### 7.2. Sprint 12 phase 2 (2-3 tuần) — hoàn thiện online
 
-3. **A6 Spectate polish** — public room list/share link, spectator count UI rõ hơn, test tự động cho quyền read-only.
+3. **A6 Spectate polish tiếp** — share link, spectator count UX rõ hơn trong lobby/game, mở rộng test tự động cho WS protocol end-to-end.
 4. **A5 Chat polish** — emoji preset/whitelist, mute/report sau này nếu mở public.
 5. **Push notification "tới lượt bạn"** — khi user background app + đến lượt, send FCM message tới device. Cần backend wire Cloud Messaging + client `firebase_messaging` setup.
 6. **Friends list (C1) — Sprint 14 prep** — Firestore schema `friendships`, sync presence (online/offline via Realtime Database).
@@ -352,4 +354,4 @@
 
 ---
 
-*Cập nhật 2026-05-31 sau khi A1 Ranked đã test thật, group 1 polish đã merge, A5 chat text và A6 Spectate cơ bản được triển khai. Lần cập nhật kế tiếp đề xuất: sau A6 polish/public room list hoặc khi chốt Sprint 13 Cờ Úp/Casual.*
+*Cập nhật 2026-05-31 sau khi A1 Ranked đã test thật, group 1 polish đã merge, A5 chat text, A6 Spectate cơ bản, active room list và backend read-only tests được triển khai. Lần cập nhật kế tiếp đề xuất: sau A6 share link hoặc khi chốt Sprint 13 Cờ Úp/Casual.*

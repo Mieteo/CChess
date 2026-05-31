@@ -412,6 +412,7 @@ Client splash sync (`cloud_sync_service._mergeCloudIntoLocal`) đã update để
 | `auth` | `{token}` | Sau connect, trước 10s | Verify Firebase ID token |
 | `create-room` | `{}` | Authed, chưa trong room | Tạo room mới |
 | `join-room` | `{roomId}` | Authed, chưa trong room | Vào room có sẵn (size < 2) |
+| `list-active-rooms` | `{}` | Authed | A6 polish: lấy danh sách ván đang playing để lobby hiển thị nút xem nhanh |
 | `reconnect-room` | `{roomId}` | Authed | Step 8: vào lại room đang grace |
 | `spectate-room` | `{roomId}` | Authed, room đang playing | A6: vào xem ván theo room ID; socket vào `room.spectators`, không có quyền move/resign |
 | `stop-spectating` | `{}` | Đang spectate | Rời khỏi danh sách spectator, không ảnh hưởng 2 player |
@@ -431,6 +432,7 @@ Client splash sync (`cloud_sync_service._mergeCloudIntoLocal`) đã update để
 | `room-joined` | `{roomId, members, status}` | Cho joiner sau join-room |
 | `peer-joined` | `{uid}` | Cho member cũ khi 2nd join |
 | `game-start` | `{roomId, redUid, blackUid, yourColor, clock, startedAt}` | Per-socket khi đủ 2 người |
+| `active-rooms` | `{rooms, total, limit, ts}` | Reply cho `list-active-rooms`. Mỗi item gồm `{roomId, redUid, blackUid, moveCount, spectatorCount, startedAt, currentTurn, clock}` |
 | `move-ack` | `{uci, moveNumber, clock}` | Cho người vừa đi |
 | `opponent-move` | `{uci, from, color, moveNumber, clock, ts}` | Cho peer và spectators |
 | `peer-disconnected` | `{uid, graceMs}` | Khi 1 bên disconnect mid-game |
@@ -523,7 +525,7 @@ Client splash sync (`cloud_sync_service._mergeCloudIntoLocal`) đã update để
 ### 10.3. Edge case chưa handle (TODO)
 
 - **2 player disconnect cùng lúc**: chỉ track 1 `disconnectedUid`. Cần Map<uid, timer>.
-- **Spectator public discovery**: spectate theo room ID đã có; chưa có danh sách ván đang chơi, invite/share link, moderation cho viewer public.
+- **Spectator public discovery**: đã có danh sách ván đang chơi qua `list-active-rooms`; chưa có invite/share link, moderation cho viewer public.
 - **Server restart graceful**: chưa save room state. Khi restart, ván đang chơi mất.
 - **Chat / emoji nâng cao**: text chat cơ bản đã có; emoji preset/whitelist, mute/report chưa làm.
 - **Room state persistence**: move/chat history hiện vẫn ở memory, restart backend là mất ván.
@@ -584,7 +586,17 @@ Log mẫu khi 1 ván chạy:
 [persist] K8M4T7 → users/{ytcI..., c7Bh...}/game_records/K8M4T7_1779462950000
 ```
 
-### 12.2. Test bằng browser console
+### 12.2. Test tự động backend
+
+```bash
+cd cchess-backend
+npm test      # Node test runner qua tsx
+npm run lint  # TypeScript strict/noEmit
+```
+
+Test hiện có: `src/rooms.test.ts` cover A6 spectator read-only (`not-player` khi move), spectator leave không đổi trạng thái phòng playing, và `activeRooms()` chỉ trả room đang chơi.
+
+### 12.3. Test bằng browser console
 
 Mở `http://localhost:8080/health` (HTTP → DevTools console không bị mixed-content block):
 
@@ -604,7 +616,7 @@ function move(uci) { ws.send(JSON.stringify({type:'move', uci})); }
 function resign() { ws.send(JSON.stringify({type:'resign'})); }
 ```
 
-### 12.3. Deploy (chưa làm)
+### 12.4. Deploy (chưa làm)
 
 Production hosting candidates (theo doc 06 + 08):
 

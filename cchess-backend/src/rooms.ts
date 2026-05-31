@@ -85,6 +85,10 @@ export function getRoomById(roomId: string): Room | undefined {
   return rooms.get(roomId);
 }
 
+export function activeRooms(): Room[] {
+  return [...rooms.values()].filter((room) => room.status === 'playing');
+}
+
 /// Step 8: rebind a fresh socket to an existing room (reconnect path).
 /// Caller is responsible for verifying uid matches one of redUid/blackUid
 /// and that disconnectedUid was set. This just updates the maps.

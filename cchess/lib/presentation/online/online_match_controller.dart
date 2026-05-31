@@ -52,6 +52,50 @@ class OnlineChatMessage {
   }
 }
 
+class OnlineActiveRoom {
+  const OnlineActiveRoom({
+    required this.roomId,
+    required this.moveCount,
+    required this.spectatorCount,
+    this.redUid,
+    this.blackUid,
+    this.startedAtMs,
+    this.currentTurn,
+    this.redClockMs,
+    this.blackClockMs,
+  });
+
+  final String roomId;
+  final String? redUid;
+  final String? blackUid;
+  final int moveCount;
+  final int spectatorCount;
+  final int? startedAtMs;
+  final PieceColor? currentTurn;
+  final int? redClockMs;
+  final int? blackClockMs;
+
+  static OnlineActiveRoom? fromServer(Map<String, dynamic> msg) {
+    final roomId = msg['roomId'] as String?;
+    if (roomId == null || roomId.isEmpty) return null;
+    final turn = msg['currentTurn'] as String?;
+    final clock = msg['clock'] as Map<String, dynamic>?;
+    return OnlineActiveRoom(
+      roomId: roomId,
+      redUid: msg['redUid'] as String?,
+      blackUid: msg['blackUid'] as String?,
+      moveCount: (msg['moveCount'] as num?)?.toInt() ?? 0,
+      spectatorCount: (msg['spectatorCount'] as num?)?.toInt() ?? 0,
+      startedAtMs: (msg['startedAt'] as num?)?.toInt(),
+      currentTurn: turn == 'black'
+          ? PieceColor.black
+          : (turn == 'red' ? PieceColor.red : null),
+      redClockMs: (clock?['red'] as num?)?.toInt(),
+      blackClockMs: (clock?['black'] as num?)?.toInt(),
+    );
+  }
+}
+
 class OnlineMatchState {
   const OnlineMatchState({
     this.phase = OnlineMatchPhase.idle,
@@ -75,6 +119,8 @@ class OnlineMatchState {
     this.peerDisconnectGraceMs,
     this.eloUpdate,
     this.chatMessages = const <OnlineChatMessage>[],
+    this.activeRooms = const <OnlineActiveRoom>[],
+    this.activeRoomsUpdatedAtMs,
   });
 
   final OnlineMatchPhase phase;
@@ -105,6 +151,8 @@ class OnlineMatchState {
   /// Null when server didn't (yet) compute ELO (vd persist failed).
   final Map<String, dynamic>? eloUpdate;
   final List<OnlineChatMessage> chatMessages;
+  final List<OnlineActiveRoom> activeRooms;
+  final int? activeRoomsUpdatedAtMs;
 
   bool get isMyTurn => myColor != null && currentTurn == myColor;
   bool get isPlaying =>
@@ -136,6 +184,8 @@ class OnlineMatchState {
     int? peerDisconnectGraceMs,
     Map<String, dynamic>? eloUpdate,
     List<OnlineChatMessage>? chatMessages,
+    List<OnlineActiveRoom>? activeRooms,
+    int? activeRoomsUpdatedAtMs,
     bool clearError = false,
     bool clearPeerDisconnect = false,
   }) {
@@ -165,6 +215,9 @@ class OnlineMatchState {
           : (peerDisconnectGraceMs ?? this.peerDisconnectGraceMs),
       eloUpdate: eloUpdate ?? this.eloUpdate,
       chatMessages: chatMessages ?? this.chatMessages,
+      activeRooms: activeRooms ?? this.activeRooms,
+      activeRoomsUpdatedAtMs:
+          activeRoomsUpdatedAtMs ?? this.activeRoomsUpdatedAtMs,
     );
   }
 }
@@ -258,6 +311,14 @@ class OnlineMatchController extends StateNotifier<OnlineMatchState> {
 
   void cancelMatching() {
     _socket.cancelMatching();
+  }
+
+  void requestActiveRooms() {
+    if (state.phase != OnlineMatchPhase.authed) {
+      _setError('Chưa sẵn sàng (phase=${state.phase.name})');
+      return;
+    }
+    _socket.listActiveRooms();
   }
 
   /// Called by UI when user taps from→to. Validates locally via XiangqiGame,
@@ -375,6 +436,9 @@ class OnlineMatchController extends StateNotifier<OnlineMatchState> {
           lastEventLog: newLog,
         );
         break;
+      case 'active-rooms':
+        _onActiveRooms(msg, newLog);
+        break;
       case 'peer-joined':
         // Will be followed by game-start; just log.
         state = state.copyWith(lastEventLog: newLog);
@@ -474,6 +538,25 @@ class OnlineMatchController extends StateNotifier<OnlineMatchState> {
     );
     // Persist for Step 8 reconnect
     if (roomId != null) _reconnectStore.save(roomId);
+  }
+
+  void _onActiveRooms(Map<String, dynamic> msg, List<String> log) {
+    final rooms =
+        (msg['rooms'] as List?)
+            ?.whereType<Map>()
+            .map(
+              (m) => OnlineActiveRoom.fromServer(Map<String, dynamic>.from(m)),
+            )
+            .whereType<OnlineActiveRoom>()
+            .toList() ??
+        const <OnlineActiveRoom>[];
+    state = state.copyWith(
+      activeRooms: rooms,
+      activeRoomsUpdatedAtMs:
+          (msg['ts'] as num?)?.toInt() ?? DateTime.now().millisecondsSinceEpoch,
+      lastEventLog: log,
+      clearError: true,
+    );
   }
 
   void _onReconnected(Map<String, dynamic> msg, List<String> log) {

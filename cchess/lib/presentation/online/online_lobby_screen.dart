@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/chess_engine/chess_engine.dart';
 import '../../core/constants/app_constants.dart';
 import '../../data/services/reconnect_store.dart';
 import '../../theme/app_colors.dart';
@@ -109,6 +110,11 @@ class _OnlineLobbyScreenState extends ConsumerState<OnlineLobbyScreen> {
     _ctrl.cancelMatching();
   }
 
+  void _refreshActiveRooms() {
+    setState(() => _localError = null);
+    _ctrl.requestActiveRooms();
+  }
+
   void _joinRoom() {
     final id = _roomIdCtrl.text.trim().toUpperCase();
     if (id.isEmpty) {
@@ -129,6 +135,11 @@ class _OnlineLobbyScreenState extends ConsumerState<OnlineLobbyScreen> {
     _ctrl.spectateRoom(id);
   }
 
+  void _spectateRoomId(String roomId) {
+    setState(() => _localError = null);
+    _ctrl.spectateRoom(roomId);
+  }
+
   Future<void> _leave() async {
     await _ctrl.leave();
     if (mounted) context.go(AppConstants.routeCompete);
@@ -140,6 +151,10 @@ class _OnlineLobbyScreenState extends ConsumerState<OnlineLobbyScreen> {
 
     // Auto-navigate when game starts, or when spectate snapshot arrives.
     ref.listen<OnlineMatchState>(onlineMatchControllerProvider, (prev, next) {
+      if (next.phase == OnlineMatchPhase.authed &&
+          prev?.phase != OnlineMatchPhase.authed) {
+        _ctrl.requestActiveRooms();
+      }
       final enteredBoard =
           next.phase == OnlineMatchPhase.playing ||
           next.phase == OnlineMatchPhase.spectating;
@@ -159,7 +174,7 @@ class _OnlineLobbyScreenState extends ConsumerState<OnlineLobbyScreen> {
         ),
       ),
       body: SafeArea(
-        child: Padding(
+        child: SingleChildScrollView(
           padding: const EdgeInsets.all(AppSpacing.base),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -273,6 +288,13 @@ class _OnlineLobbyScreenState extends ConsumerState<OnlineLobbyScreen> {
                     ),
                   ],
                 ),
+                AppSpacing.vGapBase,
+                _ActiveRoomsPanel(
+                  rooms: state.activeRooms,
+                  updatedAtMs: state.activeRoomsUpdatedAtMs,
+                  onRefresh: _busy ? null : _refreshActiveRooms,
+                  onSpectate: _busy ? null : _spectateRoomId,
+                ),
               ],
               if (state.phase == OnlineMatchPhase.matching) ...[
                 AppSpacing.vGapLg,
@@ -343,7 +365,7 @@ class _OnlineLobbyScreenState extends ConsumerState<OnlineLobbyScreen> {
                   ),
                 ),
               ],
-              const Spacer(),
+              AppSpacing.vGapBase,
               if (state.phase != OnlineMatchPhase.idle)
                 TextButton.icon(
                   icon: const Icon(Icons.close),
@@ -354,6 +376,232 @@ class _OnlineLobbyScreenState extends ConsumerState<OnlineLobbyScreen> {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _ActiveRoomsPanel extends StatelessWidget {
+  const _ActiveRoomsPanel({
+    required this.rooms,
+    required this.updatedAtMs,
+    required this.onRefresh,
+    required this.onSpectate,
+  });
+
+  final List<OnlineActiveRoom> rooms;
+  final int? updatedAtMs;
+  final VoidCallback? onRefresh;
+  final ValueChanged<String>? onSpectate;
+
+  String _updatedLabel() {
+    final ts = updatedAtMs;
+    if (ts == null) return 'Chưa tải';
+    final dt = DateTime.fromMillisecondsSinceEpoch(ts);
+    final hh = dt.hour.toString().padLeft(2, '0');
+    final mm = dt.minute.toString().padLeft(2, '0');
+    return 'Cập nhật $hh:$mm';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            const Icon(
+              Icons.visibility_outlined,
+              size: 18,
+              color: AppColors.accentGold,
+            ),
+            AppSpacing.hGapSm,
+            Expanded(
+              child: Text(
+                'Ván đang diễn ra',
+                style: AppTextStyles.headingMd.copyWith(
+                  color: AppColors.accentGold,
+                ),
+              ),
+            ),
+            Text(
+              _updatedLabel(),
+              style: AppTextStyles.captionSm.copyWith(
+                color: AppColors.onSurfaceVariant,
+              ),
+            ),
+            IconButton(
+              tooltip: 'Làm mới',
+              icon: const Icon(Icons.refresh),
+              onPressed: onRefresh,
+            ),
+          ],
+        ),
+        if (rooms.isEmpty)
+          Container(
+            padding: const EdgeInsets.all(AppSpacing.sm),
+            decoration: BoxDecoration(
+              color: AppColors.surfaceContainerHigh,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: AppColors.outlineVariant),
+            ),
+            child: Text(
+              'Chưa có ván đang chơi',
+              style: AppTextStyles.captionSm,
+            ),
+          )
+        else
+          ListView.separated(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: rooms.length,
+            separatorBuilder: (context, _) => AppSpacing.vGapSm,
+            itemBuilder: (context, index) {
+              final room = rooms[index];
+              return _ActiveRoomTile(room: room, onSpectate: onSpectate);
+            },
+          ),
+      ],
+    );
+  }
+}
+
+class _ActiveRoomTile extends StatelessWidget {
+  const _ActiveRoomTile({required this.room, required this.onSpectate});
+
+  final OnlineActiveRoom room;
+  final ValueChanged<String>? onSpectate;
+
+  String _shortUid(String? uid) {
+    if (uid == null || uid.isEmpty) return '—';
+    return uid.length > 8 ? uid.substring(0, 8) : uid;
+  }
+
+  String _formatClock(int? ms) {
+    if (ms == null) return '--:--';
+    if (ms <= 0) return '00:00';
+    final s = (ms / 1000).floor();
+    final mm = (s ~/ 60).toString().padLeft(2, '0');
+    final ss = (s % 60).toString().padLeft(2, '0');
+    return '$mm:$ss';
+  }
+
+  String _elapsedLabel(int? startedAtMs) {
+    if (startedAtMs == null) return '—';
+    final elapsed = DateTime.now().millisecondsSinceEpoch - startedAtMs;
+    if (elapsed <= 0) return '0p';
+    final minutes = elapsed ~/ 60000;
+    if (minutes < 60) return '${minutes}p';
+    final hours = minutes ~/ 60;
+    final rest = minutes % 60;
+    return '${hours}h${rest.toString().padLeft(2, '0')}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final turnLabel = room.currentTurn == PieceColor.red
+        ? 'Đỏ'
+        : room.currentTurn == PieceColor.black
+        ? 'Đen'
+        : '—';
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.sm),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.outlineVariant),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  room.roomId,
+                  style: AppTextStyles.monoTimer.copyWith(
+                    color: AppColors.accentGold,
+                  ),
+                ),
+              ),
+              OutlinedButton.icon(
+                icon: const Icon(Icons.visibility_outlined, size: 18),
+                label: const Text('Xem'),
+                onPressed: onSpectate == null
+                    ? null
+                    : () => onSpectate!(room.roomId),
+              ),
+            ],
+          ),
+          AppSpacing.vGapXs,
+          Wrap(
+            spacing: AppSpacing.sm,
+            runSpacing: AppSpacing.xs,
+            children: [
+              _RoomMeta(
+                icon: Icons.circle,
+                color: AppColors.vermilionRed,
+                label: 'Đỏ ${_shortUid(room.redUid)}',
+              ),
+              _RoomMeta(
+                icon: Icons.circle,
+                color: AppColors.inkBlack,
+                label: 'Đen ${_shortUid(room.blackUid)}',
+              ),
+              _RoomMeta(
+                icon: Icons.swap_horiz,
+                color: AppColors.accentGold,
+                label: 'Lượt $turnLabel',
+              ),
+              _RoomMeta(
+                icon: Icons.sports_score_outlined,
+                color: AppColors.onSurfaceVariant,
+                label: '${room.moveCount} nước',
+              ),
+              _RoomMeta(
+                icon: Icons.visibility_outlined,
+                color: AppColors.onSurfaceVariant,
+                label: '${room.spectatorCount} xem',
+              ),
+              _RoomMeta(
+                icon: Icons.schedule,
+                color: AppColors.onSurfaceVariant,
+                label: _elapsedLabel(room.startedAtMs),
+              ),
+            ],
+          ),
+          AppSpacing.vGapXs,
+          Text(
+            'Đỏ ${_formatClock(room.redClockMs)}  ·  Đen ${_formatClock(room.blackClockMs)}',
+            style: AppTextStyles.monoSm.copyWith(
+              color: AppColors.onSurfaceVariant,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RoomMeta extends StatelessWidget {
+  const _RoomMeta({
+    required this.icon,
+    required this.color,
+    required this.label,
+  });
+
+  final IconData icon;
+  final Color color;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 12, color: color),
+        const SizedBox(width: 4),
+        Text(label, style: AppTextStyles.captionSm),
+      ],
     );
   }
 }

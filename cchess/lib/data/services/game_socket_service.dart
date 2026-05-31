@@ -118,6 +118,8 @@ class GameSocketService {
 
   void cancelMatching() => send({'type': 'cancel-matching'});
 
+  void listActiveRooms() => send({'type': 'list-active-rooms'});
+
   void joinRoom(String roomId) =>
       send({'type': 'join-room', 'roomId': roomId.trim().toUpperCase()});
 

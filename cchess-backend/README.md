@@ -96,6 +96,8 @@ Close codes:
 - [x] **Step 8** Reconnect grace — 60s room resume with move/chat snapshot
 - [x] **Sprint 12 A5** Basic in-game chat — `chat-message`, 120-char limit, 1.5s/user rate limit
 - [x] **Sprint 12 A6** Basic spectate — `spectate-room`/`stop-spectating`, read-only viewers receive move/chat/end snapshots
+- [x] **Sprint 12 A6 polish** Active room list — `list-active-rooms` for lobby watch discovery
+- [x] **Backend tests** `npm test` covers spectator read-only, spectator leave, and active-room filtering
 
 ## Deploy
 

@@ -3,6 +3,7 @@ import { WebSocketServer, WebSocket } from 'ws';
 import { initFirebaseAdmin, verifyIdToken } from './auth';
 import {
   attachReconnectingSocket,
+  activeRooms,
   createRoom,
   getRoomById,
   isSpectator,
@@ -63,6 +64,7 @@ const UCI_REGEX = /^[a-i][0-9][a-i][0-9]$/;
 const CHAT_MAX_CHARS = 120;
 const CHAT_RATE_LIMIT_MS = 1_500;
 const CHAT_HISTORY_LIMIT = 50;
+const ACTIVE_ROOM_LIST_LIMIT = 30;
 
 initFirebaseAdmin();
 
@@ -129,6 +131,19 @@ function pushChatMessage(room: Room, uid: string, text: string) {
   }
   room.chatMessages = history;
   return message;
+}
+
+function activeRoomSummary(room: Room) {
+  return {
+    roomId: room.id,
+    redUid: room.redUid,
+    blackUid: room.blackUid,
+    moveCount: room.movesUci?.length ?? room.moveCount,
+    spectatorCount: room.spectators.size,
+    startedAt: room.startedAt,
+    currentTurn: room.currentTurn,
+    clock: clockSnapshot(room),
+  };
 }
 
 /// Step 6 + matchmaking shared: start the game once a room has 2 players.
@@ -415,6 +430,23 @@ wss.on('connection', (socket: WebSocket, request: IncomingMessage) => {
       console.log(
         `[room] ${room.id} created by ${uid} (clock=${clockMs ?? 'default'}ms)`,
       );
+      return;
+    }
+
+    if (msg.type === 'list-active-rooms') {
+      const allRooms = activeRooms().sort(
+        (a, b) => (b.startedAt ?? b.createdAt) - (a.startedAt ?? a.createdAt),
+      );
+      const rooms = allRooms
+        .slice(0, ACTIVE_ROOM_LIST_LIMIT)
+        .map(activeRoomSummary);
+      send(socket, {
+        type: 'active-rooms',
+        rooms,
+        total: allRooms.length,
+        limit: ACTIVE_ROOM_LIST_LIMIT,
+        ts: Date.now(),
+      });
       return;
     }
 
