@@ -1,0 +1,34 @@
+# Multi-stage build for the standalone cchess-engine service.
+# The build stage compiles a generic x86-64 Pikafish binary to avoid CPU
+# feature crashes on cloud hosts, then the runtime stage starts the Node API.
+
+FROM debian:stable-slim AS pikafish
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends git build-essential ca-certificates \
+  && rm -rf /var/lib/apt/lists/*
+RUN git clone --depth 1 https://github.com/official-pikafish/Pikafish /pikafish
+WORKDIR /pikafish/src
+RUN make -j build ARCH=x86-64
+RUN make net
+RUN ./pikafish bench
+
+FROM node:20-slim AS build
+WORKDIR /app
+COPY package.json package-lock.json ./
+RUN npm ci
+COPY tsconfig.json ./
+COPY src ./src
+RUN npx tsc
+
+FROM node:20-slim AS runtime
+WORKDIR /app
+ENV NODE_ENV=production
+ENV PIKAFISH_PATH=/app/engine/pikafish
+ENV EVAL_FILE=/app/engine/pikafish.nnue
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev && npm cache clean --force
+COPY --from=build /app/dist ./dist
+COPY --from=pikafish /pikafish/src/pikafish /app/engine/pikafish
+COPY --from=pikafish /pikafish/src/*.nnue /app/engine/pikafish.nnue
+EXPOSE 8090
+CMD ["node", "dist/engine-service/server.js"]

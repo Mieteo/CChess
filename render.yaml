@@ -29,3 +29,27 @@ services:
         sync: false # Render dashboard sẽ prompt nhập secret này
       - key: NODE_ENV
         value: production
+  - type: web
+    name: cchess-engine
+    env: docker
+    rootDir: cchess-backend
+    dockerfilePath: ./Dockerfile.engine
+    dockerContext: .
+    plan: standard
+    region: singapore
+    healthCheckPath: /health
+    envVars:
+      - key: PORT
+        value: 8090
+      - key: FIREBASE_SERVICE_ACCOUNT_JSON
+        sync: false
+      - key: NODE_ENV
+        value: production
+      - key: ENGINE_THREADS
+        value: 1
+      - key: ENGINE_HASH_MB
+        value: 128
+      - key: MAX_CONCURRENCY
+        value: 1
+      - key: DEFAULT_MOVETIME_MS
+        value: 600

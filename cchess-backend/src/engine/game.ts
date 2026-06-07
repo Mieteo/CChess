@@ -76,6 +76,22 @@ export class XiangqiGame {
     );
   }
 
+  static fromFen(fen: string): XiangqiGame {
+    const parts = fen.trim().split(/\s+/);
+    const board = Board.fromFen(parts[0] ?? '');
+    const turn = parts[1] === 'b' ? PieceColor.Black : PieceColor.Red;
+    const halfmoveClock = Number.parseInt(parts[4] ?? '0', 10);
+    const fullmoveNumber = Number.parseInt(parts[5] ?? '1', 10);
+    return new XiangqiGame(
+      board,
+      turn,
+      GameStatus.Playing,
+      [],
+      Number.isFinite(halfmoveClock) ? halfmoveClock : 0,
+      Number.isFinite(fullmoveNumber) ? fullmoveNumber : 1,
+    );
+  }
+
   // ──────────────── public read-only state ────────────────
 
   get board(): Board { return this._board; }
@@ -87,6 +103,11 @@ export class XiangqiGame {
   get fullmoveNumber(): number { return this._fullmoveNumber; }
   get lastMove(): MoveRecord | null {
     return this._history.length === 0 ? null : this._history[this._history.length - 1];
+  }
+
+  toFen(): string {
+    const side = this._turn === PieceColor.Red ? 'w' : 'b';
+    return `${this._board.toFenPlacement()} ${side} - - ${this._halfmoveClock} ${this._fullmoveNumber}`;
   }
 
   // ──────────────── move generation ────────────────

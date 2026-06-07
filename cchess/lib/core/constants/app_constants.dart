@@ -52,6 +52,14 @@ class AppConstants {
     defaultValue: 'wss://cchess-backend.onrender.com',
   );
 
+  // Standalone HTTP engine service for online Pikafish analysis.
+  // Override per environment:
+  //   --dart-define=CCHESS_ENGINE_URL=https://cchess-engine-XXXX.onrender.com
+  static const String defaultEngineHttpUrl = String.fromEnvironment(
+    'CCHESS_ENGINE_URL',
+    defaultValue: 'https://cchess-engine.onrender.com',
+  );
+
   // A6 Spectate share link.
   // Base HTTPS origin for shareable room links (QR + invite text). The backend
   // serves a small landing page at `<base>/r/<roomId>` so the link opens
