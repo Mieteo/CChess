@@ -46,6 +46,80 @@ Output:
 
 Health check: open `http://localhost:8080/health` → `ok`.
 
+## Engine service: chạy Pikafish thật
+
+Repo có thêm service HTTP riêng cho Pikafish tại `src/engine-service/`. Service này tách khỏi WebSocket realtime server để tránh engine ăn CPU làm giật đồng hồ ván online.
+
+Endpoints:
+
+| Method | Path | Body | Ghi chú |
+|---|---|---|---|
+| `GET` | `/health` | - | Health + pool/cache stats |
+| `POST` | `/engine/best-move` | `{ "fen": "...", "level": "grandmaster" }` | Trả `{uci, scoreCp, depth, pv}` |
+| `POST` | `/engine/hint` | `{ "fen": "..." }` | Giống best-move nhưng quota riêng |
+| `POST` | `/engine/analyze` | `{ "startingFen": "...", "movesUci": [...] }` | Trả phân tích từng nước |
+
+### Nguồn tải chính thức
+
+- Pikafish source/release: https://github.com/official-pikafish/Pikafish
+- Latest release đang dùng trong tài liệu ngày 2026-06-07: `Pikafish-2026-01-02`
+- Binary release asset: `https://github.com/official-pikafish/Pikafish/releases/download/Pikafish-2026-01-02/Pikafish.2026-01-02.7z`
+- NNUE network: `https://github.com/official-pikafish/Networks/releases/download/master-net/pikafish.nnue`
+
+Lưu ý license: Pikafish source/binary là GPL-3.0. File `pikafish.nnue` nằm ở repo Networks và có điều khoản riêng, trong đó có hạn chế dùng thương mại nếu chưa được phép. Với production thương mại, cần xử lý license trước khi dùng NNUE chính thức.
+
+### Cách khuyến nghị: Docker build từ source
+
+`Dockerfile.engine` tự clone Pikafish, build generic `ARCH=x86-64`, tải NNUE bằng `make net`, chạy `bench`, rồi start Node engine API.
+
+```powershell
+cd cchess-backend
+docker build -f Dockerfile.engine -t cchess-engine .
+docker run --rm -p 8090:8090 -e ENGINE_AUTH_DISABLED=1 cchess-engine
+```
+
+Smoke test:
+
+```powershell
+Invoke-RestMethod `
+  -Method Post `
+  -Uri 'http://localhost:8090/engine/best-move' `
+  -ContentType 'application/json' `
+  -Body '{"fen":"rnbakabnr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RNBAKABNR w - - 0 1","level":"grandmaster"}'
+```
+
+### Chạy local bằng binary tải tay trên Windows
+
+```powershell
+cd cchess-backend
+npm install
+npm run build
+
+$env:PIKAFISH_PATH = "F:\Flutter\Copilot\CChess\CChess\cchess-backend\engine\pikafish-release\<ten-file-pikafish>.exe"
+$env:EVAL_FILE = "F:\Flutter\Copilot\CChess\CChess\cchess-backend\engine\pikafish.nnue"
+$env:ENGINE_AUTH_DISABLED = "1"
+$env:PORT = "8090"
+npm run engine:start
+```
+
+Khi tắt `ENGINE_AUTH_DISABLED`, client phải gửi `Authorization: Bearer <Firebase ID token>`.
+
+### Flutter trỏ vào engine local
+
+Android emulator:
+
+```powershell
+flutter run --dart-define=CCHESS_ENGINE_URL=http://10.0.2.2:8090
+```
+
+Máy thật cùng Wi-Fi:
+
+```powershell
+flutter run --dart-define=CCHESS_ENGINE_URL=http://<LAN-IP-cua-may-dev>:8090
+```
+
+Trong app, dùng `RemotePikafishEngine` + `EngineRouter` để remote-ok thì dùng Pikafish, remote lỗi/offline thì fallback `LocalMinimaxEngine`.
+
 ## Test from browser console
 
 ```js

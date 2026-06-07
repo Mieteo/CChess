@@ -274,4 +274,150 @@ COPY --from=build /pf/src/*.nnue   /app/engine/pikafish.nnue
 
 ---
 
-*Tạo 2026-06-07 sau khi chốt phương án lai (offline minimax Dart + online Pikafish server-side). Bước kế tiếp đề xuất: làm Phase 0 (spike FEN/UCI) để xác nhận tính khả thi trước khi đầu tư hạ tầng.*
+## 10. Trạng thái triển khai sau task 2026-06-07
+
+### 10.1. Đã triển khai trong repo
+
+- ✅ **Backend engine service riêng** trong [`cchess-backend/src/engine-service/`](cchess-backend/src/engine-service/):
+  - `server.ts`: HTTP service riêng cho `/engine/best-move`, `/engine/hint`, `/engine/analyze`, `/health`.
+  - `uci_engine.ts`: wrapper UCI spawn process Pikafish, parse `info` + `bestmove`.
+  - `engine_pool.ts`: pool nhiều process + queue + hard-timeout + 429 khi quá tải.
+  - `analysis_cache.ts`: LRU cache theo FEN + giới hạn search.
+  - `quota.ts`: hạn mức ngày theo uid cho free user; VIP hook đã có qua `isVip`.
+  - `analysis.ts`: phân tích danh sách nước UCI, phân loại `best/excellent/good/inaccuracy/mistake/blunder`.
+- ✅ **Entrypoint/runtime backend**:
+  - [`cchess-backend/package.json`](cchess-backend/package.json): thêm `engine:start`, `engine:dev`, test engine service.
+  - [`cchess-backend/Dockerfile.engine`](cchess-backend/Dockerfile.engine): build Pikafish server-side, copy binary + NNUE vào image runtime, chạy `dist/engine-service/server.js`.
+  - [`render.yaml`](render.yaml): thêm service Render `cchess-engine`, tách khỏi `cchess-backend` realtime.
+- ✅ **Hỗ trợ FEN cho TypeScript engine port**:
+  - [`cchess-backend/src/engine/game.ts`](cchess-backend/src/engine/game.ts): thêm `XiangqiGame.fromFen()` và `toFen()` để service engine replay/analyze ván.
+- ✅ **App-side abstraction Flutter**:
+  - [`cchess/lib/core/chess_engine/move_engine.dart`](cchess/lib/core/chess_engine/move_engine.dart): interface `MoveEngine`, `EngineMove`, `EngineLevel`, `EngineUseCase`.
+  - [`local_minimax_engine.dart`](cchess/lib/core/chess_engine/local_minimax_engine.dart): adapter minimax Dart hiện có.
+  - [`remote_pikafish_engine.dart`](cchess/lib/core/chess_engine/remote_pikafish_engine.dart): HTTP client gọi service Pikafish.
+  - [`engine_router.dart`](cchess/lib/core/chess_engine/engine_router.dart): route remote cho hint/analyze/grandmaster, fallback local minimax khi remote lỗi/offline.
+  - [`engine_providers.dart`](cchess/lib/core/chess_engine/engine_providers.dart): Riverpod providers cho local minimax, remote Pikafish và router lai.
+  - [`AppConstants.defaultEngineHttpUrl`](cchess/lib/core/constants/app_constants.dart): cấu hình URL engine qua `--dart-define=CCHESS_ENGINE_URL=...`.
+- ✅ **UI/controller đã nối vào `EngineRouter`**:
+  - [`game_screen.dart`](cchess/lib/presentation/game/game_screen.dart): bot move gọi `EngineRouter.bestMove(...)`; các bot cũ vẫn dùng minimax, lựa chọn **Đại Sư+** dùng Pikafish server-side và fallback minimax.
+  - [`bot_select_screen.dart`](cchess/lib/presentation/bot_game/bot_select_screen.dart): thêm card **Đại Sư+ / Pikafish**.
+  - [`app_router.dart`](cchess/lib/router/app_router.dart): parse `level=grandmaster` thành `EngineLevel.grandmaster`.
+  - [`replay_controller.dart`](cchess/lib/presentation/replay/replay_controller.dart): AI Coach/phân tích replay gọi `EngineRouter.analyze(...)`, remote lỗi thì fallback local.
+- ✅ **Test/verification đã chạy**:
+  - Backend: `npm run build`, `npm test`.
+  - Flutter: `flutter analyze`, `flutter test`.
+
+### 10.2. Chưa xong / cần làm tiếp
+
+- ⬜ **Spike FEN/UCI với Pikafish thật**: cần chạy binary thật, lấy vài thế cờ cố định, đối chiếu nước UCI trả về với board của app.
+- ⬜ **Nút gợi ý in-game**: `EngineRouter.bestMove(..., useCase: EngineUseCase.hint)` đã sẵn sàng nhưng UI nút gợi ý chưa được thêm/nối.
+- ⬜ **VIP thật + quota bền vững**: hiện quota là in-memory theo process; production nên dùng Firestore/Redis để không reset khi redeploy/restart.
+- ⬜ **Attribution trong app**: thêm mục Pikafish/GPL/NNUE license ở màn Cài đặt/Giới thiệu trước khi phát hành.
+- ⚠️ **NNUE license cho thương mại**: mã nguồn Pikafish GPL-3.0, nhưng repo chính thức `official-pikafish/Networks` ghi `pikafish.nnue` **không dùng thương mại nếu chưa được phép**. Nếu app/backend có mục tiêu thương mại, phải xin phép hoặc chọn network/engine khác có giấy phép phù hợp trước khi dùng production.
+
+---
+
+## 11. Lấy Pikafish thật và chạy service local
+
+### 11.1. Nguồn chính thức
+
+- Source/release engine: https://github.com/official-pikafish/Pikafish
+- Latest release đang thấy ngày 2026-06-07: **Pikafish 2026-01-02**  
+  `https://github.com/official-pikafish/Pikafish/releases/tag/Pikafish-2026-01-02`
+- Asset binary release:  
+  `https://github.com/official-pikafish/Pikafish/releases/download/Pikafish-2026-01-02/Pikafish.2026-01-02.7z`
+- NNUE network chính thức:  
+  `https://github.com/official-pikafish/Networks/releases/download/master-net/pikafish.nnue`
+
+### 11.2. Cách khuyến nghị cho deploy/server: Docker build từ source
+
+Không cần tải tay binary. Image [`cchess-backend/Dockerfile.engine`](cchess-backend/Dockerfile.engine) sẽ:
+
+1. Clone source Pikafish.
+2. Build generic CPU `ARCH=x86-64`.
+3. Tải NNUE bằng `make net`.
+4. Chạy `./pikafish bench` để fail sớm nếu binary không chạy được.
+5. Copy binary + `pikafish.nnue` sang Node runtime.
+
+Lệnh chạy local bằng Docker:
+
+```powershell
+cd cchess-backend
+docker build -f Dockerfile.engine -t cchess-engine .
+docker run --rm -p 8090:8090 -e ENGINE_AUTH_DISABLED=1 cchess-engine
+```
+
+Smoke test:
+
+```powershell
+Invoke-RestMethod `
+  -Method Post `
+  -Uri 'http://localhost:8090/engine/best-move' `
+  -ContentType 'application/json' `
+  -Body '{"fen":"rnbakabnr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RNBAKABNR w - - 0 1","level":"grandmaster"}'
+```
+
+Kỳ vọng response dạng:
+
+```json
+{"uci":"...","scoreCp":...,"depth":...,"pv":[...],"cached":false}
+```
+
+### 11.3. Cách chạy local bằng binary tải tay trên Windows
+
+1. Tải `Pikafish.2026-01-02.7z` từ release chính thức.
+2. Giải nén vào ví dụ `cchess-backend\engine\pikafish-release\`.
+3. Tải `pikafish.nnue` vào `cchess-backend\engine\pikafish.nnue`.
+4. Chọn file `.exe` phù hợp CPU trong archive. Nếu không chắc CPU hỗ trợ AVX2/VNNI, ưu tiên binary generic/x86-64 nếu release có.
+5. Set env và chạy service:
+
+```powershell
+cd cchess-backend
+npm install
+npm run build
+
+$env:PIKAFISH_PATH = "F:\Flutter\Copilot\CChess\CChess\cchess-backend\engine\pikafish-release\<ten-file-pikafish>.exe"
+$env:EVAL_FILE = "F:\Flutter\Copilot\CChess\CChess\cchess-backend\engine\pikafish.nnue"
+$env:ENGINE_AUTH_DISABLED = "1"
+$env:PORT = "8090"
+npm run engine:start
+```
+
+Sau đó gọi smoke test ở mục 11.2.
+
+### 11.4. Nối Flutter app vào service local
+
+- Android emulator:
+
+```powershell
+flutter run --dart-define=CCHESS_ENGINE_URL=http://10.0.2.2:8090
+```
+
+- Máy thật cùng Wi-Fi:
+
+```powershell
+flutter run --dart-define=CCHESS_ENGINE_URL=http://<LAN-IP-cua-may-dev>:8090
+```
+
+Khi bật auth thật, `RemotePikafishEngine` cần `tokenProvider` lấy Firebase ID token:
+
+```dart
+RemotePikafishEngine(
+  baseUri: Uri.parse(AppConstants.defaultEngineHttpUrl),
+  tokenProvider: () => FirebaseAuth.instance.currentUser?.getIdToken(),
+)
+```
+
+Sau đó inject vào:
+
+```dart
+EngineRouter(
+  local: LocalMinimaxEngine(),
+  remote: remotePikafishEngine,
+  canUseRemote: () => true, // sau này thay bằng online/VIP/quota state
+)
+```
+
+---
+
+*Tạo 2026-06-07 sau khi chốt phương án lai (offline minimax Dart + online Pikafish server-side). Cập nhật 2026-06-07: đã triển khai service engine/API/pool/cache/quota cơ bản, Dockerfile engine, Flutter abstraction/router/fallback và đã nối bot/replay controller vào `EngineRouter`; bước tiếp theo là chạy smoke test với Pikafish thật, thêm nút gợi ý và xử lý quota/VIP bền vững.*

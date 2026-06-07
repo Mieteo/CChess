@@ -27,6 +27,7 @@ class GameScreen extends ConsumerStatefulWidget {
   /// Mode flag accepted from the router (`local` / `bot`).
   final String mode;
   final BotDifficulty? botDifficulty;
+  final EngineLevel? engineLevel;
 
   /// Color the bot plays. Defaults to Black so the human starts.
   final PieceColor cpuColor;
@@ -35,6 +36,7 @@ class GameScreen extends ConsumerStatefulWidget {
     super.key,
     this.mode = 'local',
     this.botDifficulty,
+    this.engineLevel,
     this.cpuColor = PieceColor.black,
   });
 
@@ -50,19 +52,21 @@ class _GameScreenState extends ConsumerState<GameScreen> {
   Timer? _ticker;
   DateTime? _gameStartedAt;
   bool _soundOn = true;
-  final BotEngine _botEngine = BotEngine();
   late final GameControllerArgs _args;
   bool _resultPersisted = false;
 
   @override
   void initState() {
     super.initState();
-    final mode = widget.mode == 'bot' ? GameMode.vsBot : GameMode.localTwoPlayer;
+    final mode = widget.mode == 'bot'
+        ? GameMode.vsBot
+        : GameMode.localTwoPlayer;
     _args = GameControllerArgs(
       mode: mode,
       cpuColor: mode == GameMode.vsBot ? widget.cpuColor : null,
-      botDifficulty:
-          mode == GameMode.vsBot ? (widget.botDifficulty ?? BotDifficulty.medium) : null,
+      botDifficulty: mode == GameMode.vsBot
+          ? (widget.botDifficulty ?? BotDifficulty.medium)
+          : null,
     );
     _redTime = _gameClock;
     _blackTime = _gameClock;
@@ -124,9 +128,14 @@ class _GameScreenState extends ConsumerState<GameScreen> {
 
     _controller.setBotThinking(true);
     final difficulty = state.botDifficulty ?? BotDifficulty.medium;
-    final move = await _botEngine.chooseMove(state.game, difficulty);
+    final engine = ref.read(engineRouterProvider);
+    final result = await engine.bestMove(
+      state.game.toFen(),
+      level: widget.engineLevel ?? _engineLevelForDifficulty(difficulty),
+      useCase: EngineUseCase.bot,
+    );
     if (!mounted) return;
-    if (move == null) {
+    if (result == null) {
       _controller.setBotThinking(false);
       return;
     }
@@ -136,7 +145,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
       _controller.setBotThinking(false);
       return;
     }
-    _controller.applyBotMove(move.from, move.to);
+    _controller.applyBotMove(result.move.from, result.move.to);
   }
 
   void _onUserTap(int row, int col) {
@@ -174,7 +183,8 @@ class _GameScreenState extends ConsumerState<GameScreen> {
     final humanColor = state.mode == GameMode.vsBot
         ? (state.cpuColor == PieceColor.red ? PieceColor.black : PieceColor.red)
         : null;
-    final won = humanColor != null &&
+    final won =
+        humanColor != null &&
         ((game.status == GameStatus.redWin && humanColor == PieceColor.red) ||
             (game.status == GameStatus.blackWin &&
                 humanColor == PieceColor.black));
@@ -183,7 +193,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
     // 1. Save a kỳ phổ record.
     final repo = ref.read(gameHistoryRepositoryProvider);
     final opponentLabel = state.mode == GameMode.vsBot
-        ? 'Bot ${(state.botDifficulty ?? BotDifficulty.medium).nameVi}'
+        ? _botOpponentLabel(state.botDifficulty ?? BotDifficulty.medium)
         : 'Người Chơi 2';
     final mode = state.mode == GameMode.vsBot
         ? GameMode.vsBot
@@ -191,31 +201,33 @@ class _GameScreenState extends ConsumerState<GameScreen> {
     final duration = _gameStartedAt == null
         ? Duration.zero
         : DateTime.now().difference(_gameStartedAt!);
-    await repo.save(GameRecord(
-      id: '',
-      opponentLabel: opponentLabel,
-      mode: mode,
-      humanColor: humanColor,
-      startingFen: kInitialFen,
-      moves: game.history.map((m) => m.toUci()).toList(),
-      result: game.status,
-      endReason: game.endReason,
-      eloDelta: 0,
-      duration: duration,
-      endedAt: DateTime.now(),
-    ));
+    await repo.save(
+      GameRecord(
+        id: '',
+        opponentLabel: opponentLabel,
+        mode: mode,
+        humanColor: humanColor,
+        startingFen: kInitialFen,
+        moves: game.history.map((m) => m.toUci()).toList(),
+        result: game.status,
+        endReason: game.endReason,
+        eloDelta: 0,
+        duration: duration,
+        endedAt: DateTime.now(),
+      ),
+    );
 
     // 2. Apply to profile stats (no ELO change for local / bot games yet).
     if (humanColor != null || state.mode == GameMode.localTwoPlayer) {
       // For local 2-player we still bump totalGames but no win/loss credit.
       if (humanColor != null) {
-        await ref.read(profileControllerProvider.notifier).applyGameResult(
-              eloDelta: 0,
-              won: won,
-              drew: drew,
-            );
+        await ref
+            .read(profileControllerProvider.notifier)
+            .applyGameResult(eloDelta: 0, won: won, drew: drew);
       } else {
-        await ref.read(profileControllerProvider.notifier).update(
+        await ref
+            .read(profileControllerProvider.notifier)
+            .update(
               (p) => p.copyWith(
                 totalGames: p.totalGames + 1,
                 lastActiveAt: DateTime.now(),
@@ -245,8 +257,9 @@ class _GameScreenState extends ConsumerState<GameScreen> {
     final achRepo = ref.read(achievementRepositoryProvider);
     final puzzleRepo = ref.read(puzzleRepositoryProvider);
     final allPuzzleProgress = await puzzleRepo.getAllProgress();
-    final puzzlesSolved =
-        allPuzzleProgress.values.where((p) => p.solved).length;
+    final puzzlesSolved = allPuzzleProgress.values
+        .where((p) => p.solved)
+        .length;
 
     final stats = AchievementStats(
       totalGames: profile.totalGames,
@@ -317,9 +330,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
     );
     if (!confirmed) return;
     final loser = state.mode == GameMode.vsBot
-        ? (state.cpuColor == PieceColor.red
-            ? PieceColor.black
-            : PieceColor.red)
+        ? (state.cpuColor == PieceColor.red ? PieceColor.black : PieceColor.red)
         : state.turn;
     _controller.resign(loser);
   }
@@ -368,18 +379,15 @@ class _GameScreenState extends ConsumerState<GameScreen> {
         : null;
 
     final opponentLabel = state.mode == GameMode.vsBot
-        ? 'Bot ${(state.botDifficulty ?? BotDifficulty.medium).nameVi}'
+        ? _botOpponentLabel(state.botDifficulty ?? BotDifficulty.medium)
         : 'Người Chơi 2';
-    final opponentElo =
-        state.botDifficulty?.estimatedElo ?? 1500;
+    final opponentElo = state.botDifficulty?.estimatedElo ?? 1500;
 
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
         backgroundColor: AppColors.woodDark,
-        title: Text(
-          state.mode == GameMode.vsBot ? 'Đấu với Bot AI' : 'Đấu cờ',
-        ),
+        title: Text(state.mode == GameMode.vsBot ? 'Đấu với Bot AI' : 'Đấu cờ'),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: _onLeave,
@@ -404,7 +412,8 @@ class _GameScreenState extends ConsumerState<GameScreen> {
                     color: state.boardFlipped
                         ? PieceColor.red
                         : PieceColor.black,
-                    isMyTurn: state.turn ==
+                    isMyTurn:
+                        state.turn ==
                         (state.boardFlipped
                             ? PieceColor.red
                             : PieceColor.black),
@@ -436,7 +445,8 @@ class _GameScreenState extends ConsumerState<GameScreen> {
                     color: state.boardFlipped
                         ? PieceColor.black
                         : PieceColor.red,
-                    isMyTurn: state.turn ==
+                    isMyTurn:
+                        state.turn ==
                         (state.boardFlipped
                             ? PieceColor.black
                             : PieceColor.red),
@@ -453,8 +463,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
                     onUndo: _controller.undo,
                     onDraw: _onDraw,
                     onResign: _onResign,
-                    onToggleSound: () =>
-                        setState(() => _soundOn = !_soundOn),
+                    onToggleSound: () => setState(() => _soundOn = !_soundOn),
                     onFlip: _controller.toggleFlip,
                   ),
                 ],
@@ -520,6 +529,28 @@ class _GameScreenState extends ConsumerState<GameScreen> {
       }
     }
     return _CaptureCount(byRed: byRed, byBlack: byBlack);
+  }
+
+  EngineLevel _engineLevelForDifficulty(BotDifficulty difficulty) {
+    switch (difficulty) {
+      case BotDifficulty.veryEasy:
+        return EngineLevel.veryEasy;
+      case BotDifficulty.easy:
+        return EngineLevel.easy;
+      case BotDifficulty.medium:
+        return EngineLevel.medium;
+      case BotDifficulty.hard:
+        return EngineLevel.hard;
+      case BotDifficulty.veryHard:
+        return EngineLevel.veryHard;
+    }
+  }
+
+  String _botOpponentLabel(BotDifficulty difficulty) {
+    if (widget.engineLevel == EngineLevel.grandmaster) {
+      return 'Pikafish Đại Sư+';
+    }
+    return 'Bot ${difficulty.nameVi}';
   }
 }
 

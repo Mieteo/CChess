@@ -2,7 +2,7 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../core/chess_engine/ai/bot_difficulty.dart';
+import '../core/chess_engine/chess_engine.dart';
 import '../core/constants/app_constants.dart';
 import '../presentation/achievements/achievements_screen.dart';
 import '../presentation/bot_game/bot_select_screen.dart';
@@ -126,8 +126,17 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         builder: (context, state) {
           final mode = state.uri.queryParameters['mode'] ?? 'local';
           final levelRaw = state.uri.queryParameters['level'];
-          final level = BotDifficultyX.fromString(levelRaw);
-          return GameScreen(mode: mode, botDifficulty: level);
+          final engineLevel = engineLevelFromString(levelRaw);
+          final level =
+              BotDifficultyX.fromString(levelRaw) ??
+              (engineLevel == EngineLevel.grandmaster
+                  ? BotDifficulty.veryHard
+                  : null);
+          return GameScreen(
+            mode: mode,
+            botDifficulty: level,
+            engineLevel: engineLevel,
+          );
         },
       ),
       ShellRoute(
@@ -147,19 +156,23 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: AppConstants.routeLearning,
-            pageBuilder: (context, state) => _fade(state, const LearningScreen()),
+            pageBuilder: (context, state) =>
+                _fade(state, const LearningScreen()),
           ),
           GoRoute(
             path: AppConstants.routeCompete,
-            pageBuilder: (context, state) => _fade(state, const CompeteScreen()),
+            pageBuilder: (context, state) =>
+                _fade(state, const CompeteScreen()),
           ),
           GoRoute(
             path: AppConstants.routeCommunity,
-            pageBuilder: (context, state) => _fade(state, const CommunityScreen()),
+            pageBuilder: (context, state) =>
+                _fade(state, const CommunityScreen()),
           ),
           GoRoute(
             path: AppConstants.routeProfile,
-            pageBuilder: (context, state) => _fade(state, const ProfileScreen()),
+            pageBuilder: (context, state) =>
+                _fade(state, const ProfileScreen()),
           ),
         ],
       ),

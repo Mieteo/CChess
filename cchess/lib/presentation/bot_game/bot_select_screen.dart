@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../core/chess_engine/ai/bot_difficulty.dart';
+import '../../core/chess_engine/chess_engine.dart';
 import '../../core/constants/app_constants.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_spacing.dart';
@@ -28,10 +28,7 @@ class BotSelectScreen extends StatelessWidget {
         child: ListView(
           padding: const EdgeInsets.all(AppSpacing.base),
           children: [
-            Text(
-              'Bot AI offline',
-              style: AppTextStyles.titleLg,
-            ),
+            Text('Bot AI offline', style: AppTextStyles.titleLg),
             AppSpacing.vGapXs,
             Text(
               'Mỗi cấp độ tính trước số nước khác nhau. Càng cao càng chậm và khó.',
@@ -44,6 +41,7 @@ class BotSelectScreen extends StatelessWidget {
               _BotCard(difficulty: difficulty),
               AppSpacing.vGapMd,
             ],
+            const _GrandmasterCard(),
           ],
         ),
       ),
@@ -138,6 +136,81 @@ class _BotCard extends StatelessWidget {
                 AppSpacing.vGapXs,
                 Text(
                   difficulty.descriptionVi,
+                  style: AppTextStyles.captionSm.copyWith(
+                    color: AppColors.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const Icon(Icons.chevron_right, color: AppColors.parchmentTan),
+        ],
+      ),
+    );
+  }
+}
+
+class _GrandmasterCard extends StatelessWidget {
+  const _GrandmasterCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return CChessCard(
+      onTap: () => context.go(
+        '${AppConstants.routeGame}?mode=bot&level=${EngineLevel.grandmaster.apiName}',
+      ),
+      borderColor: AppColors.accentGold.withValues(alpha: 0.65),
+      child: Row(
+        children: [
+          Container(
+            width: 56,
+            height: 56,
+            decoration: BoxDecoration(
+              color: AppColors.accentGold.withValues(alpha: 0.16),
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: AppColors.accentGold.withValues(alpha: 0.5),
+              ),
+            ),
+            alignment: Alignment.center,
+            child: const Icon(
+              Icons.workspace_premium,
+              color: AppColors.accentGold,
+              size: 26,
+            ),
+          ),
+          AppSpacing.hGapMd,
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Text('Đại Sư+', style: AppTextStyles.headingMd),
+                    AppSpacing.hGapSm,
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 1,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppColors.accentGold.withValues(alpha: 0.18),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        'Pikafish',
+                        style: AppTextStyles.captionSm.copyWith(
+                          color: AppColors.accentGold,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 10,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                AppSpacing.vGapXs,
+                Text(
+                  'Dùng Pikafish server-side khi online; mất mạng sẽ tự hạ về Đại Sư offline.',
                   style: AppTextStyles.captionSm.copyWith(
                     color: AppColors.onSurfaceVariant,
                   ),

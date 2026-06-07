@@ -8,6 +8,14 @@ enum EngineUseCase { bot, hint, analysis }
 
 enum EngineSource { localMinimax, remotePikafish }
 
+EngineLevel? engineLevelFromString(String? value) {
+  if (value == null) return null;
+  for (final level in EngineLevel.values) {
+    if (level.name == value || level.apiName == value) return level;
+  }
+  return null;
+}
+
 extension EngineLevelX on EngineLevel {
   BotDifficulty get fallbackDifficulty {
     switch (this) {

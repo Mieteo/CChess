@@ -78,10 +78,13 @@ class ReplayUiState {
 /// Controller that walks through a saved [GameRecord] move-by-move.
 class ReplayController extends StateNotifier<ReplayUiState> {
   Timer? _autoPlayTimer;
-  StreamSubscription<AnalysisProgress>? _analysisSub;
+  int _analysisRunId = 0;
+  final MoveEngine _analysisEngine;
 
-  ReplayController({required GameRecord record})
-      : super(ReplayUiState(
+  ReplayController({required GameRecord record, MoveEngine? analysisEngine})
+    : _analysisEngine = analysisEngine ?? LocalMinimaxEngine(),
+      super(
+        ReplayUiState(
           record: record,
           currentPly: 0,
           board: Board.fromFen(record.startingFen),
@@ -91,12 +94,13 @@ class ReplayController extends StateNotifier<ReplayUiState> {
           coachMode: false,
           analysis: null,
           analysisProgress: 0,
-        ));
+        ),
+      );
 
   @override
   void dispose() {
     _autoPlayTimer?.cancel();
-    _analysisSub?.cancel();
+    _analysisRunId++;
     super.dispose();
   }
 
@@ -179,33 +183,21 @@ class ReplayController extends StateNotifier<ReplayUiState> {
   }
 
   void _runAnalysis() {
-    _analysisSub?.cancel();
-    final analyzer = GameAnalyzer();
-    final stream = analyzer.stream(
-      startingFen: state.record.startingFen,
-      moveUcis: state.record.moves,
-    );
-    state = state.copyWith(analysisProgress: 0, analysis: null);
-    final collected = <MoveAnalysis>[];
-    _analysisSub = stream.listen((p) {
-      if (p.latest != null) collected.add(p.latest!);
-      state = state.copyWith(analysisProgress: p.fraction);
-    }, onDone: () {
-      // Build the aggregate via the analyzer's public API.
-      analyzer
-          .analyze(
-        startingFen: state.record.startingFen,
-        moveUcis: state.record.moves,
-      )
-          .then((analysis) {
-        if (mounted) {
-          state = state.copyWith(
-            analysis: analysis,
-            analysisProgress: 1.0,
-          );
-        }
-      });
-    });
+    final runId = ++_analysisRunId;
+    state = state.copyWith(analysisProgress: 0.05, analysis: null);
+    unawaited(() async {
+      try {
+        final analysis = await _analysisEngine.analyze(
+          startingFen: state.record.startingFen,
+          moveUcis: state.record.moves,
+        );
+        if (!mounted || runId != _analysisRunId) return;
+        state = state.copyWith(analysis: analysis, analysisProgress: 1.0);
+      } catch (_) {
+        if (!mounted || runId != _analysisRunId) return;
+        state = state.copyWith(analysisProgress: 1.0);
+      }
+    }());
   }
 
   /// Rebuild a fresh board representing the position after [ply] moves.
@@ -243,12 +235,15 @@ class ReplayController extends StateNotifier<ReplayUiState> {
 
 final replayControllerProvider = StateNotifierProvider.autoDispose
     .family<ReplayController, ReplayUiState, GameRecord>((ref, record) {
-  return ReplayController(record: record);
-});
+      return ReplayController(
+        record: record,
+        analysisEngine: ref.watch(engineRouterProvider),
+      );
+    });
 
 /// FutureProvider that loads a [GameRecord] by id.
 final replayRecordProvider = FutureProvider.autoDispose
     .family<GameRecord?, String>((ref, id) async {
-  final repo = ref.watch(gameHistoryRepositoryProvider);
-  return repo.getById(id);
-});
+      final repo = ref.watch(gameHistoryRepositoryProvider);
+      return repo.getById(id);
+    });

@@ -9,6 +9,7 @@ export 'ai/evaluator.dart';
 export 'ai/game_analyzer.dart';
 export 'ai/minimax.dart';
 export 'board.dart';
+export 'engine_providers.dart';
 export 'engine_router.dart';
 export 'local_minimax_engine.dart';
 export 'move.dart';
