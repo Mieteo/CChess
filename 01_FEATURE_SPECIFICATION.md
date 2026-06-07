@@ -370,9 +370,9 @@ CChess App
 - CDN: Ảnh, video khóa học
 
 ### 7.3 AI / Chess Engine
-- Pikafish (Fairy-Stockfish fork for Xiangqi) — engine mạnh nhất cho cờ tướng
-- Tích hợp qua FFI (dart:ffi) hoặc isolate
-- AI Coach: Phân tích bằng engine + rule-based feedback
+- Pikafish — engine cờ tướng mạnh nhất (phái sinh từ Stockfish, đánh giá NNUE). **Lưu ý: KHÔNG phải Fairy-Stockfish** (Fairy-Stockfish là engine đa biến thể khác) — Pikafish là engine chuyên cờ tướng.
+- Tích hợp **server-side** (chạy trên backend, app gọi qua API) thay vì FFI on-device — tránh ràng buộc GPL-3.0 khi phát hành app thương mại. Xem [`11_KE_HOACH_TICH_HOP_ENGINE.md`](11_KE_HOACH_TICH_HOP_ENGINE.md).
+- Engine offline/bot nhẹ: minimax Dart on-device (đã có). AI Coach: Pikafish (server) + rule-based feedback.
 
 ### 7.4 Bảo mật
 - JWT authentication

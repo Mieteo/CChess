@@ -142,6 +142,12 @@ class GameSocketService {
   void sendChatMessage(String text) =>
       send({'type': 'chat-message', 'text': text.trim()});
 
+  /// Sprint 12 rematch: offer to play again in the same room (colors swap).
+  /// When both players offer, the server restarts the game automatically.
+  void offerRematch() => send({'type': 'rematch-offer'});
+
+  void declineRematch() => send({'type': 'rematch-decline'});
+
   /// Step 4: send a Xiangqi move in UCI format (e.g. "e2e4").
   /// Server validates format + turn + clock + Xiangqi legality.
   void sendMove(String uci) =>

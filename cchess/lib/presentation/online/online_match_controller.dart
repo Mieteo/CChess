@@ -121,6 +121,8 @@ class OnlineMatchState {
     this.chatMessages = const <OnlineChatMessage>[],
     this.activeRooms = const <OnlineActiveRoom>[],
     this.activeRoomsUpdatedAtMs,
+    this.rematchOfferedByMe = false,
+    this.rematchOfferedByOpponent = false,
   });
 
   final OnlineMatchPhase phase;
@@ -154,6 +156,11 @@ class OnlineMatchState {
   final List<OnlineActiveRoom> activeRooms;
   final int? activeRoomsUpdatedAtMs;
 
+  /// Sprint 12 rematch: whether I have offered a rematch, and whether the
+  /// opponent has offered one. When both true, server starts a new game.
+  final bool rematchOfferedByMe;
+  final bool rematchOfferedByOpponent;
+
   bool get isMyTurn => myColor != null && currentTurn == myColor;
   bool get isPlaying =>
       phase == OnlineMatchPhase.playing ||
@@ -186,6 +193,8 @@ class OnlineMatchState {
     List<OnlineChatMessage>? chatMessages,
     List<OnlineActiveRoom>? activeRooms,
     int? activeRoomsUpdatedAtMs,
+    bool? rematchOfferedByMe,
+    bool? rematchOfferedByOpponent,
     bool clearError = false,
     bool clearPeerDisconnect = false,
   }) {
@@ -218,6 +227,9 @@ class OnlineMatchState {
       activeRooms: activeRooms ?? this.activeRooms,
       activeRoomsUpdatedAtMs:
           activeRoomsUpdatedAtMs ?? this.activeRoomsUpdatedAtMs,
+      rematchOfferedByMe: rematchOfferedByMe ?? this.rematchOfferedByMe,
+      rematchOfferedByOpponent:
+          rematchOfferedByOpponent ?? this.rematchOfferedByOpponent,
     );
   }
 }
@@ -347,6 +359,24 @@ class OnlineMatchController extends StateNotifier<OnlineMatchState> {
   void resign() {
     if (!state.isPlaying) return;
     _socket.resign();
+  }
+
+  /// Sprint 12 rematch: offer to play again. Only valid once the game ended
+  /// and the opponent is still connected. When both sides offer, the server
+  /// starts a fresh game (colors swapped) via a new game-start event.
+  void offerRematch() {
+    if (state.phase != OnlineMatchPhase.ended) return;
+    if (state.rematchOfferedByMe) return;
+    state = state.copyWith(rematchOfferedByMe: true, clearError: true);
+    _socket.offerRematch();
+  }
+
+  void declineRematch() {
+    state = state.copyWith(
+      rematchOfferedByMe: false,
+      rematchOfferedByOpponent: false,
+    );
+    _socket.declineRematch();
   }
 
   void sendChatMessage(String text) {
@@ -502,6 +532,26 @@ class OnlineMatchController extends StateNotifier<OnlineMatchState> {
       case 'reconnected':
         _onReconnected(msg, newLog);
         break;
+      case 'rematch-offered':
+        state = state.copyWith(
+          rematchOfferedByOpponent: true,
+          lastEventLog: newLog,
+        );
+        break;
+      case 'rematch-pending':
+        state = state.copyWith(
+          rematchOfferedByMe: true,
+          lastEventLog: newLog,
+        );
+        break;
+      case 'rematch-declined':
+        state = state.copyWith(
+          rematchOfferedByMe: false,
+          rematchOfferedByOpponent: false,
+          errorMessage: 'Đối thủ đã từ chối đấu lại.',
+          lastEventLog: newLog,
+        );
+        break;
       case 'error':
         _onError(msg, newLog);
         break;
@@ -534,6 +584,8 @@ class OnlineMatchController extends StateNotifier<OnlineMatchState> {
       blackClockMs: (clock?['black'] as num?)?.toInt() ?? state.blackClockMs,
       lastEventLog: log,
       chatMessages: const <OnlineChatMessage>[],
+      rematchOfferedByMe: false,
+      rematchOfferedByOpponent: false,
       clearError: true,
     );
     // Persist for Step 8 reconnect
@@ -727,6 +779,22 @@ class OnlineMatchController extends StateNotifier<OnlineMatchState> {
         errorMessage: code == 'invalid-chat'
             ? 'Tin nhắn không hợp lệ hoặc quá dài.'
             : 'Bạn gửi chat quá nhanh.',
+        lastEventLog: log,
+      );
+      return;
+    }
+    // Sprint 12 rematch: the opponent left before a rematch could start. Keep
+    // the ended screen alive (don't flip to phase=error) and reset offer flags
+    // so the result dialog can show a hint instead of breaking.
+    if (state.phase == OnlineMatchPhase.ended &&
+        (code == 'no-opponent' ||
+            code == 'rematch-failed' ||
+            code == 'not-finished' ||
+            code == 'not-player')) {
+      state = state.copyWith(
+        rematchOfferedByMe: false,
+        rematchOfferedByOpponent: false,
+        errorMessage: 'Không thể đấu lại — đối thủ đã rời phòng.',
         lastEventLog: log,
       );
       return;

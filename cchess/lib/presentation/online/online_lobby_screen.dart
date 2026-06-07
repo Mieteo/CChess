@@ -9,9 +9,20 @@ import '../../theme/app_colors.dart';
 import '../../theme/app_spacing.dart';
 import '../../theme/app_text_styles.dart';
 import 'online_match_controller.dart';
+import 'room_share.dart';
+import 'share_room_sheet.dart';
 
 class OnlineLobbyScreen extends ConsumerStatefulWidget {
-  const OnlineLobbyScreen({super.key});
+  const OnlineLobbyScreen({
+    super.key,
+    this.deepLinkRoomId,
+    this.deepLinkSpectate = true,
+  });
+
+  /// A6 share link: when arriving via a shared link the room id is passed here;
+  /// the lobby auto-connects then spectates ([deepLinkSpectate] true) or joins.
+  final String? deepLinkRoomId;
+  final bool deepLinkSpectate;
 
   @override
   ConsumerState<OnlineLobbyScreen> createState() => _OnlineLobbyScreenState();
@@ -36,38 +47,58 @@ class _OnlineLobbyScreenState extends ConsumerState<OnlineLobbyScreen> {
   @override
   void initState() {
     super.initState();
-    // Step 8: if a fresh reconnect state exists, auto-connect + reconnect.
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (_reconnectAttempted) return;
       _reconnectAttempted = true;
-      // Only auto-reconnect if we're idle (not already in a flow)
+      // Only auto-act if we're idle (not already in a flow)
       final s = ref.read(onlineMatchControllerProvider);
       if (s.phase != OnlineMatchPhase.idle) return;
-      // Probe storage first — avoid touching network if no saved state
+
+      // A6 share link: a deep-link room id takes priority over reconnect —
+      // connect then spectate (or join) the shared room.
+      final deepLinkId = widget.deepLinkRoomId;
+      if (deepLinkId != null && RoomShare.isValidRoomId(deepLinkId)) {
+        final roomId = RoomShare.normalizeRoomId(deepLinkId);
+        await _run(() async {
+          if (!await _connectAndWaitAuthed() || !mounted) return;
+          if (widget.deepLinkSpectate) {
+            _ctrl.spectateRoom(roomId);
+          } else {
+            _ctrl.joinRoom(roomId);
+          }
+        });
+        return;
+      }
+
+      // Step 8: if a fresh reconnect state exists, auto-connect + reconnect.
+      // Probe storage first — avoid touching network if no saved state.
       final store = ref.read(reconnectStoreProvider);
       final saved = await store.readFresh();
       if (saved == null || !mounted) return;
-      // Auto-connect then try reconnect
       await _run(() async {
-        await _ctrl.connect(_urlCtrl.text.trim());
-        // Wait for authed phase before sending reconnect-room
-        const maxWaitMs = 5000;
-        const stepMs = 50;
-        var waited = 0;
-        while (waited < maxWaitMs) {
-          final phase = ref.read(onlineMatchControllerProvider).phase;
-          if (phase == OnlineMatchPhase.authed) break;
-          if (phase == OnlineMatchPhase.error) return;
-          await Future<void>.delayed(const Duration(milliseconds: stepMs));
-          waited += stepMs;
-        }
-        if (!mounted) return;
-        if (ref.read(onlineMatchControllerProvider).phase ==
-            OnlineMatchPhase.authed) {
-          _ctrl.reconnectRoom(saved);
-        }
+        if (!await _connectAndWaitAuthed() || !mounted) return;
+        _ctrl.reconnectRoom(saved);
       });
     });
+  }
+
+  /// Connect, then wait until the controller reaches the `authed` phase.
+  /// Returns false if the connection errored or timed out. Shared by the
+  /// reconnect and the A6 share-link deep-link flows.
+  Future<bool> _connectAndWaitAuthed() async {
+    await _ctrl.connect(_urlCtrl.text.trim());
+    const maxWaitMs = 5000;
+    const stepMs = 50;
+    var waited = 0;
+    while (waited < maxWaitMs) {
+      final phase = ref.read(onlineMatchControllerProvider).phase;
+      if (phase == OnlineMatchPhase.authed) return true;
+      if (phase == OnlineMatchPhase.error) return false;
+      await Future<void>.delayed(const Duration(milliseconds: stepMs));
+      waited += stepMs;
+    }
+    return ref.read(onlineMatchControllerProvider).phase ==
+        OnlineMatchPhase.authed;
   }
 
   @override
@@ -341,6 +372,21 @@ class _OnlineLobbyScreenState extends ConsumerState<OnlineLobbyScreen> {
                     ),
                   ),
                 ),
+                AppSpacing.vGapBase,
+                ElevatedButton.icon(
+                  icon: const Icon(Icons.share),
+                  label: const Text('Chia sẻ phòng (link / QR)'),
+                  onPressed: () => ShareRoomSheet.show(
+                    context,
+                    roomId: state.roomId,
+                    spectate: false,
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.accentGold,
+                    foregroundColor: AppColors.inkBlack,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                ),
               ],
               if (state.errorMessage != null) ...[
                 AppSpacing.vGapBase,
@@ -521,6 +567,15 @@ class _ActiveRoomTile extends StatelessWidget {
                   style: AppTextStyles.monoTimer.copyWith(
                     color: AppColors.accentGold,
                   ),
+                ),
+              ),
+              IconButton(
+                tooltip: 'Chia sẻ link xem',
+                icon: const Icon(Icons.share, size: 18),
+                onPressed: () => ShareRoomSheet.show(
+                  context,
+                  roomId: room.roomId,
+                  spectate: true,
                 ),
               ),
               OutlinedButton.icon(

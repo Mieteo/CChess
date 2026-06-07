@@ -42,6 +42,47 @@ export function startMatch(room: Room, uidOf: (s: WebSocket) => string | undefin
   room.engine = XiangqiGame.initial();
 }
 
+/// Sprint 12 rematch: start a fresh game in an existing (finished) room with
+/// colors SWAPPED from the previous game (chess etiquette — alternate the
+/// first-move advantage). Both player sockets must still be connected.
+/// Returns false if the room isn't in a valid state to rematch.
+export function startRematch(room: Room): boolean {
+  if (room.members.size !== 2) return false;
+  const prevRedSocket = room.redSocket;
+  const prevBlackSocket = room.blackSocket;
+  const prevRedUid = room.redUid;
+  const prevBlackUid = room.blackUid;
+  if (!prevRedSocket || !prevBlackSocket || !prevRedUid || !prevBlackUid) {
+    return false;
+  }
+  // Swap: previous black plays red this time.
+  room.redSocket = prevBlackSocket;
+  room.blackSocket = prevRedSocket;
+  room.redUid = prevBlackUid;
+  room.blackUid = prevRedUid;
+
+  const clock = room.initialClockMs ?? INITIAL_CLOCK_MS;
+  room.clockMsByColor = { red: clock, black: clock };
+  room.currentTurn = 'red';
+  const now = Date.now();
+  room.turnStartedAt = now;
+  room.startedAt = now;
+  room.endedAt = undefined;
+  room.result = undefined;
+  room.endReason = undefined;
+  room.movesUci = [];
+  room.moveCount = 0;
+  room.status = 'playing';
+  room.engine = XiangqiGame.initial();
+  room.rematchOfferedBy = undefined;
+  room.disconnectedUid = undefined;
+  if (room.disconnectTimer) {
+    clearTimeout(room.disconnectTimer);
+    room.disconnectTimer = undefined;
+  }
+  return true;
+}
+
 /// Cast helper — engine is stored as `unknown` on Room to avoid a circular import.
 function engineOf(room: Room): XiangqiGame | null {
   return (room.engine as XiangqiGame | undefined) ?? null;

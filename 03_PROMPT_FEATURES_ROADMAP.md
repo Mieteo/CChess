@@ -20,7 +20,7 @@ Tech stack:
 - Navigation: GoRouter
 - Backend: Firebase (Auth, Firestore, Realtime Database, Cloud Functions, Storage)
 - Real-time game: WebSocket (dart:io WebSocket hoặc socket_io_client)
-- Chess engine: Pikafish (Fairy-Stockfish for Xiangqi) qua FFI
+- Chess engine: Pikafish (engine cờ tướng riêng, phái sinh Stockfish — **KHÔNG phải** Fairy-Stockfish) — chạy **server-side** (xem [11_KE_HOACH_TICH_HOP_ENGINE.md](11_KE_HOACH_TICH_HOP_ENGINE.md)); bot offline dùng minimax Dart on-device
 - Local DB: Hive
 - HTTP: Dio + Retrofit
 
@@ -95,6 +95,8 @@ Output: Toàn bộ project scaffold ready to run.
 ---
 
 ## PHASE 1 — PROMPT 02: Chess Engine (Pikafish Integration)
+
+> ⚠️ **Cập nhật 2026-06-07:** hướng tích hợp đã đổi từ **FFI on-device** sang **lai: minimax Dart offline + Pikafish server-side** (lý do GPL-3.0 + iOS App Store xung khắc GPL). Phần mô tả FFI bên dưới giữ lại làm lịch sử; kế hoạch hiện hành xem [`11_KE_HOACH_TICH_HOP_ENGINE.md`](11_KE_HOACH_TICH_HOP_ENGINE.md).
 
 ```
 Tích hợp chess engine Xiangqi vào Flutter:

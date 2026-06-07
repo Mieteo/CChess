@@ -13,6 +13,7 @@ import '../../theme/app_text_styles.dart';
 import '../../widgets/chess/chess_board.dart';
 import '../profile/profile_controller.dart';
 import 'online_match_controller.dart';
+import 'share_room_sheet.dart';
 
 class OnlineGameScreen extends ConsumerStatefulWidget {
   const OnlineGameScreen({super.key});
@@ -27,6 +28,7 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
   List<Position> _validTargets = const [];
   Timer? _countdownTimer;
   final _chatCtrl = TextEditingController();
+  bool _resultDialogOpen = false;
 
   OnlineMatchController get _ctrl =>
       ref.read(onlineMatchControllerProvider.notifier);
@@ -164,7 +166,7 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
     ref.listen<OnlineMatchState>(onlineMatchControllerProvider, (prev, next) {
       if (next.phase == OnlineMatchPhase.ended &&
           prev?.phase != OnlineMatchPhase.ended) {
-        _showResultDialog(next);
+        _showResultDialog();
         if (next.myColor != null) {
           // Step Group-1 polish: ELO + win/loss counters đã update trên cloud,
           // pull về local để Profile screen hiển thị ngay sau dialog dismiss.
@@ -175,6 +177,17 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
             }
           }();
         }
+      }
+      // Sprint 12 rematch: both sides accepted → server restarted the room and
+      // a fresh game-start moved us back to `playing`. The result dialog closes
+      // itself (it watches the phase); here we just clear any stale board
+      // selection from the previous game.
+      if (next.phase == OnlineMatchPhase.playing &&
+          prev?.phase == OnlineMatchPhase.ended) {
+        setState(() {
+          _selected = null;
+          _validTargets = const [];
+        });
       }
     });
 
@@ -223,6 +236,16 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
                   const SizedBox(width: 4),
                   Text('${state.spectatorCount}'),
                 ],
+              ),
+            ),
+          if ((state.isPlaying || isSpectating) && state.roomId != null)
+            IconButton(
+              tooltip: 'Mời xem (link / QR)',
+              icon: const Icon(Icons.share),
+              onPressed: () => ShareRoomSheet.show(
+                context,
+                roomId: state.roomId,
+                spectate: true,
               ),
             ),
         ],
@@ -481,88 +504,236 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
     _chatCtrl.clear();
   }
 
-  Future<void> _showResultDialog(OnlineMatchState state) async {
+  String _resultTitle(OnlineMatchState state) {
     final myColor = state.myColor;
-    String title;
-    if (state.result == 'draw') {
-      title = 'Hòa';
-    } else if (myColor != null) {
+    if (state.result == 'draw') return 'Hòa';
+    if (myColor != null) {
       final iWon =
           (state.result == 'red-win' && myColor == PieceColor.red) ||
           (state.result == 'black-win' && myColor == PieceColor.black);
-      title = iWon ? 'Bạn thắng!' : 'Bạn thua';
-    } else {
-      title = switch (state.result) {
-        'red-win' => 'Đỏ thắng',
-        'black-win' => 'Đen thắng',
-        'draw' => 'Hòa',
-        _ => 'Kết quả: ${state.result}',
-      };
+      return iWon ? 'Bạn thắng!' : 'Bạn thua';
     }
+    return switch (state.result) {
+      'red-win' => 'Đỏ thắng',
+      'black-win' => 'Đen thắng',
+      'draw' => 'Hòa',
+      _ => 'Kết quả: ${state.result}',
+    };
+  }
 
-    // Step A2: extract my-side ELO change if available
-    Widget? eloWidget;
+  String _reasonLabel(String? reason) {
+    return switch (reason) {
+      'timeout' => 'Hết giờ',
+      'resign' => 'Xin thua',
+      'disconnect' => 'Đối thủ mất kết nối',
+      'checkmate' => 'Chiếu bí',
+      'stalemate' => 'Hết nước đi (thua)',
+      null => '—',
+      _ => reason,
+    };
+  }
+
+  /// Step A2: my-side ELO change widget, or null if server didn't send ELO.
+  Widget? _buildEloWidget(OnlineMatchState state) {
+    final myColor = state.myColor;
     final eloUpdate = state.eloUpdate;
-    if (eloUpdate != null && myColor != null) {
-      final myEloSide = myColor == PieceColor.red
-          ? eloUpdate['red'] as Map<String, dynamic>?
-          : eloUpdate['black'] as Map<String, dynamic>?;
-      if (myEloSide != null) {
-        final delta = (myEloSide['delta'] as num?)?.toInt() ?? 0;
-        final newElo = (myEloSide['new'] as num?)?.toInt();
-        final isUp = delta > 0;
-        final isFlat = delta == 0;
-        final color = isFlat
-            ? AppColors.parchmentTan
-            : (isUp ? AppColors.tealSuccess : AppColors.vermilionRed);
-        final sign = isUp ? '+' : '';
-        eloWidget = Padding(
-          padding: const EdgeInsets.only(top: AppSpacing.sm),
-          child: Row(
-            children: [
-              Icon(
-                isFlat
-                    ? Icons.remove
-                    : (isUp ? Icons.trending_up : Icons.trending_down),
-                color: color,
-                size: 18,
-              ),
-              const SizedBox(width: 6),
-              Text(
-                'ELO: $sign$delta${newElo != null ? "  →  $newElo" : ""}',
-                style: AppTextStyles.headingMd.copyWith(color: color),
-              ),
-            ],
+    if (eloUpdate == null || myColor == null) return null;
+    final myEloSide = myColor == PieceColor.red
+        ? eloUpdate['red'] as Map<String, dynamic>?
+        : eloUpdate['black'] as Map<String, dynamic>?;
+    if (myEloSide == null) return null;
+    final delta = (myEloSide['delta'] as num?)?.toInt() ?? 0;
+    final newElo = (myEloSide['new'] as num?)?.toInt();
+    final isUp = delta > 0;
+    final isFlat = delta == 0;
+    final color = isFlat
+        ? AppColors.parchmentTan
+        : (isUp ? AppColors.tealSuccess : AppColors.vermilionRed);
+    final sign = isUp ? '+' : '';
+    return Padding(
+      padding: const EdgeInsets.only(top: AppSpacing.sm),
+      child: Row(
+        children: [
+          Icon(
+            isFlat
+                ? Icons.remove
+                : (isUp ? Icons.trending_up : Icons.trending_down),
+            color: color,
+            size: 18,
           ),
-        );
-      }
-    }
-
-    final resultContent = <Widget>[Text('Lý do: ${state.endReason ?? "—"}')];
-    if (eloWidget != null) resultContent.add(eloWidget);
-
-    await showDialog<void>(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => AlertDialog(
-        title: Text(title),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: resultContent,
-        ),
-        actions: [
-          TextButton(
-            onPressed: () async {
-              Navigator.pop(ctx);
-              await _ctrl.leave();
-              if (mounted) context.go(AppConstants.routeCompete);
-            },
-            child: const Text('Về Đối Đầu'),
+          const SizedBox(width: 6),
+          Text(
+            'ELO: $sign$delta${newElo != null ? "  →  $newElo" : ""}',
+            style: AppTextStyles.headingMd.copyWith(color: color),
           ),
         ],
       ),
     );
+  }
+
+  /// Highlighted info tile inside the result dialog for rematch status.
+  Widget _rematchTile(String text, IconData icon, {bool showSpinner = false}) {
+    return Padding(
+      padding: const EdgeInsets.only(top: AppSpacing.sm),
+      child: Container(
+        padding: const EdgeInsets.all(AppSpacing.sm),
+        decoration: BoxDecoration(
+          color: AppColors.accentGold.withValues(alpha: 0.18),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: AppColors.accentGold),
+        ),
+        child: Row(
+          children: [
+            if (showSpinner)
+              const SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: AppColors.accentGold,
+                ),
+              )
+            else
+              Icon(icon, size: 16, color: AppColors.accentGold),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                text,
+                style: AppTextStyles.captionSm.copyWith(
+                  color: AppColors.accentGold,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _leaveToCompete(BuildContext dialogCtx) async {
+    Navigator.pop(dialogCtx);
+    await _ctrl.leave();
+    if (mounted) context.go(AppConstants.routeCompete);
+  }
+
+  /// Result dialog with reactive rematch flow. The content/actions rebuild as
+  /// the rematch offer state changes; when both sides accept, the server sends
+  /// a fresh `game-start` (phase → playing) and the dialog auto-closes.
+  Future<void> _showResultDialog() async {
+    if (_resultDialogOpen) return;
+    _resultDialogOpen = true;
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogCtx) {
+        return Consumer(
+          builder: (ctx, ref, _) {
+            final state = ref.watch(onlineMatchControllerProvider);
+
+            // Rematch accepted (phase → playing) or we left — close the dialog.
+            if (state.phase != OnlineMatchPhase.ended) {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (Navigator.of(dialogCtx).canPop()) {
+                  Navigator.of(dialogCtx).pop();
+                }
+              });
+              return const SizedBox.shrink();
+            }
+
+            // Opponent already gone (left/disconnected) → rematch impossible.
+            final opponentGone = state.endReason == 'disconnect';
+            final meOffered = state.rematchOfferedByMe;
+            final oppOffered = state.rematchOfferedByOpponent;
+
+            final content = <Widget>[
+              Text('Lý do: ${_reasonLabel(state.endReason)}'),
+            ];
+            final eloWidget = _buildEloWidget(state);
+            if (eloWidget != null) content.add(eloWidget);
+
+            if (opponentGone) {
+              content.add(
+                _rematchTile('Đối thủ đã rời — không thể đấu lại.',
+                    Icons.person_off_outlined),
+              );
+            } else if (meOffered) {
+              content.add(
+                _rematchTile('Đang chờ đối thủ đồng ý đấu lại…',
+                    Icons.hourglass_top, showSpinner: true),
+              );
+            } else if (oppOffered) {
+              content.add(
+                _rematchTile('Đối thủ muốn đấu lại!', Icons.sports_kabaddi),
+              );
+            }
+            if (state.errorMessage != null) {
+              content.add(
+                Padding(
+                  padding: const EdgeInsets.only(top: AppSpacing.sm),
+                  child: Text(
+                    state.errorMessage!,
+                    style: AppTextStyles.captionSm.copyWith(
+                      color: Colors.redAccent,
+                    ),
+                  ),
+                ),
+              );
+            }
+
+            final leaveButton = TextButton(
+              onPressed: () => _leaveToCompete(dialogCtx),
+              child: const Text('Về Đối Đầu'),
+            );
+
+            final List<Widget> actions;
+            if (opponentGone) {
+              actions = [leaveButton];
+            } else if (meOffered) {
+              // Waiting for opponent — allow retracting or leaving.
+              actions = [
+                TextButton(
+                  onPressed: _ctrl.declineRematch,
+                  child: const Text('Hủy'),
+                ),
+                leaveButton,
+              ];
+            } else if (oppOffered) {
+              // Opponent offered — accept (→ restart) or decline.
+              actions = [
+                TextButton(
+                  onPressed: _ctrl.declineRematch,
+                  child: const Text('Từ chối'),
+                ),
+                FilledButton(
+                  onPressed: _ctrl.offerRematch,
+                  child: const Text('Đồng ý'),
+                ),
+              ];
+            } else {
+              actions = [
+                leaveButton,
+                FilledButton.icon(
+                  onPressed: _ctrl.offerRematch,
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('Đấu lại'),
+                ),
+              ];
+            }
+
+            return AlertDialog(
+              title: Text(_resultTitle(state)),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: content,
+              ),
+              actions: actions,
+            );
+          },
+        );
+      },
+    );
+    _resultDialogOpen = false;
   }
 }
 

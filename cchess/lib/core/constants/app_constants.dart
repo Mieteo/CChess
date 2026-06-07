@@ -49,6 +49,16 @@ class AppConstants {
   //   (lưu ý: WSS không phải WS — Render serve HTTPS)
   static const String defaultBackendWsUrl = String.fromEnvironment(
     'CCHESS_BACKEND_URL',
-    defaultValue: 'ws://192.168.1.6:8080',
+    defaultValue: 'wss://cchess-backend.onrender.com',
+  );
+
+  // A6 Spectate share link.
+  // Base HTTPS origin for shareable room links (QR + invite text). The backend
+  // serves a small landing page at `<base>/r/<roomId>` so the link opens
+  // meaningfully in a browser; opening it inside the app deep-links straight to
+  // spectate/join. Override per environment with dart-define if needed.
+  static const String shareLinkBase = String.fromEnvironment(
+    'CCHESS_SHARE_BASE',
+    defaultValue: 'https://cchess-backend.onrender.com',
   );
 }

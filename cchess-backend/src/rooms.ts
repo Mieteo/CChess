@@ -56,6 +56,11 @@ export interface Room {
   // Sprint 12 A5: short in-memory chat history for reconnect/session UI.
   chatMessages?: ChatMessage[];
   lastChatAtByUid?: Record<string, number>;
+
+  // Sprint 12 rematch: set of uids who have offered a rematch after the
+  // game finished. When both players have offered, a fresh game starts in
+  // the same room with colors swapped. Cleared on game start / leave.
+  rematchOfferedBy?: Set<string>;
 }
 
 const rooms = new Map<string, Room>();

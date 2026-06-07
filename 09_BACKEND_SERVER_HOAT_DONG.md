@@ -525,7 +525,7 @@ Client splash sync (`cloud_sync_service._mergeCloudIntoLocal`) đã update để
 ### 10.3. Edge case chưa handle (TODO)
 
 - **2 player disconnect cùng lúc**: chỉ track 1 `disconnectedUid`. Cần Map<uid, timer>.
-- **Spectator public discovery**: đã có danh sách ván đang chơi qua `list-active-rooms`; chưa có invite/share link, moderation cho viewer public.
+- **Spectator public discovery**: đã có danh sách ván đang chơi qua `list-active-rooms` + **share link/QR (A6, 2026-06-07)**: client build link `GET /r/<ROOMID>` (mặc định spectate, `?mode=join` để vào đánh), backend trả landing page HTML tĩnh (mã phòng + hướng dẫn mở app); còn moderation cho viewer public.
 - **Server restart graceful**: chưa save room state. Khi restart, ván đang chơi mất.
 - **Chat / emoji nâng cao**: text chat cơ bản đã có; emoji preset/whitelist, mute/report chưa làm.
 - **Room state persistence**: move/chat history hiện vẫn ở memory, restart backend là mất ván.

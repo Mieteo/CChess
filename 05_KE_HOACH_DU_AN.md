@@ -1,8 +1,8 @@
 # 📊 KẾ HOẠCH & TIẾN ĐỘ DỰ ÁN — CChess
 
-> Tài liệu sống — cập nhật ngày **2026-05-31** sau Sprint 12 group 1 polish + A5 chat cơ bản + A6 Spectate cơ bản.
+> Tài liệu sống — cập nhật ngày **2026-06-07** (đợt 2) sau khi **đóng hết test tự động Sprint 12**: thêm integration test WS thật (T3 rematch handshake + T7 reconnect + T8 chat) qua `cchess-backend/src/server.test.ts`, tách `server.ts` thành factory `createCChessServer()` để test in-process không cần Firebase. Backend `npm test` 17/17.
 > Mục đích: tổng kết **đã làm**, **chưa làm**, **đang chờ phụ thuộc** theo từng Sprint.
-> Tham chiếu chéo: [`01_FEATURE_SPECIFICATION.md`](01_FEATURE_SPECIFICATION.md), [`02_PROMPT_UI_UX.md`](02_PROMPT_UI_UX.md), [`03_PROMPT_FEATURES_ROADMAP.md`](03_PROMPT_FEATURES_ROADMAP.md), [`07_HUONG_DAN_THIET_LAP_FIREBASE.md`](07_HUONG_DAN_THIET_LAP_FIREBASE.md), [`08_HUONG_DAN_BACKEND_WEBSOCKET.md`](08_HUONG_DAN_BACKEND_WEBSOCKET.md), [`09_BACKEND_SERVER_HOAT_DONG.md`](09_BACKEND_SERVER_HOAT_DONG.md).
+> Tham chiếu chéo: [`01_FEATURE_SPECIFICATION.md`](01_FEATURE_SPECIFICATION.md), [`02_PROMPT_UI_UX.md`](02_PROMPT_UI_UX.md), [`03_PROMPT_FEATURES_ROADMAP.md`](03_PROMPT_FEATURES_ROADMAP.md), [`07_HUONG_DAN_THIET_LAP_FIREBASE.md`](07_HUONG_DAN_THIET_LAP_FIREBASE.md), [`08_HUONG_DAN_BACKEND_WEBSOCKET.md`](08_HUONG_DAN_BACKEND_WEBSOCKET.md), [`09_BACKEND_SERVER_HOAT_DONG.md`](09_BACKEND_SERVER_HOAT_DONG.md), [`10_KE_HOACH_TEST.md`](10_KE_HOACH_TEST.md) — **kế hoạch test các mục online chưa xác nhận**.
 
 ---
 
@@ -35,10 +35,10 @@
 | 9 | Game History + Replay AI | 🟢 | Local Hive + push `game_records` lên cloud subcollection ✓; backend cũng ghi mirror record có ELO change cho ván ranked |
 | 10 | Achievements + Daily Quests | 🟢 | Engine + UI xong, chờ Cloud Functions trigger server-side khi ván ranked đạt mốc |
 | 11 | Opening Library (Khai cuộc Đại sư) | 🟢 | Seed cứng 5 khai cuộc, chờ CMS |
-| 12 | Online Matchmaking + Spectate (A1, A5, A6) | 🟡 | **A1 Ranked done**; **A5 chat cơ bản done**; **A6 Spectate cơ bản + active room list done**; còn share link/test tự động |
+| 12 | Online Matchmaking + Spectate (A1, A5, A6) | 🟡 | **A1 Ranked done**; **A5 chat cơ bản done**; **A6 Spectate cơ bản + active room list done**; **A6 share link/QR done 2026-06-07** (link/QR mời xem + deep-link in-app + landing page backend); **Đấu lại (rematch) code done 2026-06-07**; **test tự động WS đóng hết 2026-06-07** (T3 handshake + T7 reconnect + T8 chat qua `server.test.ts`, 17/17 backend). Còn lại **chỉ là việc bạn phải tự làm**: test tay E2E 2 thiết bị (Nhóm R/S/D/M/G) + nâng cấp Render Starter $7/tháng |
 | 13 | Cờ Úp + Cờ Casual (A3, A2) | 🔒 | Chờ engine variant + invite-by-link flow |
 | 14 | Community (Bạn bè, Leaderboard, CLB) | 🔒 | Chờ S12 |
-| 15 | AI Coach (B3) + AI Replay nâng cao (B5) | ⬜ | Cần Pikafish FFI |
+| 15 | AI Coach (B3) + AI Replay nâng cao (B5) | ⬜ | Pikafish **server-side** (engine lai) — xem [11](11_KE_HOACH_TICH_HOP_ENGINE.md) |
 | 16 | Khám Phá (Shop, Inventory, Mail, Event) | ⬜ | Cần backend kinh tế |
 | 17 | VIP Center + IAP | ⬜ | Phụ thuộc store account |
 | 18 | OCR thế cờ (B7), học thuộc kỳ phổ (B8) | ⬜ | Giai đoạn 3 |
@@ -47,6 +47,8 @@
 > - Sprint 8 hoàn thành 3 lát: 8a (Firebase Auth + Firestore + rules deployed), 8b (sync local↔cloud + Cloud Functions deployed Blaze), 8c (backend Node.js WebSocket production-deployed Render).
 > - **Sprint 12 phase 1 A1 hoàn thành 2026-05-24**: matchmaking tự động + per-room clock (3/5/10/15/30 phút) + Xiangqi rule validation server-side + ELO Elo K=32 + reconnect grace 60s + Firestore persistence mirror records. Verified ván 10 phút giữa 2 thiết bị Android thật qua Internet (Render free tier endpoint). Group 1 polish 2026-05-31 đã nâng matchmaking lên ELO bucket/tolerance.
 > - Sprint 9–11 đã unblock (cloud sync chạy). Sprint 12 group 1 polish đã xong 2026-05-31: ELO bucket matchmaking, rollback khi server reject move, profile auto-refresh sau game-ended. Sprint 12 phase 2 đã có A5 chat text, A6 Spectate theo room ID và danh sách ván đang diễn ra.
+> - **2026-06-07 A6 share link/QR**: helper `room_share.dart` build/parse link (`/r/<ID>` spectate, `?mode=join`), `ShareRoomSheet` (QR + copy + native share), nút chia sẻ ở lobby/tile ván đang diễn ra/app bar ván, deep-link in-app `online-lobby?spectate|join=ID`, landing page backend `GET /r/:id`. Test `room_share_test.dart` 17/17.
+> - **2026-06-07 (đợt 2) — đóng hết test tự động Sprint 12**: refactor `cchess-backend/src/server.ts` thành factory `createCChessServer({authenticate, persist})` (giữ nguyên hành vi production; entry point production được bọc trong guard `CCHESS_NO_LISTEN`). Thêm `server.test.ts` (integration WS thật, in-process, không cần Firebase): T3 rematch handshake (cả-2-mời → `game-start{rematch:true}` đổi màu / decline / not-finished), T7 reconnect snapshot trong grace, T8 chat broadcast + rate-limit + cap 120 ký tự + chặn sau `game-ended`. Backend `npm test` **17/17** (rooms 3 + match 8 + server 6).
 
 ---
 
@@ -112,7 +114,7 @@
 - Màn chọn bot: [bot_select_screen.dart](cchess/lib/presentation/bot_game/bot_select_screen.dart).
 - **Test:** [evaluator_test.dart](cchess/test/chess_engine/ai/evaluator_test.dart), [minimax_test.dart](cchess/test/chess_engine/ai/minimax_test.dart).
 
-**Chưa làm:** transposition table, opening book riêng cho bot, Pikafish FFI (đẩy sang Sprint 15).
+**Chưa làm:** transposition table, opening book riêng cho bot, tích hợp Pikafish (server-side, đẩy sang Sprint 15 — xem [11_KE_HOACH_TICH_HOP_ENGINE.md](11_KE_HOACH_TICH_HOP_ENGINE.md)).
 
 ---
 
@@ -238,10 +240,14 @@
 - ✅ A6 Spectate cơ bản — viewer join bằng room ID, nhận snapshot moves/chat/clock, xem board read-only, không có quyền move/resign
 - ✅ A6 polish bước 1 — `list-active-rooms` + lobby hiển thị ván đang diễn ra để xem nhanh
 - ✅ A6 test tự động bước 1 — backend `rooms.test.ts` cover spectator read-only, spectator leave, active room filtering
-- A6 polish còn lại — share link / spectator UX nâng cao / moderation nếu mở cộng đồng
+- ✅ **A6 share link/QR — code done 2026-06-07.** Helper `room_share.dart` (build link `/r/<ID>`, invite text, parse roomId từ link/deep-link), `ShareRoomSheet` (QR + sao chép + native share via `share_plus`), nút chia sẻ trong lobby (đang chờ đối thủ), tile "ván đang diễn ra", và app bar màn hình ván. Deep-link in-app `online-lobby?spectate=ID`/`?join=ID` tự kết nối + vào phòng. Backend landing page `GET /r/:id`. Unit test `room_share_test.dart` 17/17.
+- ✅ **Đấu lại (rematch) — code done 2026-06-07.** Backend `rematch-offer/decline` + `startRematch` (đổi màu, reset clock/engine) + UI dialog kết quả reactive (mời/chờ/đồng ý/từ chối/huỷ, chặn khi đối thủ rời, tự đóng khi ván mới bắt đầu). Test tự động handshake WS đã có (T3); **test tay E2E đa thiết bị** → xem Nhóm R trong [`10_KE_HOACH_TEST.md`](10_KE_HOACH_TEST.md).
+- ✅ **Test tự động WS đóng hết 2026-06-07 (đợt 2).** `server.test.ts` integration WS thật (in-process, inject auth/persist giả): T3 rematch handshake + T7 reconnect snapshot + T8 chat (broadcast/rate-limit/cap/chặn-sau-ended). Refactor `server.ts` → `createCChessServer()` factory + guard `CCHESS_NO_LISTEN`. Backend `npm test` 17/17.
+- ✅ A6 share link / QR done (2026-06-07) — còn moderation cho viewer public nếu mở cộng đồng
 - A5 Chat polish — đã có `chat-message` protocol + UI bottom sheet + rate limit; còn emoji whitelist/preset nhanh nếu cần
-- Render free tier ngủ sau 15 phút → upgrade Starter $7/tháng khi launch thật
-- Online hardening: double-disconnect, graceful server restart, test tự động cho reconnect/chat
+- ⏳ **(việc của bạn) Render free tier** ngủ sau 15 phút → upgrade Starter $7/tháng khi launch thật
+- ⏳ **(việc của bạn) Test tay E2E 2 thiết bị** — Nhóm R/S/D/M/G trong [`10_KE_HOACH_TEST.md`](10_KE_HOACH_TEST.md) (các nhánh UI + đa thiết bị mà test tự động không phủ được)
+- Online hardening còn lại (tuỳ chọn, chưa làm): double-disconnect rõ ràng, graceful server restart / room persistence backend
 
 ### 🔒 Sprint 13 — Biến thể: Cờ Úp (A3), Cờ Casual (A2) (cần S12)
 - Engine biến thể Cờ Úp (random úp quân, mở khi đi nước đầu của quân đó).
@@ -255,10 +261,12 @@
 - Giải đấu định kỳ (C4).
 - Tin tức + Tàn Cục Thách Đấu hàng ngày (C6).
 
-### ⬜ Sprint 15 — AI Coach (B3) + Pikafish FFI
-- Tích hợp Pikafish binary qua dart:ffi (Android ARM64 + iOS).
-- AI Coach: phân tích nước dở, đề xuất bài tập cá nhân hóa.
-- Nâng cấp `game_analyzer.dart` từ minimax đơn giản → đánh giá theo Pikafish.
+### ⬜ Sprint 15 — AI Coach (B3) + Pikafish server-side (engine lai)
+> **Kế hoạch chi tiết:** [`11_KE_HOACH_TICH_HOP_ENGINE.md`](11_KE_HOACH_TICH_HOP_ENGINE.md). Hướng cũ "Pikafish FFI on-device" đã **bỏ** do ràng buộc GPL-3.0 (app thương mại) + iOS App Store xung khắc GPL.
+- **Mô hình lai:** offline/bot nhẹ = minimax Dart on-device (đã có ở Sprint 5); online/phân tích mạnh = **Pikafish chạy server-side** (Render service riêng `cchess-engine`), app gọi qua API + fallback minimax khi offline.
+- AI Coach: phân tích nước dở, đề xuất bài tập cá nhân hóa (Pikafish server + lớp rule-based diễn giải).
+- Nâng cấp `game_analyzer.dart` từ minimax đơn giản → gọi phân tích Pikafish server-side (gắn với B5 Replay AI).
+- **Bắt đầu bằng Phase 0 (spike FEN/UCI)** trong [11](11_KE_HOACH_TICH_HOP_ENGINE.md) để xác nhận tương thích trước khi dựng hạ tầng.
 
 ### ⬜ Sprint 16 — Khám Phá (Module D)
 - Shop (D1), Inventory (D2), Khung Avatar (D3), Mail (D4), Event (D5), Welfare/điểm danh (D6), Crafting (D7).
@@ -285,7 +293,7 @@
 | A2 | Cờ Casual + mời bạn | 🔒 | 13 |
 | A3 | Cờ Úp | 🔒 | 13 |
 | A5 | Chat + emoji + AI hint trong ván | 🟡 | Chat text cơ bản done — `chat-message` WS + bottom sheet; emoji/AI hint còn lại |
-| A6 | Spectate | 🟡 | Phase 2 — cơ bản done với `spectate-room`/`stop-spectating`, read-only board, active room list, backend read-only tests; còn share link |
+| A6 | Spectate | 🟡 | Phase 2 — cơ bản done với `spectate-room`/`stop-spectating`, read-only board, active room list, backend read-only tests; **share link/QR done 2026-06-07** (link/QR + deep-link in-app + landing page); còn moderation public |
 | A7 | Đấu Bot AI | ✅ | 5 |
 | B1 | Khóa học vỡ lòng | 🟡 | UI placeholder, content chưa có |
 | B2 | Khóa học video | ⬜ | sau S15 |
@@ -314,7 +322,7 @@
 
 - **Tổng file Dart `lib/`:** ~85 file (+presentation/online/, +data/services/reconnect_store/, +data/services/game_socket_service/, +data/services/cloud_sync_service/, +data/services/google_auth_service/).
 - **Backend TypeScript:** ~1000 dòng (server.ts + auth.ts + rooms.ts + match.ts + persistence.ts + elo.ts + matchmaking.ts + engine/ port).
-- **Tổng dòng test:** Flutter 1.306 dòng / 12 file test; backend đã bắt đầu có `rooms.test.ts` cho A6 spectate/read-only.
+- **Tổng dòng test:** Flutter 13 file test (thêm `test/online/online_match_controller_test.dart` — 8 test rematch/core); backend `rooms.test.ts` + `match.test.ts` + **`server.test.ts`** (17 test: spectate/read-only + match lifecycle + startRematch + **integration WS thật cho rematch handshake/reconnect/chat**). `npm test` 17/17.
 - **Sprint hoàn thành (1 chiều):** 10/18 (1–7 + 8a + 8b + 8c).
 - **Sprint code xong, sync một phần:** 3/18 (S9, S10, S11).
 - **Sprint MVP done phase 1:** 1/18 (S12 — A1 Ranked production).
@@ -328,14 +336,15 @@
 
 ## 7. Khuyến nghị bước tiếp theo
 
-### 7.1. Polish ngắn (1-3 giờ mỗi item) — củng cố A1 trước khi mở rộng
+### 7.1. Việc gấp nhất — verify các tính năng vừa code (xem [`10_KE_HOACH_TEST.md`](10_KE_HOACH_TEST.md))
 
-1. **Tests cho online flow** — unit test `OnlineMatchController` (mock socket events), integration test backend `match.ts` apply move + clock + reconnect + chat.
-2. **Render upgrade Starter** ($7/tháng) — bỏ sleep 15 phút, lúc nào có user thật phải bỏ.
+0. **Test E2E Đấu lại (Nhóm R)** — *ưu tiên #1*: rematch vừa code xong, chưa chạy thật lần nào. Kiểm 12 case R1–R12, đặc biệt R9 (đối thủ rời rồi mới bấm Đấu lại → không được văng phase=error).
+1. ✅ **Test tự động (Nhóm T) — ĐÃ ĐÓNG HẾT 2026-06-07.** Backend `rooms.test.ts` (3) + `match.test.ts` (8) + **`server.test.ts` (6 integration WS thật)** = `npm test` 17/17; Flutter `online_match_controller_test.dart` 8/8. T3 handshake WS (`rematch-offer` x2 → `game-start{rematch:true}` đổi màu / decline / not-finished) đã xong, kèm T7 reconnect + T8 chat. **Không còn khoảng trống test tự động cho Sprint 12.**
+2. **(việc của bạn) Render upgrade Starter** ($7/tháng) — bỏ sleep 15 phút, lúc nào có user thật phải bỏ.
 
 ### 7.2. Sprint 12 phase 2 (2-3 tuần) — hoàn thiện online
 
-3. **A6 Spectate polish tiếp** — share link, spectator count UX rõ hơn trong lobby/game, mở rộng test tự động cho WS protocol end-to-end.
+3. **A6 Spectate polish tiếp** — ✅ share link/QR done (2026-06-07); còn spectator count UX rõ hơn trong lobby/game, mở rộng test tự động cho WS protocol end-to-end, OS-level deep link (Android intent-filter + iOS universal link) nếu cần mở link ngoài app.
 4. **A5 Chat polish** — emoji preset/whitelist, mute/report sau này nếu mở public.
 5. **Push notification "tới lượt bạn"** — khi user background app + đến lượt, send FCM message tới device. Cần backend wire Cloud Messaging + client `firebase_messaging` setup.
 6. **Friends list (C1) — Sprint 14 prep** — Firestore schema `friendships`, sync presence (online/offline via Realtime Database).
@@ -347,11 +356,13 @@
 
 ### 7.4. Định hướng dài hạn (Q3-Q4 2026)
 
-12. **AI Coach Pikafish FFI** (Sprint 15) — phân tích sâu sau ván.
+12. **AI Coach Pikafish server-side** (Sprint 15, engine lai — [11](11_KE_HOACH_TICH_HOP_ENGINE.md)) — phân tích sâu sau ván.
 13. **Content production** (Sprint 11 follow-up + Sprint 6 puzzle 10.000+) — cần tool import PGN/FEN hoặc CMS web.
 14. **Shop + VIP** (Sprint 16-17) — IAP, monetization.
 15. **OCR + advanced** (Sprint 18).
 
 ---
 
-*Cập nhật 2026-05-31 sau khi A1 Ranked đã test thật, group 1 polish đã merge, A5 chat text, A6 Spectate cơ bản, active room list và backend read-only tests được triển khai. Lần cập nhật kế tiếp đề xuất: sau A6 share link hoặc khi chốt Sprint 13 Cờ Úp/Casual.*
+*Cập nhật 2026-06-07: (1) hoàn thiện nút Đấu lại (rematch) — UI dialog reactive + xử lý lỗi đối thủ rời; (2) tạo [`10_KE_HOACH_TEST.md`](10_KE_HOACH_TEST.md) liệt kê 46 case online chưa xác nhận test; (3) thêm test tự động Nhóm T (backend `match.test.ts` + Flutter `online_match_controller_test.dart`, 16 test mới, tất cả xanh).*
+
+*Cập nhật 2026-06-07 (đợt 2) — **đóng hết test tự động Sprint 12**: refactor `cchess-backend/src/server.ts` thành factory `createCChessServer({authenticate, persist})` (giữ nguyên hành vi production, entry point bọc trong guard `CCHESS_NO_LISTEN`) + thêm `server.test.ts` integration WS thật in-process (T3 rematch handshake / T7 reconnect snapshot / T8 chat). Backend `npm test` 17/17, `tsc` + `npm run build` sạch. **Khoảng trống test tự động Sprint 12 đã khép.** Việc còn lại thuộc về người dùng: test tay E2E 2 thiết bị (Nhóm R/S/D/M/G) + nâng cấp Render Starter. Lần cập nhật kế tiếp đề xuất: sau đợt test tay Nhóm R đầu tiên.*

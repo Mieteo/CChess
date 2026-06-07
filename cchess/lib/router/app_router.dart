@@ -56,7 +56,17 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: AppConstants.routeOnlineLobby,
-        builder: (context, state) => const OnlineLobbyScreen(),
+        builder: (context, state) {
+          // A6 share link deep-link: `/online-lobby?spectate=ID` (watch) or
+          // `?join=ID` (play). Lobby auto-connects then enters the room.
+          final q = state.uri.queryParameters;
+          final spectateId = q['spectate'];
+          final joinId = q['join'];
+          return OnlineLobbyScreen(
+            deepLinkRoomId: spectateId ?? joinId,
+            deepLinkSpectate: joinId == null,
+          );
+        },
       ),
       GoRoute(
         path: AppConstants.routeOnlineGame,

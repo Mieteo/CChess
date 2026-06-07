@@ -9,7 +9,7 @@
     "start": "node dist/server.js",
     "dev": "tsx watch src/server.ts",
     "lint": "tsc --noEmit",
-    "test": "tsx --test src/rooms.test.ts"
+    "test": "tsx --test src/rooms.test.ts src/match.test.ts src/server.test.ts"
   },
   "engines": {
     "node": ">=20"
