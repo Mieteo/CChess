@@ -5,7 +5,8 @@
 > Phạm vi: tập trung các tính năng **online/multiplayer Sprint 12** (Đấu lại, Chat, Spectate, Reconnect, Matchmaking) + **engine service Pikafish / nút Gợi ý** (Sprint 15 sớm) — phần engine/offline (Sprint 1–7) đã có unit test xanh, không lặp lại ở đây.
 > Tham chiếu: [`05_KE_HOACH_DU_AN.md`](05_KE_HOACH_DU_AN.md), [`08_HUONG_DAN_BACKEND_WEBSOCKET.md`](08_HUONG_DAN_BACKEND_WEBSOCKET.md), [`09_BACKEND_SERVER_HOAT_DONG.md`](09_BACKEND_SERVER_HOAT_DONG.md), [`11_KE_HOACH_TICH_HOP_ENGINE.md`](11_KE_HOACH_TICH_HOP_ENGINE.md).
 >
-> **Trạng thái test tự động 2026-06-11:** Backend `cd cchess-backend && npm test` → **25/25 xanh** (7 file). Flutter `cd cchess && flutter test` → **148/148 xanh** (18 file). Chi tiết ở Nhóm T (§8).
+> **Trạng thái test tự động 2026-06-12:** Backend `cd cchess-backend && npm test` → **26/26 xanh** (7 file). Flutter `cd cchess && flutter test` → **152/152 xanh** (18 file). Chi tiết ở Nhóm T (§8).
+> **Test tay đợt 1 (2026-06-12):** Nhóm R 11/12 PASS; R9 phát hiện bug độ trễ ~10s → đã sửa cùng ngày (3 nguyên nhân gốc, xem R9) → chờ retest.
 
 ---
 
@@ -39,26 +40,32 @@
 
 ---
 
-## 2. Nhóm R — Đấu lại (Rematch) ⭐ *mới code, chưa test lần nào*
+## 2. Nhóm R — Đấu lại (Rematch) — **test tay đợt 1 ngày 2026-06-12: 11/12 PASS**
 
 > Code liên quan: [online_game_screen.dart](cchess/lib/presentation/online/online_game_screen.dart) (`_showResultDialog`), [online_match_controller.dart](cchess/lib/presentation/online/online_match_controller.dart) (`offerRematch`/`declineRematch`/handlers), [server.ts](cchess-backend/src/server.ts) (`rematch-offer`/`rematch-decline`), [match.ts](cchess-backend/src/match.ts) (`startRematch`).
 
-- [ ] **R1 — Hiện nút Đấu lại sau ván kết thúc bình thường.** Kết ván bằng chiếu bí (hoặc xin thua / hết giờ) → dialog kết quả hiện **"Về Đối Đầu"** + **"🔄 Đấu lại"**; tiêu đề đúng (Thắng/Thua/Hòa), dòng "Lý do" hiển thị tiếng Việt (Chiếu bí / Xin thua / Hết giờ), có dòng ELO.
-- [ ] **R2 — Mời đấu lại (offer).** Bấm "Đấu lại" → dialog đổi sang **spinner + "Đang chờ đối thủ đồng ý đấu lại…"**, còn nút **"Hủy"** + "Về Đối Đầu". Bên đối thủ thấy banner **"Đối thủ muốn đấu lại!"** + nút **"Từ chối"/"Đồng ý"**.
-- [ ] **R3 — Cả hai đồng ý → ván mới.** Khi cả 2 cùng mời/đồng ý:
+- [x] **R1 — Hiện nút Đấu lại sau ván kết thúc bình thường.** Kết ván bằng chiếu bí (hoặc xin thua / hết giờ) → dialog kết quả hiện **"Về Đối Đầu"** + **"🔄 Đấu lại"**; tiêu đề đúng (Thắng/Thua/Hòa), dòng "Lý do" hiển thị tiếng Việt (Chiếu bí / Xin thua / Hết giờ), có dòng ELO.
+- [x] **R2 — Mời đấu lại (offer).** Bấm "Đấu lại" → dialog đổi sang **spinner + "Đang chờ đối thủ đồng ý đấu lại…"**, còn nút **"Hủy"** + "Về Đối Đầu". Bên đối thủ thấy banner **"Đối thủ muốn đấu lại!"** + nút **"Từ chối"/"Đồng ý"**.
+- [x] **R3 — Cả hai đồng ý → ván mới.** Khi cả 2 cùng mời/đồng ý:
   - Dialog kết quả **tự đóng** ở cả 2 máy.
   - Bàn cờ reset về thế ban đầu, đồng hồ reset đúng mức clock đã chọn.
   - **Màu đổi chỗ** (ai vừa đi Đỏ giờ đi Đen) — kiểm strip tên/màu trên–dưới.
   - Không còn highlight ô chọn cũ từ ván trước.
-- [ ] **R4 — Đối thủ từ chối lời mời của mình.** Đang chờ (R2) mà đối thủ bấm "Từ chối" → mình thấy text đỏ **"Đối thủ đã từ chối đấu lại."**, dialog quay lại trạng thái mặc định (Về Đối Đầu + Đấu lại).
-- [ ] **R5 — Tự hủy lời mời.** Đang chờ (R2) bấm **"Hủy"** → quay về mặc định ở máy mình; đối thủ nhận thông báo huỷ (banner "muốn đấu lại" biến mất).
-- [ ] **R6 — Đối thủ mời trước, mình "Đồng ý".** Đối thủ mời (mình thấy banner) → bấm **"Đồng ý"** → ván mới bắt đầu (như R3).
-- [ ] **R7 — Đối thủ mời trước, mình "Từ chối".** Bấm **"Từ chối"** → dialog quay về mặc định; đối thủ nhận thông báo từ chối.
-- [ ] **R8 — Kết ván do đối thủ disconnect → KHÔNG cho đấu lại.** Nếu ván kết thúc với lý do `disconnect` → dialog chỉ có **"Về Đối Đầu"**, banner **"Đối thủ đã rời — không thể đấu lại."**, không có nút Đấu lại.
-- [ ] **R9 — Đối thủ rời rồi mình mới bấm Đấu lại (xử lý lỗi êm).** Đối thủ bấm "Về Đối Đầu" thoát hẳn → mình bấm "Đấu lại" → nhận lỗi gracefully: text đỏ **"Không thể đấu lại — đối thủ đã rời phòng."**, **không** văng sang màn lỗi (phase=error), vẫn ở dialog kết quả. *(Đây là case dễ vỡ nhất — test kỹ.)*
-- [ ] **R10 — Vòng lặp nhiều ván.** Sau R3, chơi hết ván 2 → dialog kết quả ván 2 hiện đúng, lại có nút Đấu lại; lặp được nhiều lần không treo / không double-dialog.
-- [ ] **R11 — ELO/Profile cập nhật mỗi ván rematch.** Mỗi ván ranked sau rematch đều ghi ELO riêng; sau khi đóng dialog → màn Hồ Sơ phản ánh ELO/win-loss mới (auto-refresh).
-- [ ] **R12 — Spectator khi 2 bên rematch.** Nếu có người đang xem trong phòng lúc rematch → họ nhận `game-start` ván mới (board reset), không bị kẹt ở màn kết quả.
+- [x] **R4 — Đối thủ từ chối lời mời của mình.** Đang chờ (R2) mà đối thủ bấm "Từ chối" → mình thấy text đỏ **"Đối thủ đã từ chối đấu lại."**, dialog quay lại trạng thái mặc định (Về Đối Đầu + Đấu lại).
+- [x] **R5 — Tự hủy lời mời.** Đang chờ (R2) bấm **"Hủy"** → quay về mặc định ở máy mình; đối thủ nhận thông báo huỷ (banner "muốn đấu lại" biến mất).
+- [x] **R6 — Đối thủ mời trước, mình "Đồng ý".** Đối thủ mời (mình thấy banner) → bấm **"Đồng ý"** → ván mới bắt đầu (như R3).
+- [x] **R7 — Đối thủ mời trước, mình "Từ chối".** Bấm **"Từ chối"** → dialog quay về mặc định; đối thủ nhận thông báo từ chối.
+- [x] **R8 — Kết ván do đối thủ disconnect → KHÔNG cho đấu lại.** Nếu ván kết thúc với lý do `disconnect` → dialog chỉ có **"Về Đối Đầu"**, banner **"Đối thủ đã rời — không thể đấu lại."**, không có nút Đấu lại.
+- [ ] **R9 — Đối thủ rời rồi mình mới bấm Đấu lại (xử lý lỗi êm).** Đối thủ bấm "Về Đối Đầu" thoát hẳn → mình bấm "Đấu lại" → nhận lỗi gracefully + dialog cập nhật ngay banner "Đối thủ đã rời", **không** văng phase=error.
+  - ❌ **BUG (2026-06-12, test tay đợt 1):** A thoát trận xong, trong ~10s đầu B bấm "Đấu lại" vẫn nhận "Đang chờ đối thủ đồng ý…"; phải đợi ~10s (heartbeat server giết socket A) rồi bấm lại mới ra "Không thể đấu lại — đối thủ đã rời phòng".
+  - ✅ **ĐÃ SỬA 2026-06-12** (3 nguyên nhân gốc):
+    1. `game_socket_service.dart` xoá `roomId` ngay khi `game-ended` → `leave()` của A **không gửi `leave-room`** (chỉ đóng socket). → Giữ `roomId` đến khi `left-room` thật.
+    2. Nút back app-bar + back hệ thống Android của người chơi **không gọi `leave()`** (chỉ `context.go`) → socket A "ma" còn trong phòng tới khi heartbeat dọn (~5–10s). → Gom về `_onBackPressed()` duy nhất + `PopScope`; đang chơi thì hỏi xác nhận rồi resign+leave.
+    3. Client B **bỏ qua sự kiện `peer-left`** → dù server báo ngay, dialog không đổi. → Controller xử lý `peer-left` khi phase=ended: set `opponentLeftRoom`, dialog lập tức hiện banner "Đối thủ đã rời — không thể đấu lại." và ẩn nút Đấu lại; `offerRematch` chặn local không cần round-trip.
+  - Test tự động đã thêm: backend `server.test.ts` "R9: leave-room after game end broadcasts peer-left + rematch fails fast"; Flutter 4 test nhóm "R9 — opponent left" trong `online_match_controller_test.dart`. **→ CẦN RETEST TAY** để đóng case này.
+- [x] **R10 — Vòng lặp nhiều ván.** Sau R3, chơi hết ván 2 → dialog kết quả ván 2 hiện đúng, lại có nút Đấu lại; lặp được nhiều lần không treo / không double-dialog.
+- [x] **R11 — ELO/Profile cập nhật mỗi ván rematch.** Mỗi ván ranked sau rematch đều ghi ELO riêng; sau khi đóng dialog → màn Hồ Sơ phản ánh ELO/win-loss mới (auto-refresh).
+- [x] **R12 — Spectator khi 2 bên rematch.** Nếu có người đang xem trong phòng lúc rematch → họ nhận `game-start` ván mới (board reset), không bị kẹt ở màn kết quả.
 
 ---
 
@@ -144,7 +151,7 @@
 ## 8. Nhóm T — Test tự động ✅ XANH TOÀN BỘ (cập nhật 2026-06-11)
 
 > Mục này là **viết test code**, không phải test tay. Ưu tiên làm để khỏi phải test tay lặp lại các case ở trên.
-> **Trạng thái 2026-06-11:** T1–T11 đều xanh. Backend `cd cchess-backend && npm test` → **25/25** (7 file). Flutter `cd cchess && flutter test` → **148/148** (18 file).
+> **Trạng thái 2026-06-12:** T1–T12 đều xanh. Backend `cd cchess-backend && npm test` → **26/26** (7 file). Flutter `cd cchess && flutter test` → **152/152** (18 file).
 
 - [x] **T1 — `rooms.test.ts`** (backend): spectator read-only, spectator leave, active room filtering. *(3 test, pass)*
 - [x] **T2 — `match.test.ts`** (backend): `startMatch` (gán màu/clock/turn/engine), `applyMove` hợp lệ/`not-your-turn`/`illegal-move`/`not-player`/`time-out` + trừ đồng hồ, **`startRematch`** (đổi màu + reset clock/engine/moves + clear cờ offer; fail khi <2 người). *(8 test, pass)*
@@ -157,9 +164,10 @@
 - [x] **T9 — engine-service tests** (backend, thêm 2026-06-07 cùng đợt code engine Pikafish — ghi nhận vào tài liệu 2026-06-11): [`uci_parser.test.ts`](cchess-backend/src/engine-service/uci_parser.test.ts) parse `info`/`bestmove`/mate-score *(3 test)*; [`engine_pool.test.ts`](cchess-backend/src/engine-service/engine_pool.test.ts) giới hạn concurrency + reject khi queue đầy *(2 test)*; [`engine-service/server.test.ts`](cchess-backend/src/engine-service/server.test.ts) HTTP service đòi auth + trả best-move có cache *(1 test, fake engine — KHÔNG cần binary Pikafish thật)*. *(6 test, pass)*
 - [x] **T10 — `server.disconnect.test.ts` double-disconnect** (backend, integration WS thật, mới 2026-06-11, grace rút ngắn qua env `CCHESS_RECONNECT_GRACE_MS`): cả 2 cùng rớt → cả 2 reconnect được trong grace (regression cho bug ghi-đè marker cũ) + snapshot có `peerInGrace`; cả 2 rớt không ai quay lại → người rớt trước bị xử thua `disconnect` (spectator quan sát `game-ended`). *(2 test, pass — tự động hoá phần lõi D5.)*
 - [x] **T11 — hint tests trong `game_controller_test.dart`** (Flutter, mới 2026-06-11): `showHint` lưu nước hợp lệ / từ chối sai bên / từ chối sai luật; hint tự xoá sau khi đi nước, undo, ván mới; `setHintThinking`/`clearHint`. *(6 test, pass)*
+- [x] **T12 — R9 regression tests** (mới 2026-06-12, sau bug test tay): backend `server.test.ts` thêm "leave-room sau game end → `peer-left` broadcast ngay + `rematch-offer` fail nhanh `no-opponent`" *(1 test)*; Flutter `online_match_controller_test.dart` thêm nhóm "R9 — opponent left": `peer-left` khi ended set `opponentLeftRoom` + clear cờ mời, `offerRematch` chặn local, `peer-left` ngoài phase ended chỉ log, `game-start` mới reset cờ *(4 test)*. *(5 test, pass)*
 
-> **Backend `npm test` tổng cộng 25/25 xanh** (`rooms.test.ts` 3 + `match.test.ts` 8 + `server.test.ts` 6 + `server.disconnect.test.ts` 2 + engine-service 6).
-> **Flutter `flutter test` tổng cộng 148/148 xanh** (18 file — gồm cả `engine_router_test.dart` 3 test fallback router và `game_analyzer_test.dart` của đợt engine).
+> **Backend `npm test` tổng cộng 26/26 xanh** (`rooms.test.ts` 3 + `match.test.ts` 8 + `server.test.ts` 7 + `server.disconnect.test.ts` 2 + engine-service 6).
+> **Flutter `flutter test` tổng cộng 152/152 xanh** (18 file — `online_match_controller_test.dart` giờ 12 test).
 
 ---
 
@@ -167,17 +175,17 @@
 
 | Nhóm | Tổng case | Đã PASS | Bug | Còn lại |
 |---|:---:|:---:|:---:|:---:|
-| R — Đấu lại | 12 | 0 | 0 | 12 |
+| R — Đấu lại | 12 | 11 | 1 (R9 — đã sửa, chờ retest) | 1 |
 | C — Chat | 8 | 0 | 0 | 8 |
 | S — Spectate + share link | 12 | 0 | 0 | 12 |
 | D — Reconnect | 5 | 0 | 0 | 5 |
 | M — Matchmaking/ELO | 5 | 0 | 0 | 5 |
 | G — Lifecycle | 6 | 0 | 0 | 6 |
 | H — Gợi ý in-game | 3 | 0 | 0 | 3 |
-| T — Test tự động | 11 | 11 | 0 | 0 |
-| **Tổng** | **62** | **11** | **0** | **51** |
+| T — Test tự động | 12 | 12 | 0 | 0 |
+| **Tổng** | **63** | **23** | **1** | **40** |
 
-> Cập nhật bảng này sau mỗi đợt test. **Nhóm T vẫn đóng kín (11/11 xanh)** — đợt 2026-06-11 bổ sung T9 (engine-service, đã có từ đợt engine 06-07 nhưng chưa ghi vào tài liệu), T10 (double-disconnect integration — tự động hoá phần lõi D5) và T11 (hint controller). Phần còn lại chủ yếu là **test tay E2E cần 2 thiết bị** (Nhóm R/S/D/M/G + C8/H mới). Tiếp theo ưu tiên test tay **Nhóm R** (rủi ro cao nhất, đặc biệt R9), rồi **S7–S12** (A6 share link), tiện tay kiểm luôn **H1–H3** (gợi ý) và **C8** (chip chat nhanh) trong cùng phiên.
+> Cập nhật bảng này sau mỗi đợt test. **Đợt test tay 1 (2026-06-12):** Nhóm R 11/12 PASS, tìm ra đúng bug ở case được dự báo "dễ vỡ nhất" (R9) — đã sửa + thêm T12 regression (backend 1 + Flutter 4). Tiếp theo: **retest R9** (chỉ 1 case, nhanh), rồi **S7–S12** (A6 share link), tiện tay kiểm **H1–H3** (gợi ý) và **C8** (chip chat nhanh) trong cùng phiên.
 
 ---
 
@@ -194,4 +202,4 @@
 
 ---
 
-*Tạo 2026-06-07 cùng đợt hoàn thiện nút "Đấu lại". Cập nhật 2026-06-07 (đợt 2): đóng hết Nhóm T — thêm `cchess-backend/src/server.test.ts` (integration WS) cho T3 rematch handshake + T7 reconnect + T8 chat; tách `server.ts` thành `createCChessServer()` factory để test in-process không cần Firebase. Cập nhật 2026-06-11 (đợt 3): hardening double-disconnect (D5) + test T10; nút Gợi ý in-game (Nhóm H + T11); chip chat nhanh (C8); ghi nhận bộ test engine-service (T9) vào tài liệu; tổng test tự động backend 25/25 + Flutter 148/148. Lần cập nhật kế tiếp: sau đợt test tay Nhóm R đầu tiên.*
+*Tạo 2026-06-07 cùng đợt hoàn thiện nút "Đấu lại". Cập nhật 2026-06-07 (đợt 2): đóng hết Nhóm T — thêm `cchess-backend/src/server.test.ts` (integration WS) cho T3 rematch handshake + T7 reconnect + T8 chat; tách `server.ts` thành `createCChessServer()` factory để test in-process không cần Firebase. Cập nhật 2026-06-11 (đợt 3): hardening double-disconnect (D5) + test T10; nút Gợi ý in-game (Nhóm H + T11); chip chat nhanh (C8); ghi nhận bộ test engine-service (T9) vào tài liệu. Cập nhật 2026-06-12 (đợt 4): **kết quả test tay Nhóm R đầu tiên — 11/12 PASS**; bug R9 (độ trễ ~10s khi đối thủ rời phòng) tìm ra 3 nguyên nhân gốc và sửa cùng ngày + T12 regression; tổng test tự động backend 26/26 + Flutter 152/152. Lần cập nhật kế tiếp: sau khi retest R9 + test tay Nhóm S.*

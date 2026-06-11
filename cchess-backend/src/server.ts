@@ -726,6 +726,8 @@ export function createCChessServer(options: CChessServerOptions = {}): CChessSer
           }
         }
         const room = leaveRoom(socket);
+        // A leaver's pending rematch offer is void (R9 hygiene).
+        if (uid) before.rematchOfferedBy?.delete(uid);
         send(socket, { type: 'left-room', roomId: before.id });
         if (room && !wasSpectator) {
           broadcastToRoom(room, socket, { type: 'peer-left', uid });
@@ -975,6 +977,7 @@ export function createCChessServer(options: CChessServerOptions = {}): CChessSer
       // 'playing' room.
       const room = leaveRoom(socket, { preserveStatus: wasPlaying });
       if (beforeRoom && room && uid && !wasPlaying && !wasSpectator) {
+        beforeRoom.rematchOfferedBy?.delete(uid);
         broadcastToRoom(room, socket, { type: 'peer-left', uid });
         console.log(`[room] ${beforeRoom.id} auto-left by ${uid} (disconnect)`);
       }

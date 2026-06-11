@@ -143,6 +143,36 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
     });
   }
 
+  /// Single exit path for app-bar back AND the system back gesture (R9):
+  /// always tell the server we're leaving so the opponent's UI reacts
+  /// immediately (peer-left) instead of waiting for heartbeat timeout.
+  Future<void> _onBackPressed() async {
+    final state = ref.read(onlineMatchControllerProvider);
+    if (state.isPlaying) {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Rời ván đấu?'),
+          content: const Text('Rời ván giữa chừng sẽ bị xử thua.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Ở lại'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Rời ván'),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true) return;
+      _ctrl.resign();
+    }
+    await _ctrl.leave();
+    if (mounted) context.go(AppConstants.routeCompete);
+  }
+
   Future<void> _confirmResign() async {
     final res = await showDialog<bool>(
       context: context,
@@ -219,168 +249,173 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
               : 'Đối thủ');
     final bottomLabel = isSpectating ? 'Đỏ ${_shortUid(state.redUid)}' : 'Bạn';
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.woodDark,
-        title: Text(
-          isSpectating
-              ? 'Xem ván ${state.roomId ?? ""}'
-              : 'Online ${state.roomId ?? ""}',
-        ),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () async {
-            if (isSpectating) {
-              await _ctrl.leave();
-            }
-            if (context.mounted) context.go(AppConstants.routeCompete);
-          },
-        ),
-        actions: [
-          if (isSpectating)
-            Padding(
-              padding: const EdgeInsets.only(right: AppSpacing.sm),
-              child: Row(
-                children: [
-                  const Icon(Icons.visibility_outlined, size: 18),
-                  const SizedBox(width: 4),
-                  Text('${state.spectatorCount}'),
-                ],
-              ),
-            ),
-          if ((state.isPlaying || isSpectating) && state.roomId != null)
-            IconButton(
-              tooltip: 'Mời xem (link / QR)',
-              icon: const Icon(Icons.share),
-              onPressed: () => ShareRoomSheet.show(
-                context,
-                roomId: state.roomId,
-                spectate: true,
-              ),
-            ),
-        ],
-      ),
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.sm),
-          child: Column(
-            children: [
-              _PlayerStrip(
-                label: topLabel,
-                color: topColor,
-                clockMs: topColor == PieceColor.red
-                    ? state.redClockMs
-                    : state.blackClockMs,
-                isMyTurn: state.currentTurn == topColor,
-              ),
-              AppSpacing.vGapSm,
-              if (game != null)
-                Expanded(
-                  child: AspectRatio(
-                    aspectRatio: 9 / 10,
-                    child: ChessBoard(
-                      board: game.board,
-                      selected: _selected,
-                      validTargets: _validTargets,
-                      lastMove: game.lastMove,
-                      checkedKing: checkedKing,
-                      flipped: flipped,
-                      onTap: _onTap,
-                    ),
-                  ),
-                )
-              else
-                const Expanded(
-                  child: Center(child: CircularProgressIndicator()),
+    // PopScope routes the SYSTEM back gesture through the same leave logic
+    // as the app-bar arrow — otherwise Android back exits the screen while
+    // the socket silently stays in the room (R9).
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _onBackPressed();
+      },
+      child: Scaffold(
+        backgroundColor: AppColors.background,
+        appBar: AppBar(
+          backgroundColor: AppColors.woodDark,
+          title: Text(
+            isSpectating
+                ? 'Xem ván ${state.roomId ?? ""}'
+                : 'Online ${state.roomId ?? ""}',
+          ),
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back),
+            onPressed: _onBackPressed,
+          ),
+          actions: [
+            if (isSpectating)
+              Padding(
+                padding: const EdgeInsets.only(right: AppSpacing.sm),
+                child: Row(
+                  children: [
+                    const Icon(Icons.visibility_outlined, size: 18),
+                    const SizedBox(width: 4),
+                    Text('${state.spectatorCount}'),
+                  ],
                 ),
-              AppSpacing.vGapSm,
-              _PlayerStrip(
-                label: bottomLabel,
-                color: bottomColor,
-                clockMs: bottomColor == PieceColor.red
-                    ? state.redClockMs
-                    : state.blackClockMs,
-                isMyTurn: state.currentTurn == bottomColor,
               ),
-              AppSpacing.vGapSm,
-              Row(
-                children: [
+            if ((state.isPlaying || isSpectating) && state.roomId != null)
+              IconButton(
+                tooltip: 'Mời xem (link / QR)',
+                icon: const Icon(Icons.share),
+                onPressed: () => ShareRoomSheet.show(
+                  context,
+                  roomId: state.roomId,
+                  spectate: true,
+                ),
+              ),
+          ],
+        ),
+        body: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(AppSpacing.sm),
+            child: Column(
+              children: [
+                _PlayerStrip(
+                  label: topLabel,
+                  color: topColor,
+                  clockMs: topColor == PieceColor.red
+                      ? state.redClockMs
+                      : state.blackClockMs,
+                  isMyTurn: state.currentTurn == topColor,
+                ),
+                AppSpacing.vGapSm,
+                if (game != null)
                   Expanded(
-                    child: OutlinedButton.icon(
-                      icon: const Icon(Icons.chat_bubble_outline),
-                      label: Text(
-                        'Chat${state.chatMessages.isNotEmpty ? " (${state.chatMessages.length})" : ""}',
+                    child: AspectRatio(
+                      aspectRatio: 9 / 10,
+                      child: ChessBoard(
+                        board: game.board,
+                        selected: _selected,
+                        validTargets: _validTargets,
+                        lastMove: game.lastMove,
+                        checkedKing: checkedKing,
+                        flipped: flipped,
+                        onTap: _onTap,
                       ),
-                      onPressed: state.canChat ? _showChatSheet : null,
                     ),
+                  )
+                else
+                  const Expanded(
+                    child: Center(child: CircularProgressIndicator()),
                   ),
-                  if (!isSpectating) ...[
-                    AppSpacing.hGapSm,
+                AppSpacing.vGapSm,
+                _PlayerStrip(
+                  label: bottomLabel,
+                  color: bottomColor,
+                  clockMs: bottomColor == PieceColor.red
+                      ? state.redClockMs
+                      : state.blackClockMs,
+                  isMyTurn: state.currentTurn == bottomColor,
+                ),
+                AppSpacing.vGapSm,
+                Row(
+                  children: [
                     Expanded(
                       child: OutlinedButton.icon(
-                        icon: const Icon(Icons.flag_outlined),
-                        label: const Text('Xin thua'),
-                        onPressed: state.isPlaying ? _confirmResign : null,
+                        icon: const Icon(Icons.chat_bubble_outline),
+                        label: Text(
+                          'Chat${state.chatMessages.isNotEmpty ? " (${state.chatMessages.length})" : ""}',
+                        ),
+                        onPressed: state.canChat ? _showChatSheet : null,
                       ),
                     ),
-                  ],
-                ],
-              ),
-              if (state.phase == OnlineMatchPhase.peerDisconnected) ...[
-                AppSpacing.vGapSm,
-                Builder(
-                  builder: (_) {
-                    final sec = _remainingGraceSec(state);
-                    final String label;
-                    if (sec == null) {
-                      label = 'Đối thủ mất kết nối — chờ reconnect…';
-                    } else if (sec > 0) {
-                      label = 'Đối thủ mất kết nối — còn ${sec}s để reconnect';
-                    } else {
-                      // Local countdown finished; server's grace timer fires
-                      // ~ within seconds. Avoid showing a stale "0s".
-                      label = 'Hết thời gian chờ — đang xác nhận kết quả…';
-                    }
-                    return Container(
-                      padding: const EdgeInsets.all(AppSpacing.sm),
-                      decoration: BoxDecoration(
-                        color: AppColors.accentGold.withValues(alpha: 0.18),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: AppColors.accentGold),
+                    if (!isSpectating) ...[
+                      AppSpacing.hGapSm,
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          icon: const Icon(Icons.flag_outlined),
+                          label: const Text('Xin thua'),
+                          onPressed: state.isPlaying ? _confirmResign : null,
+                        ),
                       ),
-                      child: Row(
-                        children: [
-                          const Icon(
-                            Icons.wifi_off,
-                            size: 16,
-                            color: AppColors.accentGold,
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              label,
-                              style: AppTextStyles.captionSm.copyWith(
-                                color: AppColors.accentGold,
+                    ],
+                  ],
+                ),
+                if (state.phase == OnlineMatchPhase.peerDisconnected) ...[
+                  AppSpacing.vGapSm,
+                  Builder(
+                    builder: (_) {
+                      final sec = _remainingGraceSec(state);
+                      final String label;
+                      if (sec == null) {
+                        label = 'Đối thủ mất kết nối — chờ reconnect…';
+                      } else if (sec > 0) {
+                        label =
+                            'Đối thủ mất kết nối — còn ${sec}s để reconnect';
+                      } else {
+                        // Local countdown finished; server's grace timer fires
+                        // ~ within seconds. Avoid showing a stale "0s".
+                        label = 'Hết thời gian chờ — đang xác nhận kết quả…';
+                      }
+                      return Container(
+                        padding: const EdgeInsets.all(AppSpacing.sm),
+                        decoration: BoxDecoration(
+                          color: AppColors.accentGold.withValues(alpha: 0.18),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: AppColors.accentGold),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(
+                              Icons.wifi_off,
+                              size: 16,
+                              color: AppColors.accentGold,
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                label,
+                                style: AppTextStyles.captionSm.copyWith(
+                                  color: AppColors.accentGold,
+                                ),
                               ),
                             ),
-                          ),
-                        ],
-                      ),
-                    );
-                  },
-                ),
-              ],
-              if (state.errorMessage != null) ...[
-                AppSpacing.vGapSm,
-                Text(
-                  state.errorMessage!,
-                  style: AppTextStyles.captionSm.copyWith(
-                    color: Colors.redAccent,
+                          ],
+                        ),
+                      );
+                    },
                   ),
-                ),
+                ],
+                if (state.errorMessage != null) ...[
+                  AppSpacing.vGapSm,
+                  Text(
+                    state.errorMessage!,
+                    style: AppTextStyles.captionSm.copyWith(
+                      color: Colors.redAccent,
+                    ),
+                  ),
+                ],
               ],
-            ],
+            ),
           ),
         ),
       ),
@@ -678,7 +713,10 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
             }
 
             // Opponent already gone (left/disconnected) → rematch impossible.
-            final opponentGone = state.endReason == 'disconnect';
+            // `opponentLeftRoom` flips the moment the server broadcasts
+            // peer-left (R9), so the dialog reacts without a failed offer.
+            final opponentGone =
+                state.endReason == 'disconnect' || state.opponentLeftRoom;
             final meOffered = state.rematchOfferedByMe;
             final oppOffered = state.rematchOfferedByOpponent;
 
@@ -690,13 +728,18 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
 
             if (opponentGone) {
               content.add(
-                _rematchTile('Đối thủ đã rời — không thể đấu lại.',
-                    Icons.person_off_outlined),
+                _rematchTile(
+                  'Đối thủ đã rời — không thể đấu lại.',
+                  Icons.person_off_outlined,
+                ),
               );
             } else if (meOffered) {
               content.add(
-                _rematchTile('Đang chờ đối thủ đồng ý đấu lại…',
-                    Icons.hourglass_top, showSpinner: true),
+                _rematchTile(
+                  'Đang chờ đối thủ đồng ý đấu lại…',
+                  Icons.hourglass_top,
+                  showSpinner: true,
+                ),
               );
             } else if (oppOffered) {
               content.add(

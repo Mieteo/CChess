@@ -54,9 +54,14 @@ class GameSocketService {
             case 'spectate-started':
               _currentRoomId = msg['roomId'] as String?;
               break;
+            // NOTE: 'game-ended' deliberately does NOT clear the room id —
+            // the player is still a member of the (finished) room on the
+            // server (rematch needs it), and leave() relies on isInRoom to
+            // send a proper leave-room. Clearing it here made "Về Đối Đầu"
+            // exit silently, so the opponent only learned we were gone after
+            // the heartbeat killed the socket (~10s) — bug R9.
             case 'left-room':
             case 'spectate-stopped':
-            case 'game-ended':
               _currentRoomId = null;
               break;
           }

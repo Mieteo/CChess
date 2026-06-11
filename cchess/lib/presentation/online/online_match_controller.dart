@@ -123,6 +123,7 @@ class OnlineMatchState {
     this.activeRoomsUpdatedAtMs,
     this.rematchOfferedByMe = false,
     this.rematchOfferedByOpponent = false,
+    this.opponentLeftRoom = false,
   });
 
   final OnlineMatchPhase phase;
@@ -161,6 +162,11 @@ class OnlineMatchState {
   final bool rematchOfferedByMe;
   final bool rematchOfferedByOpponent;
 
+  /// R9: the opponent left the (finished) room — server sent `peer-left`.
+  /// Rematch is no longer possible; the result dialog reacts immediately
+  /// instead of waiting for a rejected rematch-offer round-trip.
+  final bool opponentLeftRoom;
+
   bool get isMyTurn => myColor != null && currentTurn == myColor;
   bool get isPlaying =>
       phase == OnlineMatchPhase.playing ||
@@ -195,6 +201,7 @@ class OnlineMatchState {
     int? activeRoomsUpdatedAtMs,
     bool? rematchOfferedByMe,
     bool? rematchOfferedByOpponent,
+    bool? opponentLeftRoom,
     bool clearError = false,
     bool clearPeerDisconnect = false,
   }) {
@@ -230,6 +237,7 @@ class OnlineMatchState {
       rematchOfferedByMe: rematchOfferedByMe ?? this.rematchOfferedByMe,
       rematchOfferedByOpponent:
           rematchOfferedByOpponent ?? this.rematchOfferedByOpponent,
+      opponentLeftRoom: opponentLeftRoom ?? this.opponentLeftRoom,
     );
   }
 }
@@ -367,6 +375,12 @@ class OnlineMatchController extends StateNotifier<OnlineMatchState> {
   void offerRematch() {
     if (state.phase != OnlineMatchPhase.ended) return;
     if (state.rematchOfferedByMe) return;
+    if (state.opponentLeftRoom) {
+      state = state.copyWith(
+        errorMessage: 'Không thể đấu lại — đối thủ đã rời phòng.',
+      );
+      return;
+    }
     state = state.copyWith(rematchOfferedByMe: true, clearError: true);
     _socket.offerRematch();
   }
@@ -472,6 +486,21 @@ class OnlineMatchController extends StateNotifier<OnlineMatchState> {
       case 'peer-joined':
         // Will be followed by game-start; just log.
         state = state.copyWith(lastEventLog: newLog);
+        break;
+      case 'peer-left':
+        // R9: the opponent walked out of the room. After a finished game this
+        // kills any rematch hope — flip the flag so the result dialog reacts
+        // NOW (not on the next failed rematch-offer round-trip).
+        if (state.phase == OnlineMatchPhase.ended) {
+          state = state.copyWith(
+            opponentLeftRoom: true,
+            rematchOfferedByMe: false,
+            rematchOfferedByOpponent: false,
+            lastEventLog: newLog,
+          );
+        } else {
+          state = state.copyWith(lastEventLog: newLog);
+        }
         break;
       case 'game-start':
         _onGameStart(msg, newLog);
@@ -586,6 +615,7 @@ class OnlineMatchController extends StateNotifier<OnlineMatchState> {
       chatMessages: const <OnlineChatMessage>[],
       rematchOfferedByMe: false,
       rematchOfferedByOpponent: false,
+      opponentLeftRoom: false,
       clearError: true,
     );
     // Persist for Step 8 reconnect

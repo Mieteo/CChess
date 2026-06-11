@@ -212,6 +212,32 @@ test('T3: rematch-decline notifies the offerer and does not start a game', async
   }
 });
 
+test('R9: leave-room after game end broadcasts peer-left and rematch fails fast', async () => {
+  const { server, url } = await startTestServer();
+  try {
+    const { red, black } = await startGame(url, 'rita', 'sam');
+    red.send({ type: 'resign' });
+    await red.waitType('game-ended');
+    await black.waitType('game-ended');
+
+    // Rita exits the result screen ("Về Đối Đầu") → explicit leave-room.
+    red.send({ type: 'leave-room' });
+    await red.waitType('left-room');
+    // Sam is told IMMEDIATELY — this is what drives the R9 dialog update.
+    const left = await black.waitType('peer-left');
+    assert.equal(left.uid, 'rita');
+
+    // Any rematch offer now fails fast with no-opponent (no 10s heartbeat wait).
+    black.send({ type: 'rematch-offer' });
+    const err = await black.waitType('error');
+    assert.equal(err.code, 'no-opponent');
+
+    await Promise.all([red.close(), black.close()]);
+  } finally {
+    await server.close();
+  }
+});
+
 test('T3: rematch-offer is rejected while the game is still playing', async () => {
   const { server, url } = await startTestServer();
   try {

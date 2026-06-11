@@ -1,6 +1,6 @@
 # 📊 KẾ HOẠCH & TIẾN ĐỘ DỰ ÁN — CChess
 
-> Tài liệu sống — cập nhật ngày **2026-06-11** sau đợt code các phần **không bị chặn bởi test tay**: (1) nút **Gợi ý in-game** qua `EngineRouter` (remote Pikafish + fallback minimax); (2) **attribution Pikafish GPL-3.0** trong Cài đặt; (3) **chip chat nhanh** (A5 polish); (4) **hardening double-disconnect** backend (grace theo từng uid) + 2 integration test mới. Backend `npm test` **25/25**, Flutter `flutter test` **148/148**. Đợt trước (2026-06-07 đợt 2): đóng hết test tự động Sprint 12 + dựng engine service Pikafish (xem [11](11_KE_HOACH_TICH_HOP_ENGINE.md)).
+> Tài liệu sống — cập nhật ngày **2026-06-12**: **test tay Nhóm R đợt 1 — 11/12 PASS**; bug R9 (đối thủ rời phòng nhưng bên kia chỉ biết sau ~10s) đã sửa cùng ngày: giữ `roomId` sau `game-ended`, gom back app-bar/hệ thống về một đường `leave()` (+PopScope, xác nhận xử thua nếu đang chơi), client xử lý `peer-left` → dialog phản ứng tức thì, kèm 5 test regression (T12). Backend `npm test` **26/26**, Flutter `flutter test` **152/152**. Đợt 2026-06-11: nút Gợi ý in-game, attribution Pikafish, chip chat nhanh, hardening double-disconnect (xem changelog cuối tài liệu).
 > Mục đích: tổng kết **đã làm**, **chưa làm**, **đang chờ phụ thuộc** theo từng Sprint.
 > Tham chiếu chéo: [`01_FEATURE_SPECIFICATION.md`](01_FEATURE_SPECIFICATION.md), [`02_PROMPT_UI_UX.md`](02_PROMPT_UI_UX.md), [`03_PROMPT_FEATURES_ROADMAP.md`](03_PROMPT_FEATURES_ROADMAP.md), [`07_HUONG_DAN_THIET_LAP_FIREBASE.md`](07_HUONG_DAN_THIET_LAP_FIREBASE.md), [`08_HUONG_DAN_BACKEND_WEBSOCKET.md`](08_HUONG_DAN_BACKEND_WEBSOCKET.md), [`09_BACKEND_SERVER_HOAT_DONG.md`](09_BACKEND_SERVER_HOAT_DONG.md), [`10_KE_HOACH_TEST.md`](10_KE_HOACH_TEST.md) — **kế hoạch test các mục online chưa xác nhận**.
 
@@ -323,7 +323,8 @@
 
 - **Tổng file Dart `lib/`:** ~95 file (thêm `core/chess_engine/` lớp engine lai: move_engine / engine_router / local_minimax_engine / remote_pikafish_engine + transports / engine_providers).
 - **Backend TypeScript:** ~2000 dòng (realtime: server.ts + auth.ts + rooms.ts + match.ts + persistence.ts + elo.ts + matchmaking.ts + engine/ port; engine-service: server + uci_engine + engine_pool + analysis + cache + quota + fen).
-- **Test tự động:** Flutter **18 file / 148 test** xanh (`flutter test`); backend **7 file / 25 test** xanh (`npm test`). Phân loại nguồn test: xem bảng cuối [`10_KE_HOACH_TEST.md`](10_KE_HOACH_TEST.md).
+- **Test tự động:** Flutter **18 file / 152 test** xanh (`flutter test`); backend **7 file / 26 test** xanh (`npm test`). Phân loại nguồn test: xem bảng cuối [`10_KE_HOACH_TEST.md`](10_KE_HOACH_TEST.md).
+- **Test tay:** Nhóm R (rematch) 11/12 PASS đợt 1 ngày 2026-06-12; R9 sửa xong chờ retest; các nhóm C/S/D/M/G/H chưa test tay.
 - **Sprint hoàn thành (1 chiều):** 10/18 (1–7 + 8a + 8b + 8c).
 - **Sprint code xong, sync một phần:** 3/18 (S9, S10, S11).
 - **Sprint MVP done phase 1:** 1/18 (S12 — A1 Ranked production).
@@ -340,7 +341,7 @@
 
 ### 7.1. Việc gấp nhất — verify các tính năng vừa code (xem [`10_KE_HOACH_TEST.md`](10_KE_HOACH_TEST.md))
 
-0. **Test E2E Đấu lại (Nhóm R)** — *ưu tiên #1*: rematch code xong, chưa chạy thật lần nào. Kiểm 12 case R1–R12, đặc biệt R9 (đối thủ rời rồi mới bấm Đấu lại → không được văng phase=error). Tiện phiên đó kiểm luôn **H1–H3** (nút Gợi ý) + **C8** (chip chat nhanh) — đều mới code 2026-06-11.
+0. ✅ **Test E2E Đấu lại (Nhóm R) — đợt 1 xong 2026-06-12: 11/12 PASS.** Bug R9 đúng như dự báo (đối thủ rời → bên kia chỉ biết sau ~10s) — đã sửa cùng ngày (3 nguyên nhân gốc + 5 test regression, xem R9 trong [`10`](10_KE_HOACH_TEST.md)). *Việc còn lại: retest R9 (1 case, nhanh), tiện phiên đó kiểm luôn **H1–H3** (nút Gợi ý) + **C8** (chip chat nhanh).*
 1. ✅ **Test tự động (Nhóm T) — vẫn đóng kín, 2026-06-11 nâng lên 25/25 backend + 148/148 Flutter** (thêm T9 engine-service, T10 double-disconnect, T11 hint). **Không còn khoảng trống test tự động cho Sprint 12.**
 2. **(việc của bạn) Render upgrade Starter** ($7/tháng) — bỏ sleep 15 phút, lúc nào có user thật phải bỏ.
 2b. **(việc của bạn) Smoke test Pikafish thật** — chạy theo mục 11 của [`11_KE_HOACH_TICH_HOP_ENGINE.md`](11_KE_HOACH_TICH_HOP_ENGINE.md) (Docker hoặc binary tay) để xác nhận FEN/UCI khớp trước khi deploy `cchess-engine`.
@@ -370,4 +371,6 @@
 
 *Cập nhật 2026-06-07 (đợt 2) — **đóng hết test tự động Sprint 12**: refactor `cchess-backend/src/server.ts` thành factory `createCChessServer({authenticate, persist})` (giữ nguyên hành vi production, entry point bọc trong guard `CCHESS_NO_LISTEN`) + thêm `server.test.ts` integration WS thật in-process (T3 rematch handshake / T7 reconnect snapshot / T8 chat). Backend `npm test` 17/17, `tsc` + `npm run build` sạch.*
 
-*Cập nhật 2026-06-11 — **đợt code các phần không bị chặn** (không phải chờ test tay/sprint khác): nút Gợi ý in-game (EngineRouter + fallback, marker xanh ngọc, 6 test), attribution Pikafish GPL-3.0 trong Cài đặt, chip chat nhanh A5, hardening double-disconnect D5 (`disconnectGrace` map theo uid + `peerInGrace` + tự dọn phòng + 2 integration test, grace override qua env `CCHESS_RECONNECT_GRACE_MS`). Sprint 15 chuyển ⬜→🟡. Backend `npm test` **25/25**, Flutter `flutter analyze` sạch + `flutter test` **148/148**. Việc còn lại thuộc về người dùng: test tay E2E 2 thiết bị (Nhóm R/S/D/M/G/H + C8) + Render Starter + smoke test Pikafish thật. Lần cập nhật kế tiếp đề xuất: sau đợt test tay Nhóm R đầu tiên.*
+*Cập nhật 2026-06-11 — **đợt code các phần không bị chặn** (không phải chờ test tay/sprint khác): nút Gợi ý in-game (EngineRouter + fallback, marker xanh ngọc, 6 test), attribution Pikafish GPL-3.0 trong Cài đặt, chip chat nhanh A5, hardening double-disconnect D5 (`disconnectGrace` map theo uid + `peerInGrace` + tự dọn phòng + 2 integration test, grace override qua env `CCHESS_RECONNECT_GRACE_MS`). Sprint 15 chuyển ⬜→🟡. Backend `npm test` 25/25, Flutter `flutter test` 148/148.*
+
+*Cập nhật 2026-06-12 — **test tay Nhóm R đợt 1: 11/12 PASS + sửa bug R9.** Nguyên nhân gốc (3): client xoá `roomId` ngay khi `game-ended` làm `leave()` không gửi `leave-room`; nút back app-bar/hệ thống không đi qua `leave()` (socket "ma" ở lại phòng tới khi heartbeat dọn ~5–10s); client bên kia bỏ qua `peer-left` nên dialog không phản ứng. Sửa: giữ `roomId` sau game-ended, gom mọi đường thoát về `_onBackPressed()` + `PopScope` (đang chơi → xác nhận xử thua), controller xử lý `peer-left` → cờ `opponentLeftRoom` → dialog hiện ngay "Đối thủ đã rời — không thể đấu lại"; server dọn `rematchOfferedBy` của người rời. Test mới (T12): backend integration 1 + Flutter 4. Backend `npm test` **26/26**, Flutter `flutter test` **152/152**, analyze sạch. Việc còn lại của người dùng: retest R9, test tay Nhóm S/D/M/G/H + C8, Render Starter, smoke test Pikafish thật.*

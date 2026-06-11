@@ -204,6 +204,56 @@ void main() {
     });
   });
 
+  group('R9 — opponent left the finished room', () {
+    test('peer-left while ended flips opponentLeftRoom and clears offers',
+        () async {
+      await driveToEnded();
+      ctrl.offerRematch(); // I'm already waiting for a rematch…
+      expect(ctrl.state.rematchOfferedByMe, isTrue);
+
+      socket.emit({'type': 'peer-left', 'uid': 'black-uid'});
+      await pump();
+
+      expect(ctrl.state.opponentLeftRoom, isTrue);
+      expect(ctrl.state.rematchOfferedByMe, isFalse);
+      expect(ctrl.state.rematchOfferedByOpponent, isFalse);
+      expect(ctrl.state.phase, OnlineMatchPhase.ended); // dialog stays up
+    });
+
+    test('offerRematch after peer-left fails locally without a round-trip',
+        () async {
+      await driveToEnded();
+      socket.emit({'type': 'peer-left', 'uid': 'black-uid'});
+      await pump();
+
+      ctrl.offerRematch();
+
+      expect(socket.sentTypes, isNot(contains('rematch-offer')));
+      expect(ctrl.state.errorMessage, isNotNull);
+    });
+
+    test('peer-left outside the ended phase is just logged', () async {
+      await driveToPlaying();
+
+      socket.emit({'type': 'peer-left', 'uid': 'black-uid'});
+      await pump();
+
+      expect(ctrl.state.opponentLeftRoom, isFalse);
+      expect(ctrl.state.phase, OnlineMatchPhase.playing);
+    });
+
+    test('a fresh game-start resets opponentLeftRoom', () async {
+      await driveToEnded();
+      socket.emit({'type': 'peer-left', 'uid': 'black-uid'});
+      await pump();
+      expect(ctrl.state.opponentLeftRoom, isTrue);
+
+      await driveToPlaying();
+
+      expect(ctrl.state.opponentLeftRoom, isFalse);
+    });
+  });
+
   group('core game flow', () {
     test('game-ended sets result/reason and clears the reconnect store',
         () async {
