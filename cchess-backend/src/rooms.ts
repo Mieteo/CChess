@@ -49,9 +49,10 @@ export interface Room {
   // server.ts/match.ts cast to XiangqiGame.
   engine?: unknown;
 
-  // Step 8 reconnect grace period.
-  disconnectedUid?: string;
-  disconnectTimer?: NodeJS.Timeout;
+  // Step 8 reconnect grace period. Keyed by uid so BOTH players can be in
+  // grace at once (double-disconnect hardening); each entry owns its forfeit
+  // timer plus the absolute deadline (for client-facing countdowns).
+  disconnectGrace?: Map<string, { timer: NodeJS.Timeout; deadline: number }>;
 
   // Sprint 12 A5: short in-memory chat history for reconnect/session UI.
   chatMessages?: ChatMessage[];
@@ -96,7 +97,7 @@ export function activeRooms(): Room[] {
 
 /// Step 8: rebind a fresh socket to an existing room (reconnect path).
 /// Caller is responsible for verifying uid matches one of redUid/blackUid
-/// and that disconnectedUid was set. This just updates the maps.
+/// and that the uid has an entry in disconnectGrace. This just updates the maps.
 export function attachReconnectingSocket(
   socket: WebSocket,
   room: Room,
@@ -195,6 +196,36 @@ export function leaveRoom(
     return room;
   }
   return room;
+}
+
+/// Cancel pending grace timer(s). With a uid, clears only that player's
+/// entry; without, clears every entry (game over / rematch reset).
+export function clearDisconnectGrace(room: Room, uid?: string): void {
+  const grace = room.disconnectGrace;
+  if (!grace) return;
+  if (uid !== undefined) {
+    const entry = grace.get(uid);
+    if (entry) {
+      clearTimeout(entry.timer);
+      grace.delete(uid);
+    }
+    return;
+  }
+  for (const entry of grace.values()) clearTimeout(entry.timer);
+  grace.clear();
+}
+
+/// Drop a room that no longer has any sockets attached — e.g. a game that
+/// finished while both players were disconnected. No-op while anyone is
+/// still connected (player or spectator).
+export function deleteRoomIfEmpty(room: Room): boolean {
+  if (room.members.size > 0 || room.spectators.size > 0) return false;
+  clearDisconnectGrace(room);
+  if (room.clockTimer) {
+    clearInterval(room.clockTimer);
+    room.clockTimer = undefined;
+  }
+  return rooms.delete(room.id);
 }
 
 export function isSpectator(room: Room, socket: WebSocket): boolean {

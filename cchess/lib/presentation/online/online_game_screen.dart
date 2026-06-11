@@ -15,6 +15,17 @@ import '../profile/profile_controller.dart';
 import 'online_match_controller.dart';
 import 'share_room_sheet.dart';
 
+/// Quick-chat presets (A5). Sent as plain `chat-message` text — the server's
+/// 120-char cap and rate limit apply unchanged.
+const List<String> _quickChatPresets = [
+  'Chào bạn! 👋',
+  'Chúc may mắn 🍀',
+  'Nước hay đấy! 🔥',
+  'Suýt nữa thì… 😅',
+  'Đánh hay lắm 👏',
+  'Hẹn gặp lại 🤝',
+];
+
 class OnlineGameScreen extends ConsumerStatefulWidget {
   const OnlineGameScreen({super.key});
 
@@ -458,6 +469,32 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
                                     );
                                   },
                                 ),
+                        ),
+                        AppSpacing.vGapSm,
+                        SizedBox(
+                          height: 36,
+                          child: ListView.separated(
+                            scrollDirection: Axis.horizontal,
+                            itemCount: _quickChatPresets.length,
+                            separatorBuilder: (context, _) => AppSpacing.hGapXs,
+                            itemBuilder: (context, index) {
+                              final preset = _quickChatPresets[index];
+                              return ActionChip(
+                                label: Text(
+                                  preset,
+                                  style: AppTextStyles.captionSm,
+                                ),
+                                backgroundColor:
+                                    AppColors.surfaceContainerHighest,
+                                side: const BorderSide(
+                                  color: AppColors.outlineVariant,
+                                ),
+                                onPressed: state.canChat
+                                    ? () => _ctrl.sendChatMessage(preset)
+                                    : null,
+                              );
+                            },
+                          ),
                         ),
                         AppSpacing.vGapSm,
                         Row(

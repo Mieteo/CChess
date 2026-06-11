@@ -42,6 +42,8 @@ class GameUiState {
   final PieceColor? cpuColor;
   final BotDifficulty? botDifficulty;
   final bool cpuThinking;
+  final Move? hintMove;
+  final bool hintThinking;
 
   const GameUiState({
     required this.game,
@@ -53,6 +55,8 @@ class GameUiState {
     required this.cpuColor,
     required this.botDifficulty,
     required this.cpuThinking,
+    this.hintMove,
+    this.hintThinking = false,
   });
 
   GameUiState copyWith({
@@ -67,6 +71,9 @@ class GameUiState {
     PieceColor? cpuColor,
     BotDifficulty? botDifficulty,
     bool? cpuThinking,
+    Move? hintMove,
+    bool clearHint = false,
+    bool? hintThinking,
   }) {
     return GameUiState(
       game: game ?? this.game,
@@ -78,6 +85,8 @@ class GameUiState {
       cpuColor: cpuColor ?? this.cpuColor,
       botDifficulty: botDifficulty ?? this.botDifficulty,
       cpuThinking: cpuThinking ?? this.cpuThinking,
+      hintMove: clearHint ? null : (hintMove ?? this.hintMove),
+      hintThinking: hintThinking ?? this.hintThinking,
     );
   }
 
@@ -192,6 +201,7 @@ class GameController extends StateNotifier<GameUiState> {
       lastMove: move,
       clearSelected: true,
       validTargets: const [],
+      clearHint: true,
     );
     // Bot turn is triggered by the screen via [requestBotMove] so the
     // controller stays free of timer/engine dependencies.
@@ -212,6 +222,7 @@ class GameController extends StateNotifier<GameUiState> {
       clearLastMove: game.history.isEmpty,
       clearSelected: true,
       validTargets: const [],
+      clearHint: true,
     );
   }
 
@@ -236,11 +247,40 @@ class GameController extends StateNotifier<GameUiState> {
       cpuThinking: false,
       clearSelected: true,
       validTargets: const [],
+      clearHint: true,
     );
   }
 
   void setBotThinking(bool value) {
     state = state.copyWith(cpuThinking: value);
+  }
+
+  void setHintThinking(bool value) {
+    state = state.copyWith(hintThinking: value);
+  }
+
+  /// Show an engine-suggested move on the board. Rejects suggestions that are
+  /// no longer legal (e.g. the position changed while the engine was
+  /// thinking).
+  void showHint(Position from, Position to) {
+    final game = state.game;
+    if (game.status.isOver) return;
+    final piece = game.board.at(from);
+    if (piece == null || piece.color != game.turn) return;
+    if (!game.isValidMove(from, to)) return;
+    state = state.copyWith(
+      hintMove: Move(
+        from: from,
+        to: to,
+        moved: piece,
+        captured: game.board.at(to),
+      ),
+      hintThinking: false,
+    );
+  }
+
+  void clearHint() {
+    state = state.copyWith(clearHint: true, hintThinking: false);
   }
 }
 

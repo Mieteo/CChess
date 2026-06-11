@@ -103,7 +103,7 @@
 
 **Nghiệm thu:** có hàm chuyển đổi FEN/move + 1 test đối chiếu xanh; biết chắc Pikafish chạy đúng trên 1 thế cờ thật của app.
 
-### Phase 1 — UCI wrapper + service engine (backend) ⬜
+### Phase 1 — UCI wrapper + service engine (backend) 🟡 *(code + test fake-process xong 2026-06-07; còn chạy với binary thật)*
 **Mục tiêu:** một service nói chuyện được với Pikafish, có kiểm soát tài nguyên.
 - [ ] Thư mục mới `cchess-engine/` (hoặc `cchess-backend/src/engine-service/`) — quyết định mono-repo vs repo riêng.
 - [ ] `uci_engine.ts` — spawn tiến trình Pikafish (`child_process.spawn`), gửi lệnh UCI, **parse `info`/`bestmove`** (xem §5.1).
@@ -113,7 +113,7 @@
 
 **Nghiệm thu:** unit test (fake process) cho parser UCI + test thật gọi `bestMove(startFen)` trả về nước hợp lệ; pool không vượt số tiến trình cấu hình.
 
-### Phase 2 — API surface + auth + rate limit (backend) ⬜
+### Phase 2 — API surface + auth + rate limit (backend) 🟡 *(endpoint + auth + quota in-memory xong; VIP thật + quota bền vững còn lại)*
 **Mục tiêu:** app gọi được, an toàn, có hạn mức.
 - [ ] Endpoint (HTTP `POST` hoặc message WS — đề xuất **HTTP cho phân tích**, vì không cần realtime):
   - `POST /engine/best-move` `{ fen, level }` → `{ uci, scoreCp, depth }`
@@ -125,7 +125,7 @@
 
 **Nghiệm thu:** gọi 3 endpoint qua `curl` với token hợp lệ trả đúng; không token → 401; vượt hạn mức → 429.
 
-### Phase 3 — Đóng gói & deploy (Docker + Render) ⬜
+### Phase 3 — Đóng gói & deploy (Docker + Render) 🟡 *(Dockerfile.engine + render.yaml xong; CHƯA deploy thật)*
 **Mục tiêu:** service engine chạy thật trên Render, tách khỏi realtime.
 - [ ] **Dockerfile** multi-stage: stage build compile Pikafish (⚠️ C) + tải `pikafish.nnue`; stage runtime `node:20-slim` copy binary + nnue + service (xem §5.3).
 - [ ] Thêm service `cchess-engine` vào `render.yaml` (Blueprint) — **plan ≥ Standard** (xem §6).
@@ -135,7 +135,7 @@
 
 **Nghiệm thu:** `bestMove` qua endpoint production trả < ~1s; service realtime KHÔNG bị ảnh hưởng khi engine đang phân tích (đo đồng hồ ván không giật).
 
-### Phase 4 — Tích hợp app Flutter ⬜
+### Phase 4 — Tích hợp app Flutter 🟡 *(abstraction/router/bot Đại Sư+/replay + nút Gợi ý + attribution xong 2026-06-11; còn màn AI Coach B3)*
 **Mục tiêu:** UI dùng engine qua lớp trừu tượng + fallback.
 - [ ] `MoveEngine` (abstract) trong `lib/core/chess_engine/` — interface chung: `Future<EngineMove> bestMove(...)`, `Future<GameAnalysis> analyze(...)`.
 - [ ] `LocalMinimaxEngine` — bọc [bot_engine.dart](cchess/lib/core/chess_engine/ai/bot_engine.dart) hiện có (không sửa logic minimax).
@@ -146,7 +146,7 @@
 
 **Nghiệm thu:** online → phân tích dùng Pikafish; tắt mạng → tự fallback minimax, không crash, có báo trạng thái.
 
-### Phase 5 — Test & hardening ⬜
+### Phase 5 — Test & hardening 🟡 *(unit/integration fake-engine + router fallback test xong; load test + giám sát chi phí còn lại)*
 - [ ] Backend: unit test parser UCI (fake process), test pool/queue/timeout, test rate-limit/VIP.
 - [ ] Tải thử (load test): N request đồng thời → đo độ trễ, CPU, hàng đợi; chỉnh `MAX_CONCURRENCY`.
 - [ ] App: test `EngineRouter` (fake remote) — đường remote-ok và đường fallback.
@@ -309,10 +309,11 @@ COPY --from=build /pf/src/*.nnue   /app/engine/pikafish.nnue
 
 ### 10.2. Chưa xong / cần làm tiếp
 
-- ⬜ **Spike FEN/UCI với Pikafish thật**: cần chạy binary thật, lấy vài thế cờ cố định, đối chiếu nước UCI trả về với board của app.
-- ⬜ **Nút gợi ý in-game**: `EngineRouter.bestMove(..., useCase: EngineUseCase.hint)` đã sẵn sàng nhưng UI nút gợi ý chưa được thêm/nối.
+- ✅ **Nút gợi ý in-game — DONE 2026-06-11**: nút 💡 trong `GameActionBar` (ván bot/local), `_onHint` ở [game_screen.dart](cchess/lib/presentation/game/game_screen.dart) gọi `EngineRouter.bestMove(useCase: hint)` → remote Pikafish khi online, fallback minimax + snackbar khi offline; nước gợi ý vẽ marker **xanh ngọc** trên [chess_board.dart](cchess/lib/widgets/chess/chess_board.dart) (phân biệt với marker vàng của nước cuối); hint tự xoá khi đi nước/undo/ván mới. 6 unit test trong `game_controller_test.dart`. Test tay UI: Nhóm H trong [`10_KE_HOACH_TEST.md`](10_KE_HOACH_TEST.md).
+- ✅ **Attribution trong app — DONE 2026-06-11**: Cài đặt → Giới thiệu → "Engine cờ & giấy phép" (dialog nêu Pikafish GPL-3.0 chạy server-side không bundle vào app, NNUE thuộc official-pikafish/Networks có điều khoản riêng, link nguồn).
+- ⬜ **Spike FEN/UCI với Pikafish thật**: cần chạy binary thật (Docker hoặc tải tay theo mục 11), lấy vài thế cờ cố định, đối chiếu nước UCI trả về với board của app. *(Việc cần máy thật — không tự động hoá được bằng test hiện có.)*
+- ⬜ **Deploy `cchess-engine` lên Render**: render.yaml đã khai báo service; chưa bấm deploy (plan ≥ Standard ~$25/tháng — xem §6).
 - ⬜ **VIP thật + quota bền vững**: hiện quota là in-memory theo process; production nên dùng Firestore/Redis để không reset khi redeploy/restart.
-- ⬜ **Attribution trong app**: thêm mục Pikafish/GPL/NNUE license ở màn Cài đặt/Giới thiệu trước khi phát hành.
 - ⚠️ **NNUE license cho thương mại**: mã nguồn Pikafish GPL-3.0, nhưng repo chính thức `official-pikafish/Networks` ghi `pikafish.nnue` **không dùng thương mại nếu chưa được phép**. Nếu app/backend có mục tiêu thương mại, phải xin phép hoặc chọn network/engine khác có giấy phép phù hợp trước khi dùng production.
 
 ---
@@ -420,4 +421,4 @@ EngineRouter(
 
 ---
 
-*Tạo 2026-06-07 sau khi chốt phương án lai (offline minimax Dart + online Pikafish server-side). Cập nhật 2026-06-07: đã triển khai service engine/API/pool/cache/quota cơ bản, Dockerfile engine, Flutter abstraction/router/fallback và đã nối bot/replay controller vào `EngineRouter`; bước tiếp theo là chạy smoke test với Pikafish thật, thêm nút gợi ý và xử lý quota/VIP bền vững.*
+*Tạo 2026-06-07 sau khi chốt phương án lai (offline minimax Dart + online Pikafish server-side). Cập nhật 2026-06-07: đã triển khai service engine/API/pool/cache/quota cơ bản, Dockerfile engine, Flutter abstraction/router/fallback và đã nối bot/replay controller vào `EngineRouter`. Cập nhật 2026-06-11: **nút Gợi ý in-game + attribution GPL trong Cài đặt đã xong** (Phase 4 chỉ còn màn AI Coach B3 chuyên biệt); test engine-service 6/6 nằm trong `npm test` 25/25 (xem Nhóm T9 của [`10_KE_HOACH_TEST.md`](10_KE_HOACH_TEST.md)); bước tiếp theo là smoke test với Pikafish thật (mục 11), deploy `cchess-engine`, quota/VIP bền vững.*

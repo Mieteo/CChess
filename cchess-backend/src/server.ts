@@ -4,6 +4,7 @@ import { initFirebaseAdmin, verifyIdToken, type VerifiedToken } from './auth';
 import {
   attachReconnectingSocket,
   activeRooms,
+  clearDisconnectGrace,
   createRoom,
   getRoomById,
   isSpectator,
@@ -584,18 +585,18 @@ export function createCChessServer(options: CChessServerOptions = {}): CChessSer
           send(socket, { type: 'error', code: 'game-not-active' });
           return;
         }
-        if (room.disconnectedUid !== uid) {
+        if (!uid || !room.disconnectGrace?.has(uid)) {
           send(socket, { type: 'error', code: 'not-disconnected-player' });
           return;
         }
         // Swap socket into room (replaces dead socket reference)
         attachReconnectingSocket(socket, room, uid);
-        // Cancel grace timer + clear disconnect marker
-        if (room.disconnectTimer) {
-          clearTimeout(room.disconnectTimer);
-          room.disconnectTimer = undefined;
-        }
-        room.disconnectedUid = undefined;
+        // Cancel this player's grace timer. The OTHER player may still be in
+        // grace (double-disconnect) — leave their entry untouched.
+        clearDisconnectGrace(room, uid);
+        const peerGraceEntry = [...(room.disconnectGrace ?? new Map())][0] as
+          | [string, { deadline: number }]
+          | undefined;
 
         const yourColor = uid === room.redUid ? 'red' : 'black';
         send(socket, {
@@ -609,6 +610,14 @@ export function createCChessServer(options: CChessServerOptions = {}): CChessSer
           currentTurn: room.currentTurn,
           clock: clockSnapshot(room),
           startedAt: room.startedAt,
+          // Double-disconnect: tell the reconnecting client when the peer is
+          // ALSO in grace so it can show the countdown banner right away.
+          peerInGrace: peerGraceEntry
+            ? {
+                uid: peerGraceEntry[0],
+                remainingMs: Math.max(0, peerGraceEntry[1].deadline - Date.now()),
+              }
+            : null,
         });
         broadcastToRoom(room, socket, { type: 'peer-reconnected', uid });
         console.log(`[match] ${room.id} ${yourColor} (${uid}) reconnected`);
@@ -930,29 +939,33 @@ export function createCChessServer(options: CChessServerOptions = {}): CChessSer
       if (beforeRoom && wasPlaying && uid && !wasSpectator) {
         const color = colorOfSocket(beforeRoom, socket);
         if (color) {
-          beforeRoom.disconnectedUid = uid;
-          if (beforeRoom.disconnectTimer) {
-            clearTimeout(beforeRoom.disconnectTimer);
-          }
-          beforeRoom.disconnectTimer = setTimeout(() => {
-            const stillDisconnected = beforeRoom.disconnectedUid === uid;
+          // Per-uid grace entries so a double-disconnect (both players drop)
+          // keeps BOTH forfeit timers alive — the second drop must not
+          // overwrite the first player's pending reconnect window.
+          const grace = (beforeRoom.disconnectGrace ??= new Map());
+          const prior = grace.get(uid);
+          if (prior) clearTimeout(prior.timer);
+          const timer = setTimeout(() => {
+            const stillDisconnected = beforeRoom.disconnectGrace?.has(uid) ?? false;
             const stillPlaying = beforeRoom.status === 'playing';
             console.log(
-              `[match] ${beforeRoom.id} grace timer fired: stillDisconnected=${stillDisconnected} stillPlaying=${stillPlaying} status=${beforeRoom.status}`,
+              `[match] ${beforeRoom.id} grace timer fired for ${uid}: stillDisconnected=${stillDisconnected} stillPlaying=${stillPlaying} status=${beforeRoom.status}`,
             );
+            beforeRoom.disconnectGrace?.delete(uid);
             if (stillDisconnected && stillPlaying) {
               const winner: GameResult =
                 opponentOf(color) === 'red' ? 'red-win' : 'black-win';
               finishGame(beforeRoom, winner, 'disconnect');
             }
           }, RECONNECT_GRACE_MS);
+          grace.set(uid, { timer, deadline: Date.now() + RECONNECT_GRACE_MS });
           broadcastToRoom(beforeRoom, socket, {
             type: 'peer-disconnected',
             uid,
             graceMs: RECONNECT_GRACE_MS,
           });
           console.log(
-            `[match] ${beforeRoom.id} ${color} (${uid}) disconnected, grace ${RECONNECT_GRACE_MS}ms`,
+            `[match] ${beforeRoom.id} ${color} (${uid}) disconnected, grace ${RECONNECT_GRACE_MS}ms (inGrace=${grace.size})`,
           );
         }
       }

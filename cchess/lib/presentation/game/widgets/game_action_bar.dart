@@ -4,13 +4,16 @@ import '../../../theme/app_colors.dart';
 import '../../../theme/app_spacing.dart';
 import '../../../theme/app_text_styles.dart';
 
-/// Bottom toolbar with the secondary game actions: leave, undo, draw, resign,
-/// sound toggle.
+/// Bottom toolbar with the secondary game actions: leave, undo, hint, draw,
+/// resign, sound toggle.
 class GameActionBar extends StatelessWidget {
   final bool canUndo;
+  final bool canHint;
+  final bool hintThinking;
   final bool soundOn;
   final VoidCallback onLeave;
   final VoidCallback onUndo;
+  final VoidCallback? onHint;
   final VoidCallback onDraw;
   final VoidCallback onResign;
   final VoidCallback onToggleSound;
@@ -19,9 +22,12 @@ class GameActionBar extends StatelessWidget {
   const GameActionBar({
     super.key,
     required this.canUndo,
+    this.canHint = false,
+    this.hintThinking = false,
     required this.soundOn,
     required this.onLeave,
     required this.onUndo,
+    this.onHint,
     required this.onDraw,
     required this.onResign,
     required this.onToggleSound,
@@ -53,6 +59,14 @@ class GameActionBar extends StatelessWidget {
             label: 'Đi lại',
             onTap: canUndo ? onUndo : null,
           ),
+          if (onHint != null)
+            _ActionButton(
+              icon: hintThinking
+                  ? Icons.hourglass_top
+                  : Icons.lightbulb_outline,
+              label: 'Gợi ý',
+              onTap: canHint && !hintThinking ? onHint : null,
+            ),
           _ActionButton(
             icon: Icons.handshake_outlined,
             label: 'Cầu hòa',

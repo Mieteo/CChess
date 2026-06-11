@@ -170,6 +170,12 @@ class SettingsScreen extends ConsumerWidget {
                       label: 'Điều khoản sử dụng',
                       onTap: () {},
                     ),
+                    _Divider(),
+                    _RowItem(
+                      icon: Icons.memory_outlined,
+                      label: 'Engine cờ & giấy phép',
+                      onTap: () => _showEngineAttribution(context),
+                    ),
                   ],
                 ),
                 AppSpacing.vGapLg,
@@ -189,6 +195,51 @@ class SettingsScreen extends ConsumerWidget {
       ),
     );
   }
+}
+
+/// Attribution required by the Pikafish GPL-3.0 license (engine runs
+/// server-side only — it is never bundled into this app binary).
+void _showEngineAttribution(BuildContext context) {
+  showDialog<void>(
+    context: context,
+    builder: (context) => AlertDialog(
+      backgroundColor: AppColors.surfaceContainerLow,
+      title: Text(
+        'Engine cờ & giấy phép',
+        style: AppTextStyles.bodyMd.copyWith(
+          color: AppColors.accentGold,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+      content: SingleChildScrollView(
+        child: Text(
+          'CChess dùng hai engine cờ tướng:\n\n'
+          '• Engine offline (chơi bot, gợi ý khi mất mạng): minimax thuần '
+          'Dart do nhóm CChess tự phát triển, chạy ngay trên thiết bị.\n\n'
+          '• Engine phân tích mạnh (Đại Sư+, gợi ý, phân tích ván): '
+          'Pikafish — engine cờ tướng mã nguồn mở theo giấy phép GPL-3.0, '
+          'thuộc dự án official-pikafish/Pikafish trên GitHub. Pikafish chạy '
+          'trên máy chủ của CChess, KHÔNG được đóng gói trong ứng dụng này.\n\n'
+          '• Mạng NNUE (pikafish.nnue) thuộc official-pikafish/Networks và '
+          'có điều khoản riêng về sử dụng thương mại.\n\n'
+          'Nguồn: github.com/official-pikafish/Pikafish',
+          style: AppTextStyles.captionSm.copyWith(
+            color: AppColors.onSurfaceVariant,
+            height: 1.5,
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(
+            'Đóng',
+            style: AppTextStyles.bodyMd.copyWith(color: AppColors.accentGold),
+          ),
+        ),
+      ],
+    ),
+  );
 }
 
 class _SectionLabel extends StatelessWidget {

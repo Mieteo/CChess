@@ -1,9 +1,11 @@
 # ✅ KẾ HOẠCH TEST — CChess (các mục chưa xác nhận đã test)
 
-> Tài liệu sống — tạo ngày **2026-06-07**.
+> Tài liệu sống — tạo ngày **2026-06-07**, cập nhật **2026-06-11** (đợt 3).
 > Mục đích: liệt kê **các kịch bản còn tồn đọng chưa test xong** để sắp lịch test dần.
-> Phạm vi: tập trung các tính năng **online/multiplayer Sprint 12** vừa code xong (Đấu lại, Chat, Spectate, Reconnect, Matchmaking) — phần engine/offline (Sprint 1–7) đã có unit test xanh, không lặp lại ở đây.
-> Tham chiếu: [`05_KE_HOACH_DU_AN.md`](05_KE_HOACH_DU_AN.md), [`08_HUONG_DAN_BACKEND_WEBSOCKET.md`](08_HUONG_DAN_BACKEND_WEBSOCKET.md), [`09_BACKEND_SERVER_HOAT_DONG.md`](09_BACKEND_SERVER_HOAT_DONG.md).
+> Phạm vi: tập trung các tính năng **online/multiplayer Sprint 12** (Đấu lại, Chat, Spectate, Reconnect, Matchmaking) + **engine service Pikafish / nút Gợi ý** (Sprint 15 sớm) — phần engine/offline (Sprint 1–7) đã có unit test xanh, không lặp lại ở đây.
+> Tham chiếu: [`05_KE_HOACH_DU_AN.md`](05_KE_HOACH_DU_AN.md), [`08_HUONG_DAN_BACKEND_WEBSOCKET.md`](08_HUONG_DAN_BACKEND_WEBSOCKET.md), [`09_BACKEND_SERVER_HOAT_DONG.md`](09_BACKEND_SERVER_HOAT_DONG.md), [`11_KE_HOACH_TICH_HOP_ENGINE.md`](11_KE_HOACH_TICH_HOP_ENGINE.md).
+>
+> **Trạng thái test tự động 2026-06-11:** Backend `cd cchess-backend && npm test` → **25/25 xanh** (7 file). Flutter `cd cchess && flutter test` → **148/148 xanh** (18 file). Chi tiết ở Nhóm T (§8).
 
 ---
 
@@ -71,6 +73,7 @@
 - [ ] **C5 — Spectator chat.** Người xem gửi/nhận được chat trong phòng.
 - [ ] **C6 — Khôi phục lịch sử chat sau reconnect.** Mất mạng → reconnect trong 60s → lịch sử chat (snapshot từ server) hiện lại đúng.
 - [ ] **C7 — Chặn chat khi ván đã kết thúc.** Sau `game-ended`, gửi chat → server trả `not-playing` (kiểm hành vi UI không gửi được).
+- [ ] **C8 — Chip tin nhắn nhanh (preset) — code 2026-06-11.** Hàng chip preset (Chào bạn 👋 / Chúc may mắn 🍀 / …) hiện trên ô nhập trong chat sheet; chạm 1 chip → gửi ngay như chat thường; chạm 2 chip liên tiếp < 1.5s → dính rate-limit như C3 (đúng kỳ vọng); chip bị disable khi `canChat=false`.
 
 ---
 
@@ -101,7 +104,7 @@
 - [ ] **D2 — Reconnect kịp.** Bật mạng/mở lại app trong 60s → ván tiếp tục đúng thế cờ, đúng đồng hồ, banner biến mất (`peer-reconnected`).
 - [ ] **D3 — Hết grace.** Để quá 60s → ván tự kết thúc với lý do `disconnect`, người còn lại thắng, dialog kết quả hiện (lưu ý R8: không cho đấu lại).
 - [ ] **D4 — Lifecycle nền vs kill.** Bấm Home (paused/hidden) → KHÔNG mất kết nối; vuốt kill app (detached) → vào grace + lần mở app sau auto-reconnect từ lobby (`tryAutoReconnect`).
-- [ ] **D5 — Double-disconnect** *(hardening chưa code — chỉ ghi nhận hành vi hiện tại).* Cả 2 mất mạng cùng lúc → quan sát server xử lý ra sao, ghi lại để làm hardening sau.
+- [ ] **D5 — Double-disconnect** *(✅ hardening ĐÃ CODE 2026-06-11 + có test tự động T10).* Server giờ giữ grace **theo từng uid** (map `disconnectGrace`) nên cả 2 người chơi cùng rớt vẫn giữ được cửa sổ reconnect riêng; người rớt TRƯỚC hết grace trước → xử thua trước; snapshot `reconnected` có thêm trường `peerInGrace{uid, remainingMs}` để client vẽ banner ngay. Phòng kết thúc khi cả 2 vắng mặt sẽ tự dọn (không leak). *Việc còn lại của test tay: quan sát UI 2 thiết bị thật khi cả 2 cùng mất mạng rồi cùng quay lại (banner + đồng hồ).*
 
 ---
 
@@ -128,10 +131,20 @@
 
 ---
 
-## 8. Nhóm T — Test tự động ✅ ĐÃ ĐÓNG HẾT (8/8 xanh)
+## 7b. Nhóm H — Nút Gợi ý in-game (mới code 2026-06-11) ⭐
+
+> Code: [game_screen.dart](cchess/lib/presentation/game/game_screen.dart) (`_onHint`), [game_controller.dart](cchess/lib/presentation/game/game_controller.dart) (`showHint`/`clearHint`), [game_action_bar.dart](cchess/lib/presentation/game/widgets/game_action_bar.dart), [chess_board.dart](cchess/lib/widgets/chess/chess_board.dart) (marker xanh ngọc), [engine_router.dart](cchess/lib/core/chess_engine/engine_router.dart). Logic controller đã có test tự động (T11) — nhóm này là phần UI/UX cần mắt người.
+
+- [ ] **H1 — Nút Gợi ý hoạt động (online engine).** Đang ván bot, đến lượt mình, server engine chạy (`CCHESS_ENGINE_URL` trỏ đúng) → bấm 💡 Gợi ý → 2 ô from/to sáng **xanh ngọc** (khác màu vàng của nước cuối); icon chuyển hourglass trong lúc chờ.
+- [ ] **H2 — Fallback offline.** Tắt mạng / không cấu hình engine URL → bấm Gợi ý → vẫn nhận gợi ý từ minimax local + snackbar "Gợi ý offline (minimax)…".
+- [ ] **H3 — Gợi ý tự xoá đúng lúc.** Sau khi đi nước (bất kỳ), undo, hoặc ván mới → marker gợi ý biến mất; bấm Gợi ý khi chưa đến lượt/bot đang nghĩ → nút disabled.
+
+---
+
+## 8. Nhóm T — Test tự động ✅ XANH TOÀN BỘ (cập nhật 2026-06-11)
 
 > Mục này là **viết test code**, không phải test tay. Ưu tiên làm để khỏi phải test tay lặp lại các case ở trên.
-> **Trạng thái 2026-06-07:** T1–T8 đều xanh. Backend `cd cchess-backend && npm test` → 17/17. Flutter `cd cchess && flutter test test/online` → 25/25 (`online_match_controller_test.dart` 8 + `room_share_test.dart` 17).
+> **Trạng thái 2026-06-11:** T1–T11 đều xanh. Backend `cd cchess-backend && npm test` → **25/25** (7 file). Flutter `cd cchess && flutter test` → **148/148** (18 file).
 
 - [x] **T1 — `rooms.test.ts`** (backend): spectator read-only, spectator leave, active room filtering. *(3 test, pass)*
 - [x] **T2 — `match.test.ts`** (backend): `startMatch` (gán màu/clock/turn/engine), `applyMove` hợp lệ/`not-your-turn`/`illegal-move`/`not-player`/`time-out` + trừ đồng hồ, **`startRematch`** (đổi màu + reset clock/engine/moves + clear cờ offer; fail khi <2 người). *(8 test, pass)*
@@ -141,8 +154,12 @@
 - [x] **T6 — `room_share_test.dart`** (Flutter, A6 share link): `normalizeRoomId`/`isValidRoomId`, `linkFor` (spectate vs `mode=join`, strip trailing slash), `inviteText`, `roomIdFromLink` (bare code / `/r/` / `cchess://` / `?spectate|join=` / junk→null / round-trip), `isJoinLink`. *(17 test, pass)*
 - [x] **T7 — `server.test.ts` reconnect integration** (backend, integration WS): chơi 1 nước hợp lệ → đỏ rớt mạng (đóng socket) → đối thủ nhận `peer-disconnected{graceMs>0}` → đỏ `reconnect-room` trong grace → nhận `reconnected` snapshot đúng (`yourColor`, `moves`, `currentTurn`) + đối thủ nhận `peer-reconnected`. *(1 test, pass — tự động hoá phần lõi Nhóm D2.)*
 - [x] **T8 — `server.test.ts` chat integration** (backend, integration WS): `chat-message` phát cho cả 2 bên kèm `from`; gửi liên tiếp → `error{chat-rate-limited}`; >120 ký tự → `error{invalid-chat}`; sau `game-ended` → `error{not-playing}`. *(2 test, pass — tự động hoá Nhóm C1/C3/C4/C7.)*
+- [x] **T9 — engine-service tests** (backend, thêm 2026-06-07 cùng đợt code engine Pikafish — ghi nhận vào tài liệu 2026-06-11): [`uci_parser.test.ts`](cchess-backend/src/engine-service/uci_parser.test.ts) parse `info`/`bestmove`/mate-score *(3 test)*; [`engine_pool.test.ts`](cchess-backend/src/engine-service/engine_pool.test.ts) giới hạn concurrency + reject khi queue đầy *(2 test)*; [`engine-service/server.test.ts`](cchess-backend/src/engine-service/server.test.ts) HTTP service đòi auth + trả best-move có cache *(1 test, fake engine — KHÔNG cần binary Pikafish thật)*. *(6 test, pass)*
+- [x] **T10 — `server.disconnect.test.ts` double-disconnect** (backend, integration WS thật, mới 2026-06-11, grace rút ngắn qua env `CCHESS_RECONNECT_GRACE_MS`): cả 2 cùng rớt → cả 2 reconnect được trong grace (regression cho bug ghi-đè marker cũ) + snapshot có `peerInGrace`; cả 2 rớt không ai quay lại → người rớt trước bị xử thua `disconnect` (spectator quan sát `game-ended`). *(2 test, pass — tự động hoá phần lõi D5.)*
+- [x] **T11 — hint tests trong `game_controller_test.dart`** (Flutter, mới 2026-06-11): `showHint` lưu nước hợp lệ / từ chối sai bên / từ chối sai luật; hint tự xoá sau khi đi nước, undo, ván mới; `setHintThinking`/`clearHint`. *(6 test, pass)*
 
-> **Backend `npm test` tổng cộng 17/17 xanh** (`rooms.test.ts` 3 + `match.test.ts` 8 + `server.test.ts` 6).
+> **Backend `npm test` tổng cộng 25/25 xanh** (`rooms.test.ts` 3 + `match.test.ts` 8 + `server.test.ts` 6 + `server.disconnect.test.ts` 2 + engine-service 6).
+> **Flutter `flutter test` tổng cộng 148/148 xanh** (18 file — gồm cả `engine_router_test.dart` 3 test fallback router và `game_analyzer_test.dart` của đợt engine).
 
 ---
 
@@ -151,16 +168,30 @@
 | Nhóm | Tổng case | Đã PASS | Bug | Còn lại |
 |---|:---:|:---:|:---:|:---:|
 | R — Đấu lại | 12 | 0 | 0 | 12 |
-| C — Chat | 7 | 0 | 0 | 7 |
+| C — Chat | 8 | 0 | 0 | 8 |
 | S — Spectate + share link | 12 | 0 | 0 | 12 |
 | D — Reconnect | 5 | 0 | 0 | 5 |
 | M — Matchmaking/ELO | 5 | 0 | 0 | 5 |
 | G — Lifecycle | 6 | 0 | 0 | 6 |
-| T — Test tự động | 8 | 8 | 0 | 0 |
-| **Tổng** | **55** | **8** | **0** | **47** |
+| H — Gợi ý in-game | 3 | 0 | 0 | 3 |
+| T — Test tự động | 11 | 11 | 0 | 0 |
+| **Tổng** | **62** | **11** | **0** | **51** |
 
-> Cập nhật bảng này sau mỗi đợt test. **Nhóm T đã ĐÓNG HẾT (8/8 xanh)** — T3 handshake WS đã viết xong cùng harness in-process (`server.test.ts`), thêm T7 (reconnect integration) + T8 (chat integration) tự động hoá luôn phần lõi của Nhóm D2 và Nhóm C1/C3/C4/C7. Phần còn lại chủ yếu là **test tay E2E cần 2 thiết bị** (Nhóm R/S/D/M/G còn các nhánh UI + đa thiết bị mà test tự động không phủ được). Tiếp theo ưu tiên test tay **Nhóm R** (tính năng mới nhất, rủi ro cao nhất, đặc biệt R9), rồi **S7–S12** (A6 share link).
+> Cập nhật bảng này sau mỗi đợt test. **Nhóm T vẫn đóng kín (11/11 xanh)** — đợt 2026-06-11 bổ sung T9 (engine-service, đã có từ đợt engine 06-07 nhưng chưa ghi vào tài liệu), T10 (double-disconnect integration — tự động hoá phần lõi D5) và T11 (hint controller). Phần còn lại chủ yếu là **test tay E2E cần 2 thiết bị** (Nhóm R/S/D/M/G + C8/H mới). Tiếp theo ưu tiên test tay **Nhóm R** (rủi ro cao nhất, đặc biệt R9), rồi **S7–S12** (A6 share link), tiện tay kiểm luôn **H1–H3** (gợi ý) và **C8** (chip chat nhanh) trong cùng phiên.
 
 ---
 
-*Tạo 2026-06-07 cùng đợt hoàn thiện nút "Đấu lại". Cập nhật 2026-06-07 (đợt 2): đóng hết Nhóm T — thêm `cchess-backend/src/server.test.ts` (integration WS) cho T3 rematch handshake + T7 reconnect + T8 chat; tách `server.ts` thành `createCChessServer()` factory để test in-process không cần Firebase. Lần cập nhật kế tiếp: sau đợt test tay Nhóm R đầu tiên.*
+### Phân loại nguồn test tự động (để khỏi lẫn khi bảo trì)
+
+| Bộ test | Loại | Cần hạ tầng thật? | Chạy bằng |
+|---|---|---|---|
+| Flutter `test/chess_engine/`, `test/game/`, `test/puzzle/`, `test/data/`, … | Unit thuần Dart | Không | `flutter test` |
+| Flutter `test/online/` (controller + room_share) | Unit với fake socket | Không (socket giả) | `flutter test test/online` |
+| Backend `rooms.test.ts`, `match.test.ts` | Unit thuần TS | Không | `npm test` |
+| Backend `server.test.ts`, `server.disconnect.test.ts` | **Integration WS thật** (in-process, auth/persist inject giả) | Không cần Firebase | `npm test` |
+| Backend `engine-service/*.test.ts` | Unit + HTTP integration (fake engine process) | **Không cần binary Pikafish** | `npm test` |
+| Smoke test Pikafish thật (mục 11 của [`11_KE_HOACH_TICH_HOP_ENGINE.md`](11_KE_HOACH_TICH_HOP_ENGINE.md)) | Thủ công / script curl | **Cần binary + NNUE thật** | tay (chưa làm) |
+
+---
+
+*Tạo 2026-06-07 cùng đợt hoàn thiện nút "Đấu lại". Cập nhật 2026-06-07 (đợt 2): đóng hết Nhóm T — thêm `cchess-backend/src/server.test.ts` (integration WS) cho T3 rematch handshake + T7 reconnect + T8 chat; tách `server.ts` thành `createCChessServer()` factory để test in-process không cần Firebase. Cập nhật 2026-06-11 (đợt 3): hardening double-disconnect (D5) + test T10; nút Gợi ý in-game (Nhóm H + T11); chip chat nhanh (C8); ghi nhận bộ test engine-service (T9) vào tài liệu; tổng test tự động backend 25/25 + Flutter 148/148. Lần cập nhật kế tiếp: sau đợt test tay Nhóm R đầu tiên.*

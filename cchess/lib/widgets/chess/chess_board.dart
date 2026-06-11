@@ -15,6 +15,7 @@ class ChessBoard extends StatelessWidget {
   final Position? selected;
   final List<Position> validTargets;
   final Move? lastMove;
+  final Move? hintMove;
   final Position? checkedKing;
   final bool flipped;
   final void Function(int row, int col)? onTap;
@@ -25,6 +26,7 @@ class ChessBoard extends StatelessWidget {
     this.selected,
     this.validTargets = const [],
     this.lastMove,
+    this.hintMove,
     this.checkedKing,
     this.flipped = false,
     this.onTap,
@@ -69,6 +71,22 @@ class ChessBoard extends StatelessWidget {
                   _displayPos(lastMove!.to),
                   AppColors.accentGold.withValues(alpha: 0.45),
                   pieceSize,
+                ),
+              ],
+              if (hintMove != null) ...[
+                _intersectionMarker(
+                  size,
+                  _displayPos(hintMove!.from),
+                  AppColors.tealSuccess.withValues(alpha: 0.30),
+                  pieceSize,
+                  borderColor: AppColors.tealSuccess,
+                ),
+                _intersectionMarker(
+                  size,
+                  _displayPos(hintMove!.to),
+                  AppColors.tealSuccess.withValues(alpha: 0.50),
+                  pieceSize,
+                  borderColor: AppColors.tealSuccess,
                 ),
               ],
               for (final target in validTargets)
@@ -146,8 +164,9 @@ class ChessBoard extends StatelessWidget {
     Size size,
     Position displayPos,
     Color color,
-    double pieceSize,
-  ) {
+    double pieceSize, {
+    Color? borderColor,
+  }) {
     final center = BoardPainter.cellToOffset(
       size,
       displayPos.row,
@@ -165,7 +184,8 @@ class ChessBoard extends StatelessWidget {
             color: color,
             borderRadius: BorderRadius.circular(8),
             border: Border.all(
-              color: AppColors.accentGold.withValues(alpha: 0.4),
+              color:
+                  borderColor ?? AppColors.accentGold.withValues(alpha: 0.4),
               width: 1.5,
             ),
           ),

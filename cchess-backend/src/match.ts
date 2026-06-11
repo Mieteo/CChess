@@ -4,6 +4,7 @@
 
 import type { WebSocket } from 'ws';
 import type { Color, EndReason, GameResult, Room } from './rooms';
+import { clearDisconnectGrace, deleteRoomIfEmpty } from './rooms';
 import { XiangqiGame, GameStatus, parseUci, EndReason as EngineEndReason } from './engine';
 
 /// Initial total clock per color (in ms). Currently 10 minutes — Fischer
@@ -14,7 +15,9 @@ export const INITIAL_CLOCK_MS = 600_000;
 /// Step 8 reconnect: grace window after a player disconnects mid-game.
 /// If they reconnect with the same uid within this window, the room is
 /// resumed; otherwise the game ends with reason='disconnect'.
-export const RECONNECT_GRACE_MS = 60_000;
+/// Overridable via env so integration tests can use a short window.
+export const RECONNECT_GRACE_MS =
+  Number(process.env.CCHESS_RECONNECT_GRACE_MS ?? '') || 60_000;
 
 /// Called when 2nd player joins → status becomes 'playing'.
 /// Members are iterated in insertion order; first joiner = red.
@@ -75,11 +78,7 @@ export function startRematch(room: Room): boolean {
   room.status = 'playing';
   room.engine = XiangqiGame.initial();
   room.rematchOfferedBy = undefined;
-  room.disconnectedUid = undefined;
-  if (room.disconnectTimer) {
-    clearTimeout(room.disconnectTimer);
-    room.disconnectTimer = undefined;
-  }
+  clearDisconnectGrace(room);
   return true;
 }
 
@@ -219,6 +218,11 @@ export function endMatch(room: Room, result: GameResult, reason: EndReason): voi
     clearInterval(room.clockTimer);
     room.clockTimer = undefined;
   }
+  // Any pending grace timers are moot once the game is decided. If the game
+  // ended while BOTH players were disconnected (double-disconnect), nobody is
+  // left to tear the room down — drop it here so it doesn't leak.
+  clearDisconnectGrace(room);
+  deleteRoomIfEmpty(room);
 }
 
 /// Snapshot of clock + turn for sending to clients.

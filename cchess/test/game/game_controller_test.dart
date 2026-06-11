@@ -90,4 +90,64 @@ void main() {
       expect(c.state.game.status, GameStatus.draw);
     });
   });
+
+  group('GameController hint', () {
+    test('showHint stores a legal suggestion for the side to move', () {
+      final c = GameController();
+      // Red cannon (7,1) → (7,4) is a legal opening move.
+      c.showHint(const Position(7, 1), const Position(7, 4));
+      expect(c.state.hintMove, isNotNull);
+      expect(c.state.hintMove!.from, const Position(7, 1));
+      expect(c.state.hintMove!.to, const Position(7, 4));
+      expect(c.state.hintThinking, isFalse);
+    });
+
+    test('showHint rejects a move for the wrong side', () {
+      final c = GameController();
+      // Black cannon on Red's turn.
+      c.showHint(const Position(2, 1), const Position(2, 4));
+      expect(c.state.hintMove, isNull);
+    });
+
+    test('showHint rejects an illegal move', () {
+      final c = GameController();
+      // A cannon cannot move diagonally.
+      c.showHint(const Position(7, 1), const Position(6, 2));
+      expect(c.state.hintMove, isNull);
+    });
+
+    test('hint is cleared after the player moves', () {
+      final c = GameController();
+      c.showHint(const Position(7, 1), const Position(7, 4));
+      expect(c.state.hintMove, isNotNull);
+      c.onTap(7, 1);
+      c.onTap(7, 4);
+      expect(c.state.hintMove, isNull);
+    });
+
+    test('hint is cleared on undo and newGame', () {
+      final c = GameController();
+      c.onTap(7, 1);
+      c.onTap(7, 4);
+      c.showHint(const Position(2, 1), const Position(2, 4));
+      expect(c.state.hintMove, isNotNull);
+      c.undo();
+      expect(c.state.hintMove, isNull);
+
+      c.showHint(const Position(7, 1), const Position(7, 4));
+      expect(c.state.hintMove, isNotNull);
+      c.newGame();
+      expect(c.state.hintMove, isNull);
+    });
+
+    test('setHintThinking toggles and clearHint resets both fields', () {
+      final c = GameController();
+      c.setHintThinking(true);
+      expect(c.state.hintThinking, isTrue);
+      c.showHint(const Position(7, 1), const Position(7, 4));
+      c.clearHint();
+      expect(c.state.hintMove, isNull);
+      expect(c.state.hintThinking, isFalse);
+    });
+  });
 }

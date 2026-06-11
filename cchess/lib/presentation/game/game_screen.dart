@@ -148,6 +148,49 @@ class _GameScreenState extends ConsumerState<GameScreen> {
     _controller.applyBotMove(result.move.from, result.move.to);
   }
 
+  /// Ask the engine router for a hint (remote Pikafish when online, local
+  /// minimax fallback) and surface it on the board.
+  Future<void> _onHint() async {
+    final state = _state;
+    if (!state.acceptsInput || state.hintThinking) return;
+    final turnAtRequest = state.turn;
+    _controller.setHintThinking(true);
+    EngineMove? result;
+    try {
+      final engine = ref.read(engineRouterProvider);
+      result = await engine.bestMove(
+        state.game.toFen(),
+        level: EngineLevel.grandmaster,
+        useCase: EngineUseCase.hint,
+      );
+    } catch (_) {
+      result = null;
+    }
+    if (!mounted) return;
+    // Position may have changed while the engine was thinking.
+    final current = _state;
+    if (current.game.status.isOver || current.turn != turnAtRequest) {
+      _controller.clearHint();
+      return;
+    }
+    if (result == null) {
+      _controller.clearHint();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Không tìm được gợi ý lúc này.')),
+      );
+      return;
+    }
+    _controller.showHint(result.move.from, result.move.to);
+    if (result.usedFallback) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Gợi ý offline (minimax) — máy chủ chưa sẵn sàng.'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+    }
+  }
+
   void _onUserTap(int row, int col) {
     _controller.onTap(row, col);
     // Schedule potential bot reply after this frame so the human's move
@@ -432,6 +475,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
                         selected: state.selected,
                         validTargets: state.validTargets,
                         lastMove: state.lastMove,
+                        hintMove: state.hintMove,
                         checkedKing: checkedKing,
                         flipped: state.boardFlipped,
                         onTap: _onUserTap,
@@ -458,9 +502,12 @@ class _GameScreenState extends ConsumerState<GameScreen> {
                   AppSpacing.vGapSm,
                   GameActionBar(
                     canUndo: game.history.isNotEmpty && !state.cpuThinking,
+                    canHint: state.acceptsInput,
+                    hintThinking: state.hintThinking,
                     soundOn: _soundOn,
                     onLeave: _onLeave,
                     onUndo: _controller.undo,
+                    onHint: _onHint,
                     onDraw: _onDraw,
                     onResign: _onResign,
                     onToggleSound: () => setState(() => _soundOn = !_soundOn),
