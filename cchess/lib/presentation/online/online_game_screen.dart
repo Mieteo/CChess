@@ -271,7 +271,9 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
             onPressed: _onBackPressed,
           ),
           actions: [
-            if (isSpectating)
+            // Spectator count — players see it too (server broadcasts
+            // spectator-joined/left to everyone in the room).
+            if (isSpectating || state.isPlaying || state.isEnded)
               Padding(
                 padding: const EdgeInsets.only(right: AppSpacing.sm),
                 child: Row(
@@ -719,12 +721,44 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
                 state.endReason == 'disconnect' || state.opponentLeftRoom;
             final meOffered = state.rematchOfferedByMe;
             final oppOffered = state.rematchOfferedByOpponent;
+            // Spectators (myColor == null) get a read-only dialog: a single
+            // "Thoát" button. If the players start a rematch, phase flips to
+            // spectating and the auto-close above resumes watching.
+            final watching = state.myColor == null;
 
             final content = <Widget>[
               Text('Lý do: ${_reasonLabel(state.endReason)}'),
             ];
             final eloWidget = _buildEloWidget(state);
             if (eloWidget != null) content.add(eloWidget);
+
+            if (watching) {
+              content.add(
+                state.opponentLeftRoom
+                    ? _rematchTile(
+                        'Một kỳ thủ đã rời — trận đấu khép lại.',
+                        Icons.person_off_outlined,
+                      )
+                    : _rematchTile(
+                        'Nếu hai kỳ thủ đấu lại, ván mới sẽ tự mở.',
+                        Icons.visibility_outlined,
+                      ),
+              );
+              return AlertDialog(
+                title: Text(_resultTitle(state)),
+                content: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: content,
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => _leaveToCompete(dialogCtx),
+                    child: const Text('Thoát'),
+                  ),
+                ],
+              );
+            }
 
             if (opponentGone) {
               content.add(

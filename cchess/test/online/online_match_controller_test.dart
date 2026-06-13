@@ -254,6 +254,68 @@ void main() {
     });
   });
 
+  group('spectator + waiting-room lifecycle', () {
+    Future<void> driveToSpectating() async {
+      socket.emit({
+        'type': 'spectate-started',
+        'roomId': 'ROOM01',
+        'redUid': 'red-uid',
+        'blackUid': 'black-uid',
+        'moves': <String>[],
+        'chat': <Map<String, dynamic>>[],
+        'currentTurn': 'red',
+        'clock': {'red': 600000, 'black': 600000},
+        'spectatorCount': 1,
+      });
+      await pump();
+    }
+
+    test('rematch game-start keeps a spectator read-only', () async {
+      await driveToSpectating();
+      expect(ctrl.state.phase, OnlineMatchPhase.spectating);
+
+      socket.emit({
+        'type': 'game-ended',
+        'result': 'red-win',
+        'reason': 'checkmate',
+      });
+      await pump();
+      expect(ctrl.state.phase, OnlineMatchPhase.ended);
+
+      // Players rematch → server sends game-start with yourColor == null to
+      // spectators. The watcher must resume SPECTATING, never become "red".
+      socket.emit({
+        'type': 'game-start',
+        'roomId': 'ROOM01',
+        'redUid': 'black-uid',
+        'blackUid': 'red-uid',
+        'yourColor': null,
+        'clock': {'red': 600000, 'black': 600000},
+        'rematch': true,
+      });
+      await pump();
+
+      expect(ctrl.state.phase, OnlineMatchPhase.spectating);
+      expect(ctrl.state.myColor, isNull);
+      expect(ctrl.state.game!.history, isEmpty);
+      expect(store.saved, isNull, reason: 'watchers must not save reconnect state');
+    });
+
+    test('room-expired returns the creator to the lobby with a message',
+        () async {
+      socket.emit({'type': 'room-created', 'roomId': 'ROOM02'});
+      await pump();
+      expect(ctrl.state.phase, OnlineMatchPhase.waitingForPeer);
+
+      socket.emit({'type': 'room-expired', 'roomId': 'ROOM02'});
+      await pump();
+
+      expect(ctrl.state.phase, OnlineMatchPhase.authed);
+      expect(ctrl.state.roomId, isNull);
+      expect(ctrl.state.errorMessage, isNotNull);
+    });
+  });
+
   group('core game flow', () {
     test('game-ended sets result/reason and clears the reconnect store',
         () async {

@@ -480,6 +480,18 @@ class OnlineMatchController extends StateNotifier<OnlineMatchState> {
           lastEventLog: newLog,
         );
         break;
+      case 'room-expired':
+        // Waiting-room TTL: nobody joined in time, server cancelled the room.
+        state = OnlineMatchState(
+          phase: OnlineMatchPhase.authed,
+          serverUrl: state.serverUrl,
+          myUid: state.myUid,
+          errorMessage:
+              'Phòng đã hủy — không có đối thủ vào sau 1 phút. Hãy tạo lại.',
+          lastEventLog: newLog,
+        );
+        _reconnectStore.clear();
+        break;
       case 'active-rooms':
         _onActiveRooms(msg, newLog);
         break;
@@ -593,21 +605,27 @@ class OnlineMatchController extends StateNotifier<OnlineMatchState> {
     final redUid = msg['redUid'] as String?;
     final blackUid = msg['blackUid'] as String?;
     // Server sends `yourColor` per-socket — authoritative even when both
-    // sockets share the same Firebase uid (solo testing).
+    // sockets share the same Firebase uid (solo testing). Spectators receive
+    // rematch game-starts with yourColor == null: they must STAY read-only
+    // watchers, not be promoted to "red player".
     final yourColor = msg['yourColor'] as String?;
+    final watching = yourColor == null;
     final myColor = yourColor == 'black' ? PieceColor.black : PieceColor.red;
     final opponentUid = myColor == PieceColor.red ? blackUid : redUid;
     final clock = msg['clock'] as Map<String, dynamic>?;
     final roomId = msg['roomId'] as String?;
     state = state.copyWith(
-      phase: OnlineMatchPhase.playing,
+      phase: watching
+          ? OnlineMatchPhase.spectating
+          : OnlineMatchPhase.playing,
       roomId: roomId,
       game: XiangqiGame.initial(),
-      myColor: myColor,
-      opponentUid: opponentUid,
+      // copyWith ignores nulls, so a watcher keeps myColor/opponentUid null.
+      myColor: watching ? null : myColor,
+      opponentUid: watching ? null : opponentUid,
       redUid: redUid,
       blackUid: blackUid,
-      spectatorCount: 0,
+      spectatorCount: watching ? state.spectatorCount : 0,
       currentTurn: PieceColor.red,
       redClockMs: (clock?['red'] as num?)?.toInt() ?? state.redClockMs,
       blackClockMs: (clock?['black'] as num?)?.toInt() ?? state.blackClockMs,
@@ -618,8 +636,8 @@ class OnlineMatchController extends StateNotifier<OnlineMatchState> {
       opponentLeftRoom: false,
       clearError: true,
     );
-    // Persist for Step 8 reconnect
-    if (roomId != null) _reconnectStore.save(roomId);
+    // Persist for Step 8 reconnect (players only — watchers don't own a seat).
+    if (roomId != null && !watching) _reconnectStore.save(roomId);
   }
 
   void _onActiveRooms(Map<String, dynamic> msg, List<String> log) {

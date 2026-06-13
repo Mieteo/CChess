@@ -62,6 +62,7 @@ class GameSocketService {
             // the heartbeat killed the socket (~10s) — bug R9.
             case 'left-room':
             case 'spectate-stopped':
+            case 'room-expired':
               _currentRoomId = null;
               break;
           }

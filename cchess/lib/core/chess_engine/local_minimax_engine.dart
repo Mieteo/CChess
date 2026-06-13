@@ -17,7 +17,13 @@ class LocalMinimaxEngine implements MoveEngine {
     EngineUseCase useCase = EngineUseCase.bot,
   }) async {
     final game = XiangqiGame.fromFen(fen);
-    final move = await _botEngine.chooseMove(game, level.fallbackDifficulty);
+    // Hint/analysis want the strongest answer fast: best-effort search (no
+    // randomness, no artificial delay, time-budgeted iterative deepening).
+    final move = await _botEngine.chooseMove(
+      game,
+      level.fallbackDifficulty,
+      bestEffort: useCase != EngineUseCase.bot,
+    );
     if (move == null) return null;
     return EngineMove(
       move: move,

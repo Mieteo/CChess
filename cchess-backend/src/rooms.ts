@@ -29,6 +29,10 @@ export interface Room {
   /// lobby; falls back to engine default if absent.
   initialClockMs?: number;
 
+  /// Waiting-room TTL: cancels a lobby-created room that nobody joined.
+  /// Set by the create-room handler, cleared when the game starts.
+  waitingTimer?: NodeJS.Timeout;
+
   // Step 6 game state (populated when status -> 'playing')
   redSocket?: WebSocket;
   blackSocket?: WebSocket;
@@ -192,6 +196,10 @@ export function leaveRoom(
     return room;
   }
   if (room.members.size === 0 && room.spectators.size === 0) {
+    if (room.waitingTimer) {
+      clearTimeout(room.waitingTimer);
+      room.waitingTimer = undefined;
+    }
     rooms.delete(room.id);
     return room;
   }
@@ -224,6 +232,10 @@ export function deleteRoomIfEmpty(room: Room): boolean {
   if (room.clockTimer) {
     clearInterval(room.clockTimer);
     room.clockTimer = undefined;
+  }
+  if (room.waitingTimer) {
+    clearTimeout(room.waitingTimer);
+    room.waitingTimer = undefined;
   }
   return rooms.delete(room.id);
 }

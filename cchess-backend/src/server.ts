@@ -64,9 +64,15 @@ const HEARTBEAT_INTERVAL_MS = 5_000;
 // add legality (turn, piece existence, rule compliance).
 const UCI_REGEX = /^[a-i][0-9][a-i][0-9]$/;
 const CHAT_MAX_CHARS = 120;
-const CHAT_RATE_LIMIT_MS = 1_500;
+const CHAT_RATE_LIMIT_MS = 2_000;
 const CHAT_HISTORY_LIMIT = 50;
 const ACTIVE_ROOM_LIST_LIMIT = 30;
+
+// A lobby-created room nobody joins is cancelled after this long, so stale
+// room ids don't pile up and the creator isn't left waiting forever.
+// Overridable via env so integration tests can use a short window.
+const WAITING_ROOM_TTL_MS =
+  Number(process.env.CCHESS_WAITING_ROOM_TTL_MS ?? '') || 60_000;
 
 // A6 share link: room ids are 6 chars from an unambiguous alphabet.
 const ROOM_ID_REGEX = /^[A-Z0-9]{6}$/;
@@ -244,6 +250,10 @@ export function createCChessServer(options: CChessServerOptions = {}): CChessSer
   /// Sets status='playing', initializes engine + clocks, broadcasts per-socket
   /// game-start with yourColor field.
   function startGameForRoom(room: Room): void {
+    if (room.waitingTimer) {
+      clearTimeout(room.waitingTimer);
+      room.waitingTimer = undefined;
+    }
     room.status = 'playing';
     startMatch(room, (s) => sessions.get(s));
     startClockTicker(room);
@@ -540,10 +550,23 @@ export function createCChessServer(options: CChessServerOptions = {}): CChessSer
             ? rawClock
             : undefined;
         const room = createRoom(socket, { initialClockMs: clockMs });
+        // Waiting-room TTL: cancel the room if nobody joins in time.
+        room.waitingTimer = setTimeout(() => {
+          room.waitingTimer = undefined;
+          if (room.status !== 'waiting') return;
+          console.log(
+            `[room] ${room.id} expired — no opponent joined within ${WAITING_ROOM_TTL_MS}ms`,
+          );
+          for (const s of [...room.members]) {
+            send(s, { type: 'room-expired', roomId: room.id });
+            leaveRoom(s); // last leaver deletes the room
+          }
+        }, WAITING_ROOM_TTL_MS);
         send(socket, {
           type: 'room-created',
           roomId: room.id,
           initialClockMs: room.initialClockMs,
+          waitingTtlMs: WAITING_ROOM_TTL_MS,
         });
         console.log(
           `[room] ${room.id} created by ${uid} (clock=${clockMs ?? 'default'}ms)`,
