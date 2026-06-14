@@ -419,8 +419,28 @@ void main() {
       socket.emit({'type': 'error', 'code': 'room-not-found'});
       await pump();
 
-      expect(ctrl.state.phase, OnlineMatchPhase.error);
+      // Recovers to a usable lobby (NOT a dead-end error) + clears the room.
+      expect(ctrl.state.phase, OnlineMatchPhase.authed);
       expect(store.saved, isNull);
+    });
+
+    test('lobby reconnect to a DEAD room clears it and returns to lobby',
+        () async {
+      // A stale saved room from a previous broken session would otherwise make
+      // the lobby re-attach to a ghost room on every load (the "đang đánh / no
+      // board" stuck state). Rejecting it must clear the store.
+      store.saved = 'GHOST1';
+      ctrl.reconnectRoom('GHOST1'); // public lobby reconnect-on-load path
+      await pump();
+      expect(ctrl.state.phase, OnlineMatchPhase.reconnecting);
+      expect(socket.sentTypes, contains('reconnect-room'));
+
+      socket.emit({'type': 'error', 'code': 'room-not-found'});
+      await pump();
+
+      expect(ctrl.state.phase, OnlineMatchPhase.authed);
+      expect(store.saved, isNull,
+          reason: 'ghost room must be cleared so the lobby stops re-attaching');
     });
 
     test('no fresh reconnect state → gives up without spamming reconnect-room',

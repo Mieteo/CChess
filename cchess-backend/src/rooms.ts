@@ -107,6 +107,20 @@ export function attachReconnectingSocket(
   room: Room,
   uid: string,
 ): void {
+  // Evict any prior socket holding this seat first, so room.members never
+  // accumulates dead sockets across reconnects. A stale socket left behind
+  // would still receive broadcasts (e.g. opponent-move would go to a dead
+  // socket instead of the live one) and inflate members.size.
+  const prior =
+    uid === room.redUid
+      ? room.redSocket
+      : uid === room.blackUid
+        ? room.blackSocket
+        : undefined;
+  if (prior && prior !== socket) {
+    room.members.delete(prior);
+    socketToRoom.delete(prior);
+  }
   room.members.add(socket);
   socketToRoom.set(socket, room.id);
   if (uid === room.redUid) room.redSocket = socket;

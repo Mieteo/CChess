@@ -5,6 +5,7 @@ import type { WebSocket } from 'ws';
 import { applyMove, colorOfSocket, endMatch, startMatch } from './match';
 import {
   activeRooms,
+  attachReconnectingSocket,
   createRoom,
   joinRoom,
   leaveRoom,
@@ -74,6 +75,24 @@ test('spectator leave does not alter active player room state', () => {
   assert.equal(room.members.size, 2);
   assert.equal(room.spectators.size, 0);
   assert.equal(activeRooms().some((active) => active.id === room.id), true);
+});
+
+test('attachReconnectingSocket evicts the prior socket for that seat', () => {
+  // Regression: a reconnect used to ADD the new socket without removing the
+  // dead one, so room.members accumulated stale sockets — broadcasts (e.g.
+  // opponent-move) then went to a dead socket and members.size was inflated.
+  const room = startPlayingRoom('reattach');
+  const redUid = room.redUid!;
+  const oldRedSocket = room.redSocket!;
+  assert.equal(room.members.size, 2);
+
+  const newRedSocket = fakeSocket('reattach-red2');
+  attachReconnectingSocket(newRedSocket, room, redUid);
+
+  assert.equal(room.members.size, 2, 'membership must not grow on reconnect');
+  assert.equal(room.members.has(oldRedSocket), false, 'dead socket evicted');
+  assert.equal(room.members.has(newRedSocket), true);
+  assert.equal(room.redSocket, newRedSocket);
 });
 
 test('activeRooms returns playing rooms only', () => {

@@ -855,18 +855,26 @@ class OnlineMatchController extends StateNotifier<OnlineMatchState> {
   /// back the local game state so client and server stay in sync.
   void _onError(Map<String, dynamic> msg, List<String> log) {
     final code = msg['code'] as String?;
-    // D1 fix: a reconnect attempt was rejected (grace expired, game already
-    // over, or our seat is gone) — stop retrying and surface it.
-    if (_reconnecting &&
-        (code == 'room-not-found' ||
-            code == 'not-disconnected-player' ||
-            code == 'game-not-active' ||
-            code == 'missing-room-id')) {
+    // D1/D2 fix: a reconnect attempt was rejected — the saved room is dead
+    // (grace expired, game over, or our seat is gone). This fires for BOTH the
+    // mid-game auto-reconnect AND the lobby's reconnect-on-load. In either case
+    // CLEAR the stale saved room (otherwise the lobby keeps re-attaching to a
+    // ghost room every time it loads) and drop back to a clean, usable lobby
+    // state so the user can immediately start a new game.
+    final isReconnectReject =
+        code == 'room-not-found' ||
+        code == 'not-disconnected-player' ||
+        code == 'game-not-active' ||
+        code == 'missing-room-id';
+    if (isReconnectReject &&
+        (_reconnecting || state.phase == OnlineMatchPhase.reconnecting)) {
       _stopReconnectLoop();
       _reconnectStore.clear();
-      state = state.copyWith(
-        phase: OnlineMatchPhase.error,
-        errorMessage: 'Không thể vào lại ván — ván đã kết thúc hoặc hết hạn.',
+      state = OnlineMatchState(
+        phase: OnlineMatchPhase.authed,
+        serverUrl: state.serverUrl,
+        myUid: state.myUid,
+        errorMessage: 'Ván cũ đã kết thúc hoặc hết hạn — hãy tạo ván mới.',
         lastEventLog: log,
       );
       return;
