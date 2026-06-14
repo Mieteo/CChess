@@ -15,6 +15,9 @@ class FakeGameSocketService implements GameSocketService {
       StreamController<Map<String, dynamic>>.broadcast();
   final List<String> sentTypes = <String>[];
 
+  @override
+  void Function()? onConnectionLost;
+
   void emit(Map<String, dynamic> msg) => _controller.add(msg);
   Future<void> close() => _controller.close();
 
@@ -365,6 +368,80 @@ void main() {
 
       expect(ctrl.state.currentTurn, PieceColor.red);
       expect(ctrl.state.errorMessage, isNotNull);
+    });
+  });
+
+  group('D1 — mid-game auto-reconnect', () {
+    test('connection loss mid-game reconnects and resumes playing', () async {
+      await driveToPlaying();
+      expect(store.saved, 'ROOM01');
+
+      // Socket service reports the live connection dropped.
+      socket.onConnectionLost!();
+      await pump();
+      expect(ctrl.state.phase, OnlineMatchPhase.reconnecting);
+
+      // Re-auth lands → controller resumes the room instead of the lobby.
+      socket.emit({'type': 'authed', 'uid': 'me'});
+      await pump();
+      expect(socket.sentTypes, contains('reconnect-room'));
+      expect(ctrl.state.phase, OnlineMatchPhase.reconnecting);
+
+      // Server restores the game snapshot.
+      socket.emit({
+        'type': 'reconnected',
+        'roomId': 'ROOM01',
+        'redUid': 'red-uid',
+        'blackUid': 'black-uid',
+        'yourColor': 'red',
+        'moves': <String>[],
+        'clock': {'red': 600000, 'black': 600000},
+        'currentTurn': 'red',
+        'chat': <Map<String, dynamic>>[],
+      });
+      await pump();
+      expect(ctrl.state.phase, OnlineMatchPhase.playing);
+    });
+
+    test('reconnect rejected (grace expired) stops retrying and clears store',
+        () async {
+      await driveToPlaying();
+
+      socket.onConnectionLost!();
+      await pump();
+      socket.emit({'type': 'authed', 'uid': 'me'});
+      await pump();
+      expect(socket.sentTypes, contains('reconnect-room'));
+
+      // Server says the room is gone — our seat was forfeited.
+      socket.emit({'type': 'error', 'code': 'room-not-found'});
+      await pump();
+
+      expect(ctrl.state.phase, OnlineMatchPhase.error);
+      expect(store.saved, isNull);
+    });
+
+    test('no fresh reconnect state → gives up without spamming reconnect-room',
+        () async {
+      await driveToPlaying();
+      store.saved = null; // simulate the grace window already elapsed
+
+      socket.onConnectionLost!();
+      await pump();
+
+      expect(ctrl.state.phase, OnlineMatchPhase.error);
+      expect(socket.sentTypes, isNot(contains('reconnect-room')));
+    });
+
+    test('connection loss outside a game does not try to reconnect', () async {
+      // setUp left us at phase=authed (lobby), not in a game.
+      expect(ctrl.state.phase, OnlineMatchPhase.authed);
+
+      socket.onConnectionLost!();
+      await pump();
+
+      expect(socket.sentTypes, isNot(contains('reconnect-room')));
+      expect(ctrl.state.phase, OnlineMatchPhase.error);
     });
   });
 }

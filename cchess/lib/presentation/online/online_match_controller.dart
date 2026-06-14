@@ -248,11 +248,25 @@ class OnlineMatchState {
 /// user actions (createRoom, sendMove, resign) or server events.
 class OnlineMatchController extends StateNotifier<OnlineMatchState> {
   OnlineMatchController(this._socket, this._reconnectStore)
-    : super(const OnlineMatchState());
+    : super(const OnlineMatchState()) {
+    // D1 fix: the socket service notifies us when the live connection drops or
+    // goes silent; if we were mid-game we auto-reconnect within the grace window.
+    _socket.onConnectionLost = _handleConnectionLost;
+  }
 
   final GameSocketService _socket;
   final ReconnectStore _reconnectStore;
   StreamSubscription<Map<String, dynamic>>? _sub;
+
+  // D1 fix: mid-game auto-reconnect bookkeeping.
+  bool _reconnecting = false;
+  bool _disposed = false;
+  bool _attemptInFlight = false;
+  Timer? _reconnectTimer;
+  DateTime? _lastAttemptAt;
+  // When set, the next 'authed' sends reconnect-room (resume) instead of
+  // dropping the user back to the lobby.
+  String? _pendingReconnectRoomId;
 
   Future<void> connect(String url) async {
     try {
@@ -407,6 +421,7 @@ class OnlineMatchController extends StateNotifier<OnlineMatchState> {
   /// User-initiated leave. Clears persistent reconnect state — they've
   /// explicitly chosen to abandon the match. Use this for "Về Đối Đầu" etc.
   Future<void> leave() async {
+    _stopReconnectLoop();
     _sub?.cancel();
     _sub = null;
     if (_socket.isInRoom) {
@@ -424,6 +439,7 @@ class OnlineMatchController extends StateNotifier<OnlineMatchState> {
   /// Soft-leave for lifecycle backgrounding: disconnect socket but KEEP
   /// the persistent room id so the next app launch can attempt reconnect.
   Future<void> disconnectKeepingReconnectState() async {
+    _stopReconnectLoop();
     _sub?.cancel();
     _sub = null;
     await _socket.disconnect();
@@ -438,6 +454,20 @@ class OnlineMatchController extends StateNotifier<OnlineMatchState> {
 
     switch (msg['type']) {
       case 'authed':
+        // D1 fix: if we're resuming a dropped game, go straight to
+        // reconnect-room instead of surfacing the lobby.
+        final pendingRoom = _pendingReconnectRoomId;
+        if (pendingRoom != null) {
+          _pendingReconnectRoomId = null;
+          state = state.copyWith(
+            phase: OnlineMatchPhase.reconnecting,
+            myUid: msg['uid'] as String?,
+            lastEventLog: newLog,
+            clearError: true,
+          );
+          _socket.reconnectRoom(pendingRoom);
+          break;
+        }
         state = state.copyWith(
           phase: OnlineMatchPhase.authed,
           myUid: msg['uid'] as String?,
@@ -709,6 +739,8 @@ class OnlineMatchController extends StateNotifier<OnlineMatchState> {
       lastEventLog: log,
       clearError: true,
     );
+    // D1 fix: resume succeeded — tear down the reconnect loop.
+    _stopReconnectLoop();
   }
 
   void _onSpectateStarted(Map<String, dynamic> msg, List<String> log) {
@@ -822,6 +854,22 @@ class OnlineMatchController extends StateNotifier<OnlineMatchState> {
   /// back the local game state so client and server stay in sync.
   void _onError(Map<String, dynamic> msg, List<String> log) {
     final code = msg['code'] as String?;
+    // D1 fix: a reconnect attempt was rejected (grace expired, game already
+    // over, or our seat is gone) — stop retrying and surface it.
+    if (_reconnecting &&
+        (code == 'room-not-found' ||
+            code == 'not-disconnected-player' ||
+            code == 'game-not-active' ||
+            code == 'missing-room-id')) {
+      _stopReconnectLoop();
+      _reconnectStore.clear();
+      state = state.copyWith(
+        phase: OnlineMatchPhase.error,
+        errorMessage: 'Không thể vào lại ván — ván đã kết thúc hoặc hết hạn.',
+        lastEventLog: log,
+      );
+      return;
+    }
     if (code == 'invalid-chat' || code == 'chat-rate-limited') {
       state = state.copyWith(
         errorMessage: code == 'invalid-chat'
@@ -879,7 +927,108 @@ class OnlineMatchController extends StateNotifier<OnlineMatchState> {
     _reconnectStore.clear();
   }
 
+  // ── D1 fix: mid-game auto-reconnect ────────────────────────────────────
+  /// Called by the socket service when the live connection drops or goes
+  /// silent. If we were in an active game, start a retry loop that resumes the
+  /// room; otherwise surface the disconnect.
+  void _handleConnectionLost() {
+    if (_disposed) return;
+    final inGame =
+        state.isPlaying ||
+        state.phase == OnlineMatchPhase.peerDisconnected ||
+        state.phase == OnlineMatchPhase.reconnecting;
+    if (!inGame) {
+      if (state.phase != OnlineMatchPhase.error) {
+        state = state.copyWith(
+          phase: OnlineMatchPhase.error,
+          errorMessage: 'Mất kết nối máy chủ.',
+        );
+      }
+      return;
+    }
+    if (!_reconnecting) {
+      _reconnecting = true;
+      state = state.copyWith(
+        phase: OnlineMatchPhase.reconnecting,
+        clearError: true,
+      );
+    }
+    _startReconnectLoop();
+  }
+
+  /// Hook for a connectivity listener: nudge a reconnect attempt the instant
+  /// the network returns (no-op unless we're actively reconnecting).
+  void onNetworkAvailable() {
+    if (_reconnecting && !_disposed) {
+      _lastAttemptAt = null; // bypass the retry throttle
+      _attemptReconnect();
+    }
+  }
+
+  void _startReconnectLoop() {
+    if (_reconnectTimer != null) {
+      _attemptReconnect();
+      return;
+    }
+    _reconnectTimer = Timer.periodic(
+      const Duration(seconds: 2),
+      (_) => _attemptReconnect(),
+    );
+    _attemptReconnect();
+  }
+
+  void _stopReconnectLoop() {
+    _reconnectTimer?.cancel();
+    _reconnectTimer = null;
+    _reconnecting = false;
+    _pendingReconnectRoomId = null;
+    _lastAttemptAt = null;
+  }
+
+  /// One reconnect attempt: re-open the socket, re-auth, and (on 'authed')
+  /// send reconnect-room. Throttled so an in-flight handshake isn't disrupted;
+  /// gives up (with an error) once the saved room falls outside the grace
+  /// window. Retries are driven by the periodic loop + connection-lost events.
+  Future<void> _attemptReconnect() async {
+    if (!_reconnecting || _disposed || _attemptInFlight) return;
+    final now = DateTime.now();
+    if (_lastAttemptAt != null &&
+        now.difference(_lastAttemptAt!) < const Duration(seconds: 3)) {
+      return; // let the previous attempt's handshake land first
+    }
+    _lastAttemptAt = now;
+    _attemptInFlight = true;
+    try {
+      final saved = await _reconnectStore.readFresh();
+      if (saved == null) {
+        _stopReconnectLoop();
+        state = state.copyWith(
+          phase: OnlineMatchPhase.error,
+          errorMessage:
+              'Không kết nối lại được trong thời gian cho phép — ván đã khép.',
+        );
+        return;
+      }
+      final url = state.serverUrl;
+      if (url == null) return;
+      _pendingReconnectRoomId = saved;
+      await _socket.disconnect();
+      await _socket.connect(url);
+      _sub?.cancel();
+      _sub = _socket.messages.listen(_onMessage, onError: _onStreamError);
+      await _socket.authenticate();
+      // Success path continues via 'authed' → reconnect-room → 'reconnected'.
+    } catch (_) {
+      // Setup failed (likely still offline) — the loop will retry.
+    } finally {
+      _attemptInFlight = false;
+    }
+  }
+
   void _onStreamError(Object err) {
+    // D1 fix: during auto-reconnect, transient stream errors are expected while
+    // the network is down — don't clobber the 'reconnecting' phase.
+    if (_reconnecting) return;
     _setError('Stream: $err');
   }
 
@@ -889,6 +1038,9 @@ class OnlineMatchController extends StateNotifier<OnlineMatchState> {
 
   @override
   void dispose() {
+    _disposed = true;
+    _reconnectTimer?.cancel();
+    _socket.onConnectionLost = null;
     _sub?.cancel();
     super.dispose();
   }
@@ -901,3 +1053,10 @@ final onlineMatchControllerProvider =
         ref.read(reconnectStoreProvider),
       );
     });
+
+/// D1 fix: true while the pushed online game screen is mounted. The lobby reads
+/// this before pushing the game route so a mid-game reconnect (which transitions
+/// the phase back to `playing` while the screen is already on the navigator
+/// stack) doesn't push a SECOND copy. The relaunch-from-lobby reconnect still
+/// pushes normally because the screen isn't mounted yet at that point.
+final onlineGameOpenProvider = StateProvider<bool>((ref) => false);

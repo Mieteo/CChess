@@ -189,7 +189,9 @@ class _OnlineLobbyScreenState extends ConsumerState<OnlineLobbyScreen> {
       final enteredBoard =
           next.phase == OnlineMatchPhase.playing ||
           next.phase == OnlineMatchPhase.spectating;
-      if (enteredBoard && prev?.phase != next.phase) {
+      if (enteredBoard &&
+          prev?.phase != next.phase &&
+          !ref.read(onlineGameOpenProvider)) {
         context.push(AppConstants.routeOnlineGame);
       }
     });

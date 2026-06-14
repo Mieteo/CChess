@@ -58,7 +58,20 @@ const AUTH_TIMEOUT_MS = 10_000;
 // Step 6 disconnect detection: ping every 5s, terminate if no pong by next tick.
 // Catches half-open TCP (mobile app killed/backgrounded without sending FIN).
 // 5s = detection within 5-10s. Production may want 10-15s for less ping noise.
-const HEARTBEAT_INTERVAL_MS = 5_000;
+// Sweep interval is also when the app-level liveness check below runs;
+// overridable via env so integration tests can sweep fast.
+const HEARTBEAT_INTERVAL_MS =
+  Number(process.env.CCHESS_HEARTBEAT_INTERVAL_MS ?? '') || 5_000;
+
+// D1 fix: application-level liveness. Clients send {type:'ping'} every ~5s and
+// we reply {type:'pong'}. A socket from which we've heard NOTHING for this long
+// is considered dead and terminated immediately (→ reconnect grace). Unlike the
+// WS control-frame ping above, app-level JSON messages can't be auto-answered by
+// a proxy/load-balancer, so this still detects half-open connections behind
+// Render's router (where control-frame pong was masking ~3-min TCP timeouts).
+// Overridable via env so integration tests can use a short window.
+const LIVENESS_TIMEOUT_MS =
+  Number(process.env.CCHESS_LIVENESS_TIMEOUT_MS ?? '') || 15_000;
 
 // Xiangqi UCI: 9 cols (a-i) × 10 rows (0-9). Format check only — Step 5 will
 // add legality (turn, piece existence, rule compliance).
@@ -184,6 +197,9 @@ function activeRoomSummary(room: Room) {
 
 interface HeartbeatSocket extends WebSocket {
   isAlive?: boolean;
+  // D1 fix: timestamp of the last inbound message (any type, incl. ping). The
+  // heartbeat sweep terminates sockets silent longer than LIVENESS_TIMEOUT_MS.
+  lastSeenAt?: number;
 }
 
 export interface CChessServer {
@@ -392,8 +408,21 @@ export function createCChessServer(options: CChessServerOptions = {}): CChessSer
   }
 
   const heartbeatInterval = setInterval(() => {
+    const now = Date.now();
     wss.clients.forEach((s) => {
       const sock = s as HeartbeatSocket;
+      // D1 fix: app-level liveness first — if the client has gone silent (no
+      // ping/message) past the timeout, treat it as dead right away. This is
+      // what catches mobile wifi drops behind Render's proxy, where the WS
+      // control-frame heartbeat below was masked for ~3 min by TCP timeouts.
+      if (
+        sock.lastSeenAt !== undefined &&
+        now - sock.lastSeenAt > LIVENESS_TIMEOUT_MS
+      ) {
+        console.log('[ws] liveness timeout → terminate');
+        sock.terminate(); // fires 'close' event → grace/finishGame path
+        return;
+      }
       if (sock.isAlive === false) {
         console.log('[ws] heartbeat timeout → terminate');
         sock.terminate(); // fires 'close' event → finishGame path
@@ -426,6 +455,7 @@ export function createCChessServer(options: CChessServerOptions = {}): CChessSer
     // Heartbeat: client must respond to ping within ~HEARTBEAT_INTERVAL_MS.
     const hbSock = socket as HeartbeatSocket;
     hbSock.isAlive = true;
+    hbSock.lastSeenAt = Date.now();
     socket.on('pong', () => {
       hbSock.isAlive = true;
     });
@@ -445,6 +475,9 @@ export function createCChessServer(options: CChessServerOptions = {}): CChessSer
     }, AUTH_TIMEOUT_MS);
 
     socket.on('message', async (data, isBinary) => {
+      // D1 fix: any inbound frame proves the socket is alive (drives the
+      // app-level liveness sweep, independent of WS control-frame pong).
+      (socket as HeartbeatSocket).lastSeenAt = Date.now();
       if (isBinary) {
         send(socket, { type: 'error', code: 'binary-not-supported' });
         return;
@@ -462,6 +495,13 @@ export function createCChessServer(options: CChessServerOptions = {}): CChessSer
         msg = JSON.parse(data.toString());
       } catch {
         send(socket, { type: 'error', code: 'invalid-json' });
+        return;
+      }
+
+      // D1 fix: app-level heartbeat. lastSeenAt was bumped above; just echo a
+      // pong so the client's own watchdog stays satisfied. Allowed pre-auth.
+      if (msg.type === 'ping') {
+        send(socket, { type: 'pong', ts: Date.now() });
         return;
       }
 

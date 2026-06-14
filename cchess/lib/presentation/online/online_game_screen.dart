@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -40,6 +41,8 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
   Timer? _countdownTimer;
   final _chatCtrl = TextEditingController();
   bool _resultDialogOpen = false;
+  // D1 fix: reconnect the instant the OS reports the network is back.
+  StreamSubscription<List<ConnectivityResult>>? _connectivitySub;
 
   OnlineMatchController get _ctrl =>
       ref.read(onlineMatchControllerProvider.notifier);
@@ -48,10 +51,21 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    // D1 fix: flag the screen as open so the lobby doesn't push a second copy
+    // when a mid-game reconnect transitions the phase back to `playing`.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) ref.read(onlineGameOpenProvider.notifier).state = true;
+    });
+    _connectivitySub = Connectivity().onConnectivityChanged.listen((results) {
+      final hasNetwork = results.any((r) => r != ConnectivityResult.none);
+      if (hasNetwork) _ctrl.onNetworkAvailable();
+    });
   }
 
   @override
   void dispose() {
+    _connectivitySub?.cancel();
+    ref.read(onlineGameOpenProvider.notifier).state = false;
     _countdownTimer?.cancel();
     _chatCtrl.dispose();
     WidgetsBinding.instance.removeObserver(this);
@@ -405,6 +419,38 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
                         ),
                       );
                     },
+                  ),
+                ],
+                if (state.phase == OnlineMatchPhase.reconnecting) ...[
+                  AppSpacing.vGapSm,
+                  Container(
+                    padding: const EdgeInsets.all(AppSpacing.sm),
+                    decoration: BoxDecoration(
+                      color: AppColors.accentGold.withValues(alpha: 0.18),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: AppColors.accentGold),
+                    ),
+                    child: Row(
+                      children: [
+                        const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: AppColors.accentGold,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Mất kết nối — đang kết nối lại…',
+                            style: AppTextStyles.captionSm.copyWith(
+                              color: AppColors.accentGold,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ],
                 if (state.errorMessage != null) ...[

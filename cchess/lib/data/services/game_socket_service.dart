@@ -23,6 +23,24 @@ class GameSocketService {
   String? _authedUid;
   String? _currentRoomId;
 
+  // D1 fix: application-level heartbeat + watchdog. We send {type:'ping'} on a
+  // timer and the server answers {type:'pong'}; `_lastInboundAt` tracks the last
+  // frame we received from the server. If nothing arrives within `_silenceTimeout`
+  // the connection is treated as dead — this detects mobile wifi drops in
+  // seconds instead of waiting minutes for the OS TCP timeout to surface via
+  // onError/onDone.
+  Timer? _heartbeatTimer;
+  DateTime? _lastInboundAt;
+  bool _lostNotified = false;
+
+  /// Fired once when the socket drops or goes silent past the liveness window.
+  /// The controller wires this up to drive mid-game auto-reconnect. NOT fired
+  /// for an intentional [disconnect].
+  void Function()? onConnectionLost;
+
+  static const Duration _pingInterval = Duration(seconds: 5);
+  static const Duration _silenceTimeout = Duration(seconds: 15);
+
   Stream<Map<String, dynamic>> get messages =>
       _controller?.stream ?? const Stream.empty();
   String? get authedUid => _authedUid;
@@ -38,11 +56,17 @@ class GameSocketService {
     final channel = WebSocketChannel.connect(Uri.parse(url));
     _channel = channel;
     _controller = StreamController<Map<String, dynamic>>.broadcast();
+    _lostNotified = false;
+    _lastInboundAt = DateTime.now();
     _sub = channel.stream.listen(
       (data) {
         try {
           final raw = data is String ? data : (data as List<int>).toString();
           final msg = jsonDecode(raw) as Map<String, dynamic>;
+          _lastInboundAt = DateTime.now();
+          // D1 fix: 'pong' is liveness-only — it already refreshed the watchdog
+          // above; don't forward it (would flood the controller's event log).
+          if (msg['type'] == 'pong') return;
           switch (msg['type']) {
             case 'authed':
               _authedUid = msg['uid'] as String?;
@@ -73,6 +97,7 @@ class GameSocketService {
       },
       onError: (Object e, StackTrace st) {
         _safeAddError(e, st);
+        _handleConnectionDown();
       },
       onDone: () {
         _authedUid = null;
@@ -81,8 +106,49 @@ class GameSocketService {
         _controller = null;
         _channel = null;
         c?.close();
+        _handleConnectionDown();
       },
     );
+    _startHeartbeat();
+  }
+
+  // ── D1 fix: heartbeat + watchdog ───────────────────────────────────────
+  void _startHeartbeat() {
+    _stopHeartbeat();
+    _heartbeatTimer = Timer.periodic(_pingInterval, (_) {
+      final last = _lastInboundAt;
+      if (last != null && DateTime.now().difference(last) > _silenceTimeout) {
+        // Server has gone silent past the liveness window → treat as dropped.
+        _handleConnectionDown();
+        return;
+      }
+      try {
+        _channel?.sink.add(jsonEncode({'type': 'ping'}));
+      } catch (_) {
+        // Sink already gone — the watchdog/onDone path will handle teardown.
+      }
+    });
+  }
+
+  void _stopHeartbeat() {
+    _heartbeatTimer?.cancel();
+    _heartbeatTimer = null;
+  }
+
+  /// Tear down a dead connection and notify [onConnectionLost] exactly once.
+  /// Guarded by [_lostNotified] so onError + onDone + watchdog don't multi-fire;
+  /// [disconnect] sets the guard up-front so intentional closes stay silent.
+  void _handleConnectionDown() {
+    if (_lostNotified) return;
+    _lostNotified = true;
+    _stopHeartbeat();
+    try {
+      _channel?.sink.close();
+    } catch (_) {
+      // ignore — may already be half-closed
+    }
+    final cb = onConnectionLost;
+    if (cb != null) cb();
   }
 
   void _safeAdd(Map<String, dynamic> msg) {
@@ -163,6 +229,9 @@ class GameSocketService {
   void resign() => send({'type': 'resign'});
 
   Future<void> disconnect() async {
+    // Intentional close — suppress the onConnectionLost path and stop pinging.
+    _lostNotified = true;
+    _stopHeartbeat();
     await _sub?.cancel();
     _sub = null;
     await _channel?.sink.close();
