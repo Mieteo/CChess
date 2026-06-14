@@ -258,12 +258,13 @@ class OnlineMatchController extends StateNotifier<OnlineMatchState> {
   final ReconnectStore _reconnectStore;
   StreamSubscription<Map<String, dynamic>>? _sub;
 
-  // D1 fix: mid-game auto-reconnect bookkeeping.
+  // D1/D2 fix: mid-game auto-reconnect bookkeeping (single-flight).
   bool _reconnecting = false;
   bool _disposed = false;
-  bool _attemptInFlight = false;
-  Timer? _reconnectTimer;
-  DateTime? _lastAttemptAt;
+  bool _attemptInFlight = false; // inside _attemptReconnect's async setup
+  bool _awaitingResponse = false; // handshake sent, awaiting reconnected/error
+  Timer? _reconnectTimer; // delay before the next attempt
+  Timer? _attemptTimeout; // bounds a stalled handshake
   // When set, the next 'authed' sends reconnect-room (resume) instead of
   // dropping the user back to the lobby.
   String? _pendingReconnectRoomId;
@@ -929,8 +930,8 @@ class OnlineMatchController extends StateNotifier<OnlineMatchState> {
 
   // ── D1 fix: mid-game auto-reconnect ────────────────────────────────────
   /// Called by the socket service when the live connection drops or goes
-  /// silent. If we were in an active game, start a retry loop that resumes the
-  /// room; otherwise surface the disconnect.
+  /// silent. If we were in an active game, kick off the single-flight reconnect
+  /// state machine that resumes the room; otherwise surface the disconnect.
   void _handleConnectionLost() {
     if (_disposed) return;
     final inGame =
@@ -953,73 +954,89 @@ class OnlineMatchController extends StateNotifier<OnlineMatchState> {
         clearError: true,
       );
     }
-    _startReconnectLoop();
+    // The socket we were on just died — any handshake we were awaiting is void.
+    _awaitingResponse = false;
+    _attemptTimeout?.cancel();
+    _scheduleAttempt(immediate: true);
   }
 
-  /// Hook for a connectivity listener: nudge a reconnect attempt the instant
-  /// the network returns (no-op unless we're actively reconnecting).
+  /// Hook for a connectivity listener: nudge a reconnect the instant the
+  /// network returns. connectivity_plus can fire several events in a burst; the
+  /// single-flight guards coalesce them into ONE attempt (the socket churn from
+  /// overlapping reconnects is exactly what corrupted state in D2).
   void onNetworkAvailable() {
-    if (_reconnecting && !_disposed) {
-      _lastAttemptAt = null; // bypass the retry throttle
-      _attemptReconnect();
+    if (_reconnecting && !_disposed && !_awaitingResponse) {
+      _scheduleAttempt(immediate: true);
     }
   }
 
-  void _startReconnectLoop() {
-    if (_reconnectTimer != null) {
-      _attemptReconnect();
-      return;
-    }
-    _reconnectTimer = Timer.periodic(
-      const Duration(seconds: 2),
-      (_) => _attemptReconnect(),
+  void _scheduleAttempt({bool immediate = false}) {
+    if (!_reconnecting || _disposed) return;
+    _reconnectTimer?.cancel();
+    _reconnectTimer = Timer(
+      immediate ? Duration.zero : const Duration(seconds: 2),
+      _attemptReconnect,
     );
-    _attemptReconnect();
   }
 
   void _stopReconnectLoop() {
     _reconnectTimer?.cancel();
     _reconnectTimer = null;
+    _attemptTimeout?.cancel();
+    _attemptTimeout = null;
     _reconnecting = false;
+    _awaitingResponse = false;
     _pendingReconnectRoomId = null;
-    _lastAttemptAt = null;
   }
 
-  /// One reconnect attempt: re-open the socket, re-auth, and (on 'authed')
-  /// send reconnect-room. Throttled so an in-flight handshake isn't disrupted;
-  /// gives up (with an error) once the saved room falls outside the grace
-  /// window. Retries are driven by the periodic loop + connection-lost events.
+  /// A single reconnect attempt. STRICTLY one in flight at a time: refused while
+  /// the socket setup is running (`_attemptInFlight`) or while we're still
+  /// waiting for the server's `reconnected`/`error` (`_awaitingResponse`).
+  /// Retries are driven by drops + the handshake timeout — never a blind
+  /// periodic timer — so overlapping `disconnect/connect` cycles can't race the
+  /// server (which previously left the board reset to the start + the room
+  /// stuck "playing").
   Future<void> _attemptReconnect() async {
-    if (!_reconnecting || _disposed || _attemptInFlight) return;
-    final now = DateTime.now();
-    if (_lastAttemptAt != null &&
-        now.difference(_lastAttemptAt!) < const Duration(seconds: 3)) {
-      return; // let the previous attempt's handshake land first
+    if (!_reconnecting || _disposed || _attemptInFlight || _awaitingResponse) {
+      return;
     }
-    _lastAttemptAt = now;
     _attemptInFlight = true;
     try {
-      final saved = await _reconnectStore.readFresh();
+      // Mid-game: use the raw saved room id (NOT readFresh's 70s window — that
+      // gate is only for relaunch). The server's 60s grace is the real bound;
+      // if it expired the server rejects with room-not-found/
+      // not-disconnected-player, handled in _onError.
+      final saved = await _reconnectStore.readRoomId();
       if (saved == null) {
         _stopReconnectLoop();
         state = state.copyWith(
           phase: OnlineMatchPhase.error,
-          errorMessage:
-              'Không kết nối lại được trong thời gian cho phép — ván đã khép.',
+          errorMessage: 'Mất kết nối — không có ván để vào lại.',
         );
         return;
       }
       final url = state.serverUrl;
-      if (url == null) return;
+      if (url == null) {
+        _scheduleAttempt();
+        return;
+      }
       _pendingReconnectRoomId = saved;
       await _socket.disconnect();
       await _socket.connect(url);
       _sub?.cancel();
       _sub = _socket.messages.listen(_onMessage, onError: _onStreamError);
       await _socket.authenticate();
-      // Success path continues via 'authed' → reconnect-room → 'reconnected'.
+      // Handshake initiated → wait for authed → reconnect-room → reconnected.
+      // Arm a timeout so a stalled/offline handshake retries instead of hanging.
+      _awaitingResponse = true;
+      _attemptTimeout?.cancel();
+      _attemptTimeout = Timer(const Duration(seconds: 8), () {
+        _awaitingResponse = false;
+        _scheduleAttempt();
+      });
     } catch (_) {
-      // Setup failed (likely still offline) — the loop will retry.
+      // Setup threw (likely still offline) — retry after a short delay.
+      _scheduleAttempt();
     } finally {
       _attemptInFlight = false;
     }
@@ -1040,6 +1057,7 @@ class OnlineMatchController extends StateNotifier<OnlineMatchState> {
   void dispose() {
     _disposed = true;
     _reconnectTimer?.cancel();
+    _attemptTimeout?.cancel();
     _socket.onConnectionLost = null;
     _sub?.cancel();
     super.dispose();

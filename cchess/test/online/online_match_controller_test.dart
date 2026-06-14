@@ -78,6 +78,8 @@ class FakeReconnectStore extends ReconnectStore {
   Future<void> clear() async => saved = null;
   @override
   Future<String?> readFresh() async => saved;
+  @override
+  Future<String?> readRoomId() async => saved;
 }
 
 void main() {
@@ -442,6 +444,79 @@ void main() {
 
       expect(socket.sentTypes, isNot(contains('reconnect-room')));
       expect(ctrl.state.phase, OnlineMatchPhase.error);
+    });
+
+    test('reconnected replays the moves so the board is NOT reset to start',
+        () async {
+      // D2 headline bug: after reconnect the board showed the initial position.
+      // Verify the client replays the server's move list onto a fresh game.
+      await driveToPlaying(myColor: PieceColor.red);
+      final game = ctrl.state.game!;
+
+      // Make one real red move so we have a UCI in the exact client format.
+      Position? from;
+      Position? to;
+      for (final (pos, piece) in game.board.occupied()) {
+        if (piece.color != PieceColor.red) continue;
+        final moves = game.getValidMoves(pos);
+        if (moves.isNotEmpty) {
+          from = pos;
+          to = moves.first;
+          break;
+        }
+      }
+      ctrl.attemptMove(from!, to!);
+      final uci = socket.sentTypes
+          .firstWhere((t) => t.startsWith('move:'))
+          .substring('move:'.length);
+
+      socket.onConnectionLost!();
+      await pump();
+      socket.emit({'type': 'authed', 'uid': 'me'});
+      await pump();
+      socket.emit({
+        'type': 'reconnected',
+        'roomId': 'ROOM01',
+        'redUid': 'red-uid',
+        'blackUid': 'black-uid',
+        'yourColor': 'red',
+        'moves': <String>[uci],
+        'clock': {'red': 600000, 'black': 600000},
+        'currentTurn': 'black',
+        'chat': <Map<String, dynamic>>[],
+      });
+      await pump();
+
+      expect(ctrl.state.phase, OnlineMatchPhase.playing);
+      expect(
+        ctrl.state.game!.history.length,
+        1,
+        reason: 'the played move must be replayed, not reset to the start',
+      );
+    });
+
+    test('a burst of connectivity events coalesces into ONE reconnect attempt',
+        () async {
+      // Regression for D2: connectivity_plus firing several times (or a timer
+      // racing) used to spawn overlapping disconnect/connect cycles that reset
+      // the board + stuck the room. Single-flight must collapse them.
+      await driveToPlaying();
+
+      socket.onConnectionLost!();
+      await pump(); // first attempt runs, now awaiting 'authed'
+
+      // Network "returns" several times in a burst before the handshake lands.
+      ctrl.onNetworkAvailable();
+      ctrl.onNetworkAvailable();
+      ctrl.onNetworkAvailable();
+      await pump();
+
+      socket.emit({'type': 'authed', 'uid': 'me'});
+      await pump();
+
+      final count =
+          socket.sentTypes.where((t) => t == 'reconnect-room').length;
+      expect(count, 1, reason: 'exactly one reconnect-room despite the burst');
     });
   });
 }

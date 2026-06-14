@@ -18,10 +18,22 @@ import type { AddressInfo } from 'node:net';
 import { WebSocket } from 'ws';
 
 import type { CChessServer } from './server';
+import { PieceColor, uciOfMove, XiangqiGame } from './engine';
 
 interface Msg {
   type: string;
   [k: string]: unknown;
+}
+
+/// First legal move for a colour from the initial position (UCI string).
+function firstLegalUciFor(color: PieceColor): string {
+  const game = XiangqiGame.initial();
+  for (const [pos, piece] of game.board.occupied()) {
+    if (piece.color !== color) continue;
+    const moves = game.getValidMoves(pos);
+    if (moves.length > 0) return uciOfMove(pos, moves[0]);
+  }
+  throw new Error(`no legal move for ${color}`);
 }
 
 async function startTestServer(): Promise<{ server: CChessServer; url: string }> {
@@ -173,6 +185,45 @@ test('a player who goes app-level silent is dropped fast → peer-disconnected',
     assert.ok(elapsed < 2000, `peer-disconnected took ${elapsed}ms (want < 2000)`);
 
     await Promise.all([red.close(), black.close()]);
+  } finally {
+    await server.close();
+  }
+});
+
+// D2 regression: a player who drops mid-game and reconnects must get the FULL
+// move list back, so the client replays to the live position (not the start).
+test('reconnect after a liveness drop replays the moves played so far', async () => {
+  const { server, url } = await startTestServer();
+  try {
+    const red = await connectAuthed(url, 'rod');
+    const black = await connectAuthed(url, 'sia');
+    red.send({ type: 'create-room' });
+    const created = await red.waitType('room-created');
+    const roomId = created.roomId as string;
+    black.send({ type: 'join-room', roomId });
+    await red.waitType('game-start');
+    await black.waitType('game-start');
+
+    // Red plays one legal move → server records it in movesUci.
+    const uci = firstLegalUciFor(PieceColor.Red);
+    red.send({ type: 'move', uci });
+    await red.waitType('move-ack');
+
+    // black stays alive; red goes app-level silent → liveness drops red.
+    black.startPinging(100);
+    await black.waitType('peer-disconnected', 2500);
+
+    // Red reconnects → snapshot MUST still contain the move (board not reset).
+    const red2 = await connectAuthed(url, 'rod');
+    red2.send({ type: 'reconnect-room', roomId });
+    const snap = await red2.waitType('reconnected');
+    assert.deepEqual(
+      snap.moves,
+      [uci],
+      'reconnect snapshot must replay the played move, not reset to the start',
+    );
+
+    await Promise.all([black.close(), red2.close()]);
   } finally {
     await server.close();
   }

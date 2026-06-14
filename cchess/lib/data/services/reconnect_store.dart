@@ -29,6 +29,15 @@ class ReconnectStore {
     await prefs.remove(_kLastActivityMs);
   }
 
+  /// Returns the saved room ID regardless of age. Used for MID-GAME reconnect,
+  /// where we know we just dropped — the server's grace window (60s) is the
+  /// real bound, so we don't apply the relaunch freshness gate here. Returns
+  /// null only if nothing was ever saved.
+  Future<String?> readRoomId() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_kRoomId);
+  }
+
   /// Returns the saved room ID if it's still fresh enough to attempt a
   /// reconnect; otherwise clears stale entries and returns null.
   Future<String?> readFresh() async {
