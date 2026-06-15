@@ -583,6 +583,11 @@ export function createCChessServer(options: CChessServerOptions = {}): CChessSer
           send(socket, { type: 'error', code: 'already-in-room' });
           return;
         }
+        // A socket must never be in the matchmaking queue AND in a room at the
+        // same time: a stale queue entry would later get paired into a SECOND
+        // game, double-booking the socket and corrupting room/socket maps.
+        // Entering a private room implicitly cancels any pending search.
+        mmDequeue(socket);
         // Step A5: optional initial clock from lobby (clamp to sane range)
         const rawClock = (msg as { clockMs?: number }).clockMs;
         const clockMs =
@@ -699,6 +704,8 @@ export function createCChessServer(options: CChessServerOptions = {}): CChessSer
           send(socket, { type: 'error', code: result.code });
           return;
         }
+        // Becoming a spectator also leaves any pending matchmaking search.
+        mmDequeue(socket);
         const room = result.room;
         send(socket, {
           type: 'spectate-started',
@@ -753,6 +760,9 @@ export function createCChessServer(options: CChessServerOptions = {}): CChessSer
           send(socket, { type: 'error', code: result.code });
           return;
         }
+        // Joining a room implicitly leaves the matchmaking queue (see
+        // create-room) so a stale queue entry can't pair us into a 2nd game.
+        mmDequeue(socket);
         const room = result.room;
         const members = membersOf(room, (s) => sessions.get(s));
         send(socket, {

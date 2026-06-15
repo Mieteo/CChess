@@ -1,4 +1,4 @@
-import type { WebSocket } from 'ws';
+import { WebSocket } from 'ws';
 
 export type Color = 'red' | 'black';
 export type EndReason =
@@ -269,4 +269,93 @@ export function isSpectator(room: Room, socket: WebSocket): boolean {
 
 export function membersOf(room: Room, uidLookup: (s: WebSocket) => string | undefined): string[] {
   return [...room.members].map(uidLookup).filter((u): u is string => typeof u === 'string');
+}
+
+// ── Introspection (read-only) ─────────────────────────────────────────────
+// Pure snapshots of the otherwise-private `rooms` + `socketToRoom` maps, used
+// by the test lab (lab/) to assert invariants and drive the live dashboard.
+// They have no side effects and never run unless explicitly called.
+
+/// Serializable view of a single room's lifecycle state.
+export interface RoomDebug {
+  id: string;
+  status: Room['status'];
+  /// Connected PLAYER sockets currently attached (excludes those in grace).
+  members: number;
+  /// Of `members`, how many sockets are actually in the OPEN state. A gap here
+  /// means a stale/dead socket is lingering in the room (socket-leak smell).
+  membersOpen: number;
+  spectators: number;
+  redUid?: string;
+  blackUid?: string;
+  /// uids currently inside the reconnect grace window.
+  graceUids: string[];
+  moveCount: number;
+  hasClockTimer: boolean;
+  hasWaitingTimer: boolean;
+  startedAt?: number;
+}
+
+export function debugRooms(): RoomDebug[] {
+  return [...rooms.values()].map((room) => ({
+    id: room.id,
+    status: room.status,
+    members: room.members.size,
+    membersOpen: [...room.members].filter((s) => s.readyState === WebSocket.OPEN)
+      .length,
+    spectators: room.spectators.size,
+    redUid: room.redUid,
+    blackUid: room.blackUid,
+    graceUids: room.disconnectGrace ? [...room.disconnectGrace.keys()] : [],
+    moveCount: room.movesUci?.length ?? room.moveCount,
+    hasClockTimer: room.clockTimer !== undefined,
+    hasWaitingTimer: room.waitingTimer !== undefined,
+    startedAt: room.startedAt,
+  }));
+}
+
+/// Cross-check the two internal maps that must always agree. Returns a list of
+/// human-readable violations (empty == healthy). Catches the class of bug where
+/// a socket lingers in `members` without a back-reference in `socketToRoom`
+/// (or vice versa) after a messy disconnect/reconnect.
+export function debugSocketMapIssues(): string[] {
+  const issues: string[] = [];
+  for (const [sock, id] of socketToRoom) {
+    const room = rooms.get(id);
+    if (!room) {
+      issues.push(`socketToRoom points at missing room ${id}`);
+      continue;
+    }
+    if (!room.members.has(sock) && !room.spectators.has(sock)) {
+      issues.push(`socket mapped to ${id} but not in its members/spectators`);
+    }
+  }
+  for (const room of rooms.values()) {
+    for (const s of room.members) {
+      if (socketToRoom.get(s) !== room.id) {
+        issues.push(`member of ${room.id} missing/wrong back-ref in socketToRoom`);
+      }
+    }
+    for (const s of room.spectators) {
+      if (socketToRoom.get(s) !== room.id) {
+        issues.push(`spectator of ${room.id} missing/wrong back-ref in socketToRoom`);
+      }
+    }
+  }
+  return issues;
+}
+
+/// Lab/test-only: wipe ALL room state (and any pending timers) so the headless
+/// scenario runner can reuse one process across isolated scenarios. NOT used by
+/// the production server.
+export function __resetRoomsForLab(): void {
+  for (const room of rooms.values()) {
+    if (room.clockTimer) clearInterval(room.clockTimer);
+    if (room.waitingTimer) clearTimeout(room.waitingTimer);
+    if (room.disconnectGrace) {
+      for (const entry of room.disconnectGrace.values()) clearTimeout(entry.timer);
+    }
+  }
+  rooms.clear();
+  socketToRoom.clear();
 }

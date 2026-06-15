@@ -1,0 +1,188 @@
+<!doctype html>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>CChess Test Lab</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; font: 14px/1.5 system-ui, Segoe UI, Roboto, sans-serif;
+    background: #14100b; color: #ece3d0;
+  }
+  header {
+    padding: 12px 18px; background: #241910; border-bottom: 1px solid #4a3a28;
+    display: flex; align-items: center; gap: 14px;
+  }
+  header h1 { font-size: 16px; margin: 0; color: #e8b84b; }
+  header .muted { color: #8c7d63; font-size: 12px; }
+  .wrap { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; padding: 16px; }
+  @media (max-width: 900px) { .wrap { grid-template-columns: 1fr; } }
+  .card {
+    background: #1d160e; border: 1px solid #3a2d1e; border-radius: 10px;
+    padding: 14px;
+  }
+  .card h2 { font-size: 13px; margin: 0 0 10px; color: #e8b84b; text-transform: uppercase; letter-spacing: .5px; }
+  button {
+    background: #2c2114; color: #ece3d0; border: 1px solid #4a3a28;
+    border-radius: 7px; padding: 5px 10px; cursor: pointer; font-size: 13px;
+  }
+  button:hover { background: #3a2d1e; }
+  button.gold { background: #e8b84b; color: #1a120b; border-color: #e8b84b; font-weight: 600; }
+  button.danger { border-color: #6e2b2b; }
+  input {
+    background: #14100b; color: #ece3d0; border: 1px solid #4a3a28;
+    border-radius: 6px; padding: 5px 8px; width: 90px;
+  }
+  .row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-bottom: 8px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 5px 8px; border-bottom: 1px solid #2c2114; }
+  th { color: #8c7d63; font-weight: 600; }
+  .pill { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; }
+  .playing { background: #1f4d33; color: #7ee0a6; }
+  .waiting { background: #5a4410; color: #f0cf73; }
+  .finished { background: #3a2d1e; color: #c9b896; }
+  .grace { background: #5a2e10; color: #f0a973; }
+  .violations { border: 1px solid #6e2b2b; background: #2a1414; border-radius: 8px; padding: 10px; margin-bottom: 12px; }
+  .ok-banner { border: 1px solid #1f4d33; background: #14241b; color: #7ee0a6; border-radius: 8px; padding: 8px 12px; margin-bottom: 12px; font-size: 13px; }
+  .botctl { border: 1px solid #2c2114; border-radius: 8px; padding: 8px; margin-bottom: 8px; }
+  .botctl .name { font-weight: 600; color: #e8b84b; }
+  .recent { color: #8c7d63; font-size: 11px; font-family: ui-monospace, monospace; }
+  pre { background: #0e0b07; border: 1px solid #2c2114; border-radius: 8px; padding: 10px; overflow: auto; max-height: 320px; white-space: pre-wrap; font-size: 12px; }
+  .sc { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid #2c2114; }
+  .sc .why { color: #8c7d63; font-size: 12px; }
+  .full { grid-column: 1 / -1; }
+</style>
+
+<header>
+  <h1>🧪 CChess Test Lab</h1>
+  <span class="muted" id="status">đang kết nối…</span>
+</header>
+
+<div class="wrap">
+  <!-- LEFT: live server state -->
+  <div class="card">
+    <h2>Trạng thái server (live)</h2>
+    <div id="health"></div>
+    <h3 style="font-size:12px;color:#8c7d63;margin:8px 0 4px">Phòng</h3>
+    <table id="rooms"><thead><tr>
+      <th>ID</th><th>Trạng thái</th><th>Người chơi</th><th>Khán giả</th><th>Grace</th><th>Nước</th>
+    </tr></thead><tbody></tbody></table>
+    <h3 style="font-size:12px;color:#8c7d63;margin:12px 0 4px">Hàng chờ ghép trận</h3>
+    <table id="queue"><thead><tr><th>UID</th><th>ELO</th><th>Socket</th></tr></thead><tbody></tbody></table>
+  </div>
+
+  <!-- RIGHT: manual bot controls -->
+  <div class="card">
+    <h2>Bot thủ công</h2>
+    <div class="row">
+      <input id="newuid" placeholder="uid" />
+      <button class="gold" onclick="spawn()">+ Tạo bot</button>
+      <button class="danger" onclick="cmd({action:'clear'})">Xóa hết bot</button>
+    </div>
+    <div id="bots"></div>
+  </div>
+
+  <!-- BOTTOM: scenarios -->
+  <div class="card full">
+    <h2>Kịch bản tự động (chạy cách ly trong tiến trình con)</h2>
+    <div id="scenarios"></div>
+    <h3 style="font-size:12px;color:#8c7d63;margin:12px 0 4px">Kết quả</h3>
+    <pre id="scout">— chưa chạy —</pre>
+  </div>
+</div>
+
+<script>
+  const $ = (s) => document.querySelector(s);
+
+  async function cmd(body) {
+    const r = await fetch('/lab/cmd', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    return r.json();
+  }
+  function spawn() {
+    const uid = $('#newuid').value.trim();
+    if (!uid) return;
+    cmd({ action: 'spawn', uid }).then(() => { $('#newuid').value = ''; refresh(); });
+  }
+  function act(action, uid, extra = {}) { cmd({ action, uid, ...extra }).then(refresh); }
+  function actRoom(action, uid) {
+    const roomId = prompt('Room ID:') || '';
+    if (roomId) act(action, uid, { roomId });
+  }
+
+  function botCard(b) {
+    const room = b.roomId ? `phòng <b>${b.roomId}</b>${b.color ? ' ('+b.color+')' : ''}` : '<span class="muted">chưa vào phòng</span>';
+    return `<div class="botctl">
+      <div class="row" style="margin-bottom:4px">
+        <span class="name">${b.uid}</span> — ${room}
+      </div>
+      <div class="recent">⟵ ${b.recent.join(', ') || '—'}</div>
+      <div class="row" style="margin-top:6px">
+        <button onclick="act('create','${b.uid}')">Tạo phòng</button>
+        <button onclick="act('find','${b.uid}')">Tìm trận</button>
+        <button onclick="act('cancel','${b.uid}')">Hủy tìm</button>
+        <button onclick="actRoom('join','${b.uid}')">Vào phòng…</button>
+        <button onclick="actRoom('spectate','${b.uid}')">Xem…</button>
+        <button onclick="act('resign','${b.uid}')">Xin thua</button>
+        <button onclick="act('leave','${b.uid}')">Rời phòng</button>
+        <button class="danger" onclick="act('drop','${b.uid}')">⚡ Rớt mạng</button>
+        <button onclick="act('reconnect','${b.uid}')">↺ Reconnect</button>
+        <button class="danger" onclick="act('remove','${b.uid}')">✕</button>
+      </div>
+    </div>`;
+  }
+
+  function roomRow(r) {
+    const cls = r.graceUids.length && r.members === 0 ? 'grace' : r.status;
+    const stale = r.membersOpen < r.members ? ' ⚠️stale' : '';
+    return `<tr>
+      <td><b>${r.id}</b></td>
+      <td><span class="pill ${cls}">${r.status}${r.graceUids.length ? ' +grace' : ''}</span></td>
+      <td>${r.members}${stale} ${r.redUid ? '('+short(r.redUid)+' vs '+short(r.blackUid)+')' : ''}</td>
+      <td>${r.spectators}</td>
+      <td>${r.graceUids.map(short).join(', ') || '—'}</td>
+      <td>${r.moveCount}</td>
+    </tr>`;
+  }
+  const short = (u) => (u ? String(u).slice(0, 8) : '—');
+
+  async function refresh() {
+    let s;
+    try { s = await (await fetch('/lab/state')).json(); }
+    catch { $('#status').textContent = 'mất kết nối control server'; return; }
+    $('#status').textContent = `cập nhật ${new Date().toLocaleTimeString()}`;
+
+    const v = s.server.violations;
+    $('#health').innerHTML = v.length
+      ? `<div class="violations"><b>⚠️ ${v.length} vi phạm bất biến</b><br>` +
+        v.map((x) => `• [${x.rule}] ${x.detail}`).join('<br>') + '</div>'
+      : '<div class="ok-banner">✓ Mọi bất biến đều thỏa</div>';
+
+    $('#rooms tbody').innerHTML = s.server.rooms.map(roomRow).join('') ||
+      '<tr><td colspan="6" class="muted">— không có phòng —</td></tr>';
+    $('#queue tbody').innerHTML = s.server.queue.map((q) =>
+      `<tr><td>${q.uid}</td><td>${q.elo}</td><td>${q.alive ? '🟢 OPEN' : '🔴 closed'}</td></tr>`).join('') ||
+      '<tr><td colspan="3" class="muted">— trống —</td></tr>';
+
+    $('#bots').innerHTML = s.bots.map(botCard).join('') ||
+      '<div class="muted">Chưa có bot. Tạo một bot để bắt đầu.</div>';
+  }
+
+  async function loadScenarios() {
+    const list = await (await fetch('/lab/scenarios')).json();
+    $('#scenarios').innerHTML = list.map((s) =>
+      `<div class="sc"><div><b>${s.name}</b><div class="why">${s.why}</div></div>
+        <button class="gold" onclick="runScenario('${s.name}')">▶ Chạy</button></div>`).join('');
+  }
+  async function runScenario(name) {
+    $('#scout').textContent = `Đang chạy ${name}…`;
+    const res = await cmd({ action: 'scenario', name });
+    $('#scout').textContent = (res.ok ? '✓ PASS\n\n' : '✘ FAIL\n\n') + (res.output || res.error || '');
+  }
+
+  loadScenarios();
+  refresh();
+  setInterval(refresh, 700);
+</script>

@@ -3,7 +3,7 @@
 // Pair players whose ratings fit an expanding tolerance window. The
 // longest-waiting player is checked first, and tolerance widens over time.
 
-import type { WebSocket } from 'ws';
+import { WebSocket } from 'ws';
 
 export interface QueueEntry {
   socket: WebSocket;
@@ -105,4 +105,20 @@ export function queueSnapshot(): { uid: string; waitedMs: number; clockMs?: numb
     waitedMs: now - e.joinedAt,
     clockMs: e.clockMs,
   }));
+}
+
+/// Introspection for the test lab: queue entries plus whether each waiting
+/// socket is still OPEN. A `false` here means a closed socket is stuck in the
+/// queue (it should have been dequeued on disconnect) — an invariant violation.
+export function debugQueue(): { uid: string; elo: number; alive: boolean }[] {
+  return [...queue.values()].map((e) => ({
+    uid: e.uid,
+    elo: e.elo,
+    alive: e.socket.readyState === WebSocket.OPEN,
+  }));
+}
+
+/// Lab/test-only: empty the matchmaking queue between isolated scenarios.
+export function __resetQueueForLab(): void {
+  queue.clear();
 }
