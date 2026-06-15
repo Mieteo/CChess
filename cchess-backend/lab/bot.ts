@@ -44,11 +44,13 @@ export class Bot {
     });
   }
 
-  /// Connect + complete the auth handshake using `uid` as the token.
-  async connectAuthed(): Promise<void> {
+  /// Connect + complete the auth handshake. In the in-process lab the token IS
+  /// the uid (stub auth); against a real server pass a genuine Firebase ID
+  /// token (the smoke test mints one via anonymous sign-in).
+  async connectAuthed(token?: string): Promise<void> {
     await this.connect();
     await this.waitType('welcome');
-    this.send({ type: 'auth', token: this.uid });
+    this.send({ type: 'auth', token: token ?? this.uid });
     await this.waitType('authed');
   }
 
