@@ -95,8 +95,17 @@ export function getRoomById(roomId: string): Room | undefined {
   return rooms.get(roomId);
 }
 
+/// A room is a *live* game only while at least one of its players is still
+/// connected. During the reconnect grace window a disconnected player's socket
+/// is removed from `members` (see leaveRoom + preserveStatus), so a room where
+/// BOTH players dropped has `members.size === 0` while still flagged 'playing'.
+/// Such a "ghost" room must not be advertised as active — otherwise the lobby
+/// keeps showing A,B as "đang đánh" after both have left, until the grace timer
+/// finally forfeits it ~60s later.
 export function activeRooms(): Room[] {
-  return [...rooms.values()].filter((room) => room.status === 'playing');
+  return [...rooms.values()].filter(
+    (room) => room.status === 'playing' && room.members.size > 0,
+  );
 }
 
 /// Step 8: rebind a fresh socket to an existing room (reconnect path).

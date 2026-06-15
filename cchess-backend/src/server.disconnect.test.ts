@@ -128,6 +128,16 @@ async function startGame(
   return { red, black, roomId };
 }
 
+/// Ask the server how many games it currently advertises as "in progress".
+/// Uses a throwaway client so it doesn't perturb the room under test.
+async function activeRoomCount(url: string): Promise<number> {
+  const probe = await connectAuthed(url, `probe-${Math.random()}`);
+  probe.send({ type: 'list-active-rooms' });
+  const res = await probe.waitType('active-rooms');
+  await probe.close();
+  return (res.total as number) ?? (res.rooms as unknown[]).length;
+}
+
 // ── D5a: both drop, both reconnect within grace ──────────────────────────
 // Regression for the single-slot disconnect marker: the second drop used to
 // OVERWRITE the first player's grace entry, so the first player got
@@ -196,6 +206,39 @@ test('double-disconnect: grace expiry forfeits the first player to drop', async 
     assert.equal(ended.reason, 'disconnect');
 
     await watcher.close();
+  } finally {
+    await server.close();
+  }
+});
+
+// ── D5c: a room with NO connected players is not advertised as active ─────
+// Regression: while both players are in the reconnect grace window the room
+// is still flagged 'playing', so list-active-rooms used to surface it as a
+// live game — the lobby kept showing A,B as "đang đánh" after both had left.
+
+test('active-rooms hides a room once both players have dropped', async () => {
+  const { server, url } = await startTestServer();
+  try {
+    const { red, black } = await startGame(url, 'rhea', 'sven');
+    assert.equal(await activeRoomCount(url), 1, 'live game must be listed');
+
+    // One player drops — the other is still present, so it's a real live game.
+    await red.close();
+    await black.waitType('peer-disconnected');
+    assert.equal(
+      await activeRoomCount(url),
+      1,
+      'a game with one player still connected stays listed',
+    );
+
+    // …now the second player drops too. Nobody is connected; the room is a
+    // ghost waiting to forfeit. It must NOT be advertised as an active game.
+    await black.close();
+    assert.equal(
+      await activeRoomCount(url),
+      0,
+      'a room with no connected players must not be listed as active',
+    );
   } finally {
     await server.close();
   }
