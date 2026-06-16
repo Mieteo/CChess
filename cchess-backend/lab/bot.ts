@@ -167,4 +167,16 @@ export class Bot {
   leaveRoom(): void {
     this.send({ type: 'leave-room' });
   }
+  offerRematch(): void {
+    this.send({ type: 'rematch-offer' });
+  }
+  declineRematch(): void {
+    this.send({ type: 'rematch-decline' });
+  }
+  stopSpectating(): void {
+    this.send({ type: 'stop-spectating' });
+  }
+  chat(text: string): void {
+    this.send({ type: 'chat-message', text });
+  }
 }

@@ -1,0 +1,33 @@
+# Black-box smoke test against the LIVE deployed server. Manual trigger (and
+# optionally wire to run after a Render deploy via a webhook). It mints
+# anonymous Firebase users to authenticate, so it creates a couple of throwaway
+# Auth users per run and is intentionally NOT on every push.
+#
+#   Actions tab → "post-deploy-smoke" → Run workflow
+name: post-deploy-smoke
+
+on:
+  workflow_dispatch:
+    inputs:
+      backend_url:
+        description: WebSocket URL of the deployed server
+        default: wss://cchess-backend.onrender.com
+        required: true
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: cchess-backend
+    env:
+      CCHESS_BACKEND_URL: ${{ github.event.inputs.backend_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: cchess-backend/package-lock.json
+      - run: npm ci
+      - run: npm run lab:smoke

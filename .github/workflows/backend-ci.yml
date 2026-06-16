@@ -1,0 +1,56 @@
+# Backend correctness gate. Runs the unit/integration suite plus the test-lab
+# (scenarios + load + seeded fuzz) on every push/PR that touches the backend.
+#
+# NOTE: Render auto-deploys on push independently of this workflow. To make the
+# deploy WAIT for green CI, either disable auto-deploy in the Render service and
+# add a deploy step here (POST a deploy via the Render API / deploy hook), or
+# configure the Render service to require this check. See lab/render.ts.
+name: backend-ci
+
+on:
+  push:
+    paths:
+      - 'cchess-backend/**'
+      - '.github/workflows/backend-ci.yml'
+  pull_request:
+    paths:
+      - 'cchess-backend/**'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: cchess-backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: cchess-backend/package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      - name: Typecheck (src + lab)
+        run: |
+          npm run lint
+          npm run lab:check
+
+      - name: Unit + integration tests
+        run: npm test
+
+      - name: Lab scenarios
+        run: npm run lab
+
+      - name: Load / leak test (40 concurrent games)
+        run: npm run lab:load -- 40
+
+      # Seeded fuzz: deterministic, so a failure here is reproducible locally
+      # with the SAME command. Two profiles: steady + burst (races).
+      - name: Fuzz (steady)
+        run: npm run lab:fuzz -- 4000 --bots=8 --seed=12345
+
+      - name: Fuzz (burst / race-hunting)
+        run: npm run lab:fuzz -- 4000 --bots=8 --seed=99 --burst

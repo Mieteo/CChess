@@ -16,6 +16,7 @@
     "lab:check": "tsc --noEmit -p lab/tsconfig.json",
     "lab:dashboard": "tsx lab/control.ts",
     "lab:fuzz": "tsx lab/fuzz.ts",
+    "lab:load": "tsx lab/load.ts",
     "lab:smoke": "tsx lab/smoke.ts",
     "render:status": "tsx lab/render.ts status",
     "render:deploy": "tsx lab/render.ts deploy"

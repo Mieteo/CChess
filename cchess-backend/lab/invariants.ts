@@ -72,6 +72,50 @@ export function checkInvariants(): InvariantViolation[] {
         detail: `room ${r.id} keeps a clock timer while status='${r.status}'`,
       });
     }
+
+    // 9. Each seat of a 'playing' room must have a live (OPEN) socket UNLESS
+    //    that seat's player is currently inside the reconnect grace window.
+    if (r.status === 'playing') {
+      const redInGrace = r.graceColors.includes('red');
+      if (r.redSocketOpen !== true && !redInGrace) {
+        v.push({
+          rule: 'playing-seat-live-or-grace',
+          detail: `room ${r.id} red seat socket not OPEN and red not in grace`,
+        });
+      }
+      const blackInGrace = r.graceColors.includes('black');
+      if (r.blackSocketOpen !== true && !blackInGrace) {
+        v.push({
+          rule: 'playing-seat-live-or-grace',
+          detail: `room ${r.id} black seat socket not OPEN and black not in grace`,
+        });
+      }
+      // 10. A playing game has its clocks initialized.
+      if (!r.hasClock) {
+        v.push({
+          rule: 'playing-room-has-clock',
+          detail: `room ${r.id} is 'playing' but clockMsByColor is unset`,
+        });
+      }
+    }
+
+    // 11. Anyone in the grace window must actually be one of the two players.
+    for (const g of r.graceUids) {
+      if (g !== r.redUid && g !== r.blackUid) {
+        v.push({
+          rule: 'grace-uids-are-players',
+          detail: `room ${r.id} has grace uid ${g} that is neither red nor black`,
+        });
+      }
+    }
+
+    // 12. The recorded move count must match the actual move list length.
+    if (r.moveCount !== r.movesLen) {
+      v.push({
+        rule: 'move-count-consistent',
+        detail: `room ${r.id} moveCount=${r.moveCount} but movesUci.length=${r.movesLen}`,
+      });
+    }
   }
 
   // 7. The two internal socket maps must agree.

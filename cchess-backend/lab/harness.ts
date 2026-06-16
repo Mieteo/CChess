@@ -21,6 +21,9 @@ export interface LabTiming {
   waitingRoomTtlMs?: number;
   heartbeatIntervalMs?: number;
   livenessTimeoutMs?: number;
+  /// Lowest per-side clock the server will accept (ms). Lowered far below the
+  /// 60s production floor so timeout flows finish in ~1s.
+  minClockMs?: number;
 }
 
 const DEFAULTS: Required<LabTiming> = {
@@ -28,6 +31,7 @@ const DEFAULTS: Required<LabTiming> = {
   waitingRoomTtlMs: 1000,
   heartbeatIntervalMs: 500,
   livenessTimeoutMs: 1500,
+  minClockMs: 200,
 };
 
 export async function startLabServer(timing: LabTiming = {}): Promise<LabServer> {
@@ -37,6 +41,7 @@ export async function startLabServer(timing: LabTiming = {}): Promise<LabServer>
   process.env.CCHESS_WAITING_ROOM_TTL_MS = String(t.waitingRoomTtlMs);
   process.env.CCHESS_HEARTBEAT_INTERVAL_MS = String(t.heartbeatIntervalMs);
   process.env.CCHESS_LIVENESS_TIMEOUT_MS = String(t.livenessTimeoutMs);
+  process.env.CCHESS_MIN_CLOCK_MS = String(t.minClockMs);
 
   const { createCChessServer } = await import('../src/server');
   const server = createCChessServer({

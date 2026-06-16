@@ -87,6 +87,11 @@ const ACTIVE_ROOM_LIST_LIMIT = 30;
 const WAITING_ROOM_TTL_MS =
   Number(process.env.CCHESS_WAITING_ROOM_TTL_MS ?? '') || 60_000;
 
+// Minimum per-side clock a lobby may request (ms). 60s in production; the test
+// lab lowers it so timeout flows can be exercised in ~1s instead of a minute.
+const MIN_CLOCK_MS = Number(process.env.CCHESS_MIN_CLOCK_MS ?? '') || 60_000;
+const MAX_CLOCK_MS = 3_600_000;
+
 // A6 share link: room ids are 6 chars from an unambiguous alphabet.
 const ROOM_ID_REGEX = /^[A-Z0-9]{6}$/;
 
@@ -362,7 +367,10 @@ export function createCChessServer(options: CChessServerOptions = {}): CChessSer
   /// End the game cleanly: stop ticker, mark room finished, persist + ELO,
   /// then broadcast game-ended (with ELO deltas included when available).
   function finishGame(room: Room, result: GameResult, reason: EndReason): void {
-    endMatch(room, result, reason);
+    // endMatch is the single source of truth for the playing→finished
+    // transition. If it returns false the game was ALREADY finished (a second
+    // end-condition raced in) — bail so we don't persist/ELO/broadcast twice.
+    if (!endMatch(room, result, reason)) return;
 
     // Run persistence + ELO update, then broadcast. Even if persistence fails,
     // we still broadcast (game IS ended) — just without ELO numbers.
@@ -547,7 +555,7 @@ export function createCChessServer(options: CChessServerOptions = {}): CChessSer
         }
         const rawClock = (msg as { clockMs?: number }).clockMs;
         const clockMs =
-          typeof rawClock === 'number' && rawClock >= 60_000 && rawClock <= 3_600_000
+          typeof rawClock === 'number' && rawClock >= MIN_CLOCK_MS && rawClock <= MAX_CLOCK_MS
             ? rawClock
             : undefined;
         // Fetch current ELO from Firestore so bucket matchmaking can pair fairly
@@ -559,6 +567,19 @@ export function createCChessServer(options: CChessServerOptions = {}): CChessSer
           if (typeof e === 'number') elo = e;
         } catch (e) {
           console.warn(`[matchmaking] failed to fetch ELO for ${uid}, using default 1000:`, e);
+        }
+        // The ELO fetch above is async — the socket may have disconnected (or
+        // joined a room) DURING that await. The close handler's mmDequeue would
+        // then have run BEFORE this enqueue, leaving a dead socket stuck in the
+        // queue forever (and liable to be "paired" into a ghost game). Re-check
+        // liveness before enqueuing. This window is wider against real Firestore.
+        if (!sessions.has(socket) || socket.readyState !== WebSocket.OPEN) {
+          mmDequeue(socket);
+          return;
+        }
+        if (roomOf(socket)) {
+          send(socket, { type: 'error', code: 'already-in-room' });
+          return;
         }
         const size = mmEnqueue(socket, uid, elo, clockMs);
         send(socket, { type: 'matching', queueSize: size, elo });
@@ -591,7 +612,7 @@ export function createCChessServer(options: CChessServerOptions = {}): CChessSer
         // Step A5: optional initial clock from lobby (clamp to sane range)
         const rawClock = (msg as { clockMs?: number }).clockMs;
         const clockMs =
-          typeof rawClock === 'number' && rawClock >= 60_000 && rawClock <= 3_600_000
+          typeof rawClock === 'number' && rawClock >= MIN_CLOCK_MS && rawClock <= MAX_CLOCK_MS
             ? rawClock
             : undefined;
         const room = createRoom(socket, { initialClockMs: clockMs });
@@ -653,20 +674,25 @@ export function createCChessServer(options: CChessServerOptions = {}): CChessSer
           send(socket, { type: 'error', code: 'game-not-active' });
           return;
         }
-        if (!uid || !room.disconnectGrace?.has(uid)) {
+        // Eligible only if this uid owns a SEAT currently in grace. (Grace is
+        // keyed by seat now, so check the entry uids, not the map key.)
+        const graceEntries = room.disconnectGrace
+          ? [...room.disconnectGrace.values()]
+          : [];
+        if (!uid || !graceEntries.some((e) => e.uid === uid)) {
           send(socket, { type: 'error', code: 'not-disconnected-player' });
           return;
         }
-        // Swap socket into room (replaces dead socket reference)
-        attachReconnectingSocket(socket, room, uid);
-        // Cancel this player's grace timer. The OTHER player may still be in
-        // grace (double-disconnect) — leave their entry untouched.
-        clearDisconnectGrace(room, uid);
-        const peerGraceEntry = [...(room.disconnectGrace ?? new Map())][0] as
-          | [string, { deadline: number }]
-          | undefined;
-
-        const yourColor = uid === room.redUid ? 'red' : 'black';
+        // Swap socket into room (replaces dead socket reference). The returned
+        // seat is authoritative — it handles the same-uid case where redUid ===
+        // blackUid and the seat can't be inferred from uid alone.
+        const yourColor = attachReconnectingSocket(socket, room, uid);
+        // Cancel THIS seat's grace timer. The other seat may still be in grace
+        // (double-disconnect) — leave its entry untouched.
+        clearDisconnectGrace(room, yourColor);
+        const peerEntry = room.disconnectGrace
+          ? [...room.disconnectGrace.values()][0]
+          : undefined;
         send(socket, {
           type: 'reconnected',
           roomId: room.id,
@@ -680,10 +706,10 @@ export function createCChessServer(options: CChessServerOptions = {}): CChessSer
           startedAt: room.startedAt,
           // Double-disconnect: tell the reconnecting client when the peer is
           // ALSO in grace so it can show the countdown banner right away.
-          peerInGrace: peerGraceEntry
+          peerInGrace: peerEntry
             ? {
-                uid: peerGraceEntry[0],
-                remainingMs: Math.max(0, peerGraceEntry[1].deadline - Date.now()),
+                uid: peerEntry.uid,
+                remainingMs: Math.max(0, peerEntry.deadline - Date.now()),
               }
             : null,
         });
@@ -1014,26 +1040,27 @@ export function createCChessServer(options: CChessServerOptions = {}): CChessSer
       if (beforeRoom && wasPlaying && uid && !wasSpectator) {
         const color = colorOfSocket(beforeRoom, socket);
         if (color) {
-          // Per-uid grace entries so a double-disconnect (both players drop)
-          // keeps BOTH forfeit timers alive — the second drop must not
-          // overwrite the first player's pending reconnect window.
+          // Per-SEAT grace entries (keyed by color). A double-disconnect keeps
+          // BOTH forfeit timers alive, and — unlike the old per-uid keying — a
+          // same-uid game (one account on both seats) still tracks each seat
+          // independently, so reconnecting one seat doesn't wipe the other's.
           const grace = (beforeRoom.disconnectGrace ??= new Map());
-          const prior = grace.get(uid);
+          const prior = grace.get(color);
           if (prior) clearTimeout(prior.timer);
           const timer = setTimeout(() => {
-            const stillDisconnected = beforeRoom.disconnectGrace?.has(uid) ?? false;
+            const stillDisconnected = beforeRoom.disconnectGrace?.has(color) ?? false;
             const stillPlaying = beforeRoom.status === 'playing';
             console.log(
-              `[match] ${beforeRoom.id} grace timer fired for ${uid}: stillDisconnected=${stillDisconnected} stillPlaying=${stillPlaying} status=${beforeRoom.status}`,
+              `[match] ${beforeRoom.id} grace timer fired for ${color} (${uid}): stillDisconnected=${stillDisconnected} stillPlaying=${stillPlaying} status=${beforeRoom.status}`,
             );
-            beforeRoom.disconnectGrace?.delete(uid);
+            beforeRoom.disconnectGrace?.delete(color);
             if (stillDisconnected && stillPlaying) {
               const winner: GameResult =
                 opponentOf(color) === 'red' ? 'red-win' : 'black-win';
               finishGame(beforeRoom, winner, 'disconnect');
             }
           }, RECONNECT_GRACE_MS);
-          grace.set(uid, { timer, deadline: Date.now() + RECONNECT_GRACE_MS });
+          grace.set(color, { timer, deadline: Date.now() + RECONNECT_GRACE_MS, uid });
           broadcastToRoom(beforeRoom, socket, {
             type: 'peer-disconnected',
             uid,

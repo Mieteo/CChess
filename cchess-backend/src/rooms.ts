@@ -53,10 +53,17 @@ export interface Room {
   // server.ts/match.ts cast to XiangqiGame.
   engine?: unknown;
 
-  // Step 8 reconnect grace period. Keyed by uid so BOTH players can be in
-  // grace at once (double-disconnect hardening); each entry owns its forfeit
-  // timer plus the absolute deadline (for client-facing countdowns).
-  disconnectGrace?: Map<string, { timer: NodeJS.Timeout; deadline: number }>;
+  // Step 8 reconnect grace period. Keyed by SEAT (color), not uid: a seat is
+  // identified by socket identity (colorOfSocket), so even a same-uid game
+  // (one Firebase account on both seats — e.g. a user playing themselves on
+  // two tabs) gets an independent grace entry + forfeit timer per seat. Keying
+  // by uid used to collapse both seats into one entry, so reconnecting one seat
+  // wiped the other seat's grace and left it stuck. `uid` is carried for
+  // client-facing peer-disconnect countdowns.
+  disconnectGrace?: Map<
+    Color,
+    { timer: NodeJS.Timeout; deadline: number; uid: string }
+  >;
 
   // Sprint 12 A5: short in-memory chat history for reconnect/session UI.
   chatMessages?: ChatMessage[];
@@ -115,25 +122,37 @@ export function attachReconnectingSocket(
   socket: WebSocket,
   room: Room,
   uid: string,
-): void {
+): Color {
+  // Decide which seat this socket reclaims. Normally the uid uniquely
+  // identifies the seat. For SAME-UID solo testing (red & black share one
+  // Firebase uid) the seat is ambiguous — fill whichever seat's socket is
+  // currently gone (the one that actually dropped), so a black reconnect
+  // doesn't get wrongly slotted into the still-live red seat. The chosen seat
+  // is returned so the caller reports a consistent `yourColor`.
+  const sameUid = uid === room.redUid && uid === room.blackUid;
+  let seat: Color;
+  if (sameUid) {
+    const redGone =
+      !room.redSocket || room.redSocket.readyState !== WebSocket.OPEN;
+    seat = redGone ? 'red' : 'black';
+  } else {
+    seat = uid === room.blackUid ? 'black' : 'red';
+  }
+
   // Evict any prior socket holding this seat first, so room.members never
   // accumulates dead sockets across reconnects. A stale socket left behind
   // would still receive broadcasts (e.g. opponent-move would go to a dead
   // socket instead of the live one) and inflate members.size.
-  const prior =
-    uid === room.redUid
-      ? room.redSocket
-      : uid === room.blackUid
-        ? room.blackSocket
-        : undefined;
+  const prior = seat === 'red' ? room.redSocket : room.blackSocket;
   if (prior && prior !== socket) {
     room.members.delete(prior);
     socketToRoom.delete(prior);
   }
   room.members.add(socket);
   socketToRoom.set(socket, room.id);
-  if (uid === room.redUid) room.redSocket = socket;
-  else if (uid === room.blackUid) room.blackSocket = socket;
+  if (seat === 'red') room.redSocket = socket;
+  else room.blackSocket = socket;
+  return seat;
 }
 
 export type SpectateResult =
@@ -172,12 +191,21 @@ export function createRoom(socket: WebSocket, options?: { initialClockMs?: numbe
 
 export type JoinResult =
   | { ok: true; room: Room }
-  | { ok: false; code: 'room-not-found' | 'room-full' | 'already-in-room' };
+  | {
+      ok: false;
+      code: 'room-not-found' | 'room-full' | 'already-in-room' | 'room-in-progress';
+    };
 
 export function joinRoom(socket: WebSocket, roomId: string): JoinResult {
   if (socketToRoom.has(socket)) return { ok: false, code: 'already-in-room' };
   const room = rooms.get(roomId);
   if (!room) return { ok: false, code: 'room-not-found' };
+  // Only a room still WAITING for its second player is joinable. Joining a
+  // 'playing' room (e.g. one with a player mid-reconnect, members.size===1) used
+  // to slip past the size check and re-trigger startGameForRoom — resetting the
+  // in-progress game and hijacking the disconnected player's seat. A 'finished'
+  // room isn't joinable either.
+  if (room.status !== 'waiting') return { ok: false, code: 'room-in-progress' };
   if (room.members.size >= MAX_MEMBERS) return { ok: false, code: 'room-full' };
   room.members.add(socket);
   socketToRoom.set(socket, room.id);
@@ -229,16 +257,16 @@ export function leaveRoom(
   return room;
 }
 
-/// Cancel pending grace timer(s). With a uid, clears only that player's
-/// entry; without, clears every entry (game over / rematch reset).
-export function clearDisconnectGrace(room: Room, uid?: string): void {
+/// Cancel pending grace timer(s). With a color, clears only that seat's entry;
+/// without, clears every entry (game over / rematch reset).
+export function clearDisconnectGrace(room: Room, color?: Color): void {
   const grace = room.disconnectGrace;
   if (!grace) return;
-  if (uid !== undefined) {
-    const entry = grace.get(uid);
+  if (color !== undefined) {
+    const entry = grace.get(color);
     if (entry) {
       clearTimeout(entry.timer);
-      grace.delete(uid);
+      grace.delete(color);
     }
     return;
   }
@@ -288,15 +316,27 @@ export interface RoomDebug {
   spectators: number;
   redUid?: string;
   blackUid?: string;
-  /// uids currently inside the reconnect grace window.
+  /// uids currently inside the reconnect grace window (for display).
   graceUids: string[];
+  /// seats (colors) currently inside the grace window — the precise per-seat
+  /// view; distinct from graceUids when both seats share one uid.
+  graceColors: Color[];
   moveCount: number;
+  /// movesUci.length — should equal moveCount for a consistent game.
+  movesLen: number;
+  /// Seat-socket liveness (null = seat socket unset). A 'playing' seat whose
+  /// socket is not open should have its uid in graceUids.
+  redSocketOpen: boolean | null;
+  blackSocketOpen: boolean | null;
   hasClockTimer: boolean;
   hasWaitingTimer: boolean;
+  hasClock: boolean;
   startedAt?: number;
 }
 
 export function debugRooms(): RoomDebug[] {
+  const openOf = (s: WebSocket | undefined): boolean | null =>
+    s === undefined ? null : s.readyState === WebSocket.OPEN;
   return [...rooms.values()].map((room) => ({
     id: room.id,
     status: room.status,
@@ -306,10 +346,17 @@ export function debugRooms(): RoomDebug[] {
     spectators: room.spectators.size,
     redUid: room.redUid,
     blackUid: room.blackUid,
-    graceUids: room.disconnectGrace ? [...room.disconnectGrace.keys()] : [],
-    moveCount: room.movesUci?.length ?? room.moveCount,
+    graceUids: room.disconnectGrace
+      ? [...room.disconnectGrace.values()].map((e) => e.uid)
+      : [],
+    graceColors: room.disconnectGrace ? [...room.disconnectGrace.keys()] : [],
+    moveCount: room.moveCount,
+    movesLen: room.movesUci?.length ?? 0,
+    redSocketOpen: openOf(room.redSocket),
+    blackSocketOpen: openOf(room.blackSocket),
     hasClockTimer: room.clockTimer !== undefined,
     hasWaitingTimer: room.waitingTimer !== undefined,
+    hasClock: room.clockMsByColor !== undefined,
     startedAt: room.startedAt,
   }));
 }

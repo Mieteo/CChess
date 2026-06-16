@@ -208,8 +208,13 @@ export function isTimedOut(room: Room): boolean {
   return elapsed >= room.clockMsByColor[room.currentTurn];
 }
 
-export function endMatch(room: Room, result: GameResult, reason: EndReason): void {
-  if (room.status === 'finished') return;
+/// Transition the room to 'finished'. Returns true if THIS call performed the
+/// transition, false if the room was already finished. Callers (finishGame)
+/// rely on the return to avoid persisting / broadcasting a result twice when
+/// two end-conditions race (e.g. resign + timeout), which would double-apply
+/// ELO and emit two game-ended events.
+export function endMatch(room: Room, result: GameResult, reason: EndReason): boolean {
+  if (room.status === 'finished') return false;
   room.status = 'finished';
   room.result = result;
   room.endReason = reason;
@@ -223,6 +228,7 @@ export function endMatch(room: Room, result: GameResult, reason: EndReason): voi
   // left to tear the room down — drop it here so it doesn't leak.
   clearDisconnectGrace(room);
   deleteRoomIfEmpty(room);
+  return true;
 }
 
 /// Snapshot of clock + turn for sending to clients.
