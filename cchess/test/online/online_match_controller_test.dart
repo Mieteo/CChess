@@ -15,6 +15,11 @@ class FakeGameSocketService implements GameSocketService {
       StreamController<Map<String, dynamic>>.broadcast();
   final List<String> sentTypes = <String>[];
 
+  /// Captured clock budget from the last create-room / find-match so B3 can
+  /// assert the lobby's chosen clock actually reaches the socket.
+  int? lastCreateRoomClockMs;
+  int? lastFindMatchClockMs;
+
   @override
   void Function()? onConnectionLost;
 
@@ -35,9 +40,16 @@ class FakeGameSocketService implements GameSocketService {
   bool get isInRoom => false;
 
   @override
-  void createRoom({int? clockMs}) => sentTypes.add('create-room');
+  void createRoom({int? clockMs}) {
+    lastCreateRoomClockMs = clockMs;
+    sentTypes.add('create-room');
+  }
+
   @override
-  void findMatch({int? clockMs}) => sentTypes.add('find-match');
+  void findMatch({int? clockMs}) {
+    lastFindMatchClockMs = clockMs;
+    sentTypes.add('find-match');
+  }
   @override
   void cancelMatching() => sentTypes.add('cancel-matching');
   @override
@@ -793,6 +805,105 @@ void main() {
       expect(issued, isTrue);
       expect(socket.sentTypes, contains('reconnect-room'));
       expect(ctrl.state.phase, OnlineMatchPhase.reconnecting);
+    });
+  });
+
+  group('B3 — matchmaking + lobby (M1/M3/M4)', () {
+    test('M1 — findMatch sends find-match with the chosen clock', () async {
+      // setUp leaves us at phase=authed.
+      ctrl.findMatch(clockMs: 300000);
+
+      expect(socket.sentTypes, contains('find-match'));
+      expect(socket.lastFindMatchClockMs, 300000);
+    });
+
+    test('matching event moves us into the queue phase', () async {
+      socket.emit({'type': 'matching'});
+      await pump();
+
+      expect(ctrl.state.phase, OnlineMatchPhase.matching);
+    });
+
+    test('match-found seats us with the room id and opponent', () async {
+      socket.emit({
+        'type': 'match-found',
+        'roomId': 'ROOM07',
+        'opponent': 'rival-uid',
+      });
+      await pump();
+
+      expect(ctrl.state.phase, OnlineMatchPhase.waitingForPeer);
+      expect(ctrl.state.roomId, 'ROOM07');
+      expect(ctrl.state.opponentUid, 'rival-uid');
+    });
+
+    test('M3 — cancelMatching sends cancel-matching; the ack returns to lobby',
+        () async {
+      socket.emit({'type': 'matching'});
+      await pump();
+
+      ctrl.cancelMatching();
+      expect(socket.sentTypes, contains('cancel-matching'));
+
+      socket.emit({'type': 'matching-canceled'});
+      await pump();
+      expect(ctrl.state.phase, OnlineMatchPhase.authed);
+    });
+
+    test('M4 — createRoom forwards the chosen clock; room-created waits', () async {
+      ctrl.createRoom(clockMs: 600000);
+
+      expect(socket.sentTypes, contains('create-room'));
+      expect(socket.lastCreateRoomClockMs, 600000);
+
+      socket.emit({'type': 'room-created', 'roomId': 'ROOM08'});
+      await pump();
+      expect(ctrl.state.phase, OnlineMatchPhase.waitingForPeer);
+      expect(ctrl.state.roomId, 'ROOM08');
+    });
+
+    test('requestActiveRooms sends the query; active-rooms populates state',
+        () async {
+      ctrl.requestActiveRooms();
+      expect(socket.sentTypes, contains('list-active-rooms'));
+
+      socket.emit({
+        'type': 'active-rooms',
+        'rooms': [
+          {
+            'roomId': 'ROOM09',
+            'redUid': 'r',
+            'blackUid': 'b',
+            'moveCount': 4,
+            'spectatorCount': 2,
+            'currentTurn': 'black',
+            'clock': {'red': 590000, 'black': 600000},
+          },
+        ],
+      });
+      await pump();
+
+      expect(ctrl.state.activeRooms, hasLength(1));
+      final room = ctrl.state.activeRooms.single;
+      expect(room.roomId, 'ROOM09');
+      expect(room.moveCount, 4);
+      expect(room.spectatorCount, 2);
+      expect(room.currentTurn, PieceColor.black);
+    });
+
+    test('lobby actions are gated to the authed phase', () async {
+      // Drop out of the lobby into an active game…
+      await driveToPlaying();
+      expect(ctrl.state.phase, OnlineMatchPhase.playing);
+      socket.sentTypes.clear();
+
+      // …now create-room / find-match must NOT be sent, and surface an error.
+      ctrl.createRoom(clockMs: 600000);
+      ctrl.findMatch(clockMs: 600000);
+
+      expect(socket.sentTypes, isNot(contains('create-room')));
+      expect(socket.sentTypes, isNot(contains('find-match')));
+      expect(ctrl.state.errorMessage, isNotNull);
     });
   });
 }

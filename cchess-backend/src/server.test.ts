@@ -483,3 +483,76 @@ test('M4: the creator\'s clock choice initialises both sides equally', async () 
     await server.close();
   }
 });
+
+// ── A1: spectator chat + chat history in snapshots (C5/C6) ────────────────
+
+test('A1/C5: a spectator gets chat history on join and can chat to players', async () => {
+  const { server, url } = await startTestServer();
+  try {
+    const { red, black, roomId } = await startGame(url, 'ivy', 'jack');
+
+    // A player chats BEFORE anyone is watching → it lands in room history.
+    red.send({ type: 'chat-message', text: 'gg hf' });
+    await red.waitType('chat-message');
+    await black.waitType('chat-message');
+
+    // A watcher joins and is handed the existing history in spectate-started.
+    const watcher = await connectAuthed(url, 'mona');
+    watcher.send({ type: 'spectate-room', roomId });
+    const started = await watcher.waitType('spectate-started');
+    const history = started.chat as Array<{ from: string; text: string }>;
+    assert.equal(history.length, 1);
+    assert.equal(history[0].from, 'ivy');
+    assert.equal(history[0].text, 'gg hf');
+
+    // The watcher chats → BOTH players AND the watcher receive it.
+    watcher.send({ type: 'chat-message', text: 'nice game' });
+    for (const c of [red, black, watcher]) {
+      const m = await c.waitType('chat-message');
+      assert.equal(m.text, 'nice game');
+      assert.equal(m.from, 'mona', 'chat is attributed to the spectator');
+    }
+
+    red.send({ type: 'resign' });
+    await red.waitType('game-ended');
+    await Promise.all([red.close(), black.close(), watcher.close()]);
+  } finally {
+    await server.close();
+  }
+});
+
+test('A1/C6: the reconnect snapshot restores chat history in order', async () => {
+  const { server, url } = await startTestServer();
+  try {
+    const { red, black, roomId } = await startGame(url, 'kim', 'leo');
+
+    // Two messages from distinct uids (distinct uids dodge the rate limit).
+    red.send({ type: 'chat-message', text: 'hello' });
+    await red.waitType('chat-message');
+    await black.waitType('chat-message');
+    black.send({ type: 'chat-message', text: 'hi back' });
+    await black.waitType('chat-message');
+    await red.waitType('chat-message');
+
+    // Red drops and reconnects within grace → snapshot carries the history.
+    await red.close();
+    await black.waitType('peer-disconnected');
+    const red2 = await connectAuthed(url, 'kim');
+    red2.send({ type: 'reconnect-room', roomId });
+    const snap = await red2.waitType('reconnected');
+    const chat = snap.chat as Array<{ from: string; text: string }>;
+    assert.deepEqual(
+      chat.map((c) => [c.from, c.text]),
+      [
+        ['kim', 'hello'],
+        ['leo', 'hi back'],
+      ],
+    );
+
+    red2.send({ type: 'resign' });
+    await red2.waitType('game-ended');
+    await Promise.all([red2.close(), black.close()]);
+  } finally {
+    await server.close();
+  }
+});

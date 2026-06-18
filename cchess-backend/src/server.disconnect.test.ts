@@ -243,3 +243,59 @@ test('active-rooms hides a room once both players have dropped', async () => {
     await server.close();
   }
 });
+
+// ── D3: a single player drops and never returns → grace expiry forfeits ───
+// D5 covers BOTH players dropping; this is the everyday case of one player
+// losing the network and not coming back inside the (here shortened) grace.
+
+test('D3: a lone disconnect forfeits on grace expiry — opponent wins, room freed', async () => {
+  const { server, url } = await startTestServer();
+  try {
+    const { red, black } = await startGame(url, 'tina', 'umar');
+
+    // Red drops; black is told, then nobody reconnects.
+    await red.close();
+    const dc = await black.waitType('peer-disconnected');
+    assert.equal(dc.uid, 'tina');
+    assert.ok((dc.graceMs as number) > 0);
+
+    // The 1500ms grace expires → black wins by disconnect (red forfeits).
+    const ended = await black.waitType('game-ended', 5000);
+    assert.equal(ended.result, 'black-win', 'the player who dropped forfeits');
+    assert.equal(ended.reason, 'disconnect');
+
+    // The finished room is no longer advertised as a live game.
+    assert.equal(await activeRoomCount(url), 0);
+
+    await black.close();
+  } finally {
+    await server.close();
+  }
+});
+
+test('D3: reconnecting after the grace window closed is rejected (seat gone)', async () => {
+  const { server, url } = await startTestServer();
+  try {
+    const { red, black, roomId } = await startGame(url, 'vera', 'wes');
+
+    await red.close();
+    await black.waitType('peer-disconnected');
+    await black.waitType('game-ended', 5000); // grace expired → red forfeited
+
+    // Red comes back too late: the seat is gone, so the resume is refused with
+    // a reconnect-reject code (the client clears its saved room → clean lobby).
+    const red2 = await connectAuthed(url, 'vera');
+    red2.send({ type: 'reconnect-room', roomId });
+    const err = await red2.waitType('error');
+    assert.ok(
+      ['game-not-active', 'room-not-found', 'not-disconnected-player'].includes(
+        err.code as string,
+      ),
+      `expected a reconnect-reject code, got ${err.code}`,
+    );
+
+    await Promise.all([red2.close(), black.close()]);
+  } finally {
+    await server.close();
+  }
+});
