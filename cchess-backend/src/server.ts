@@ -92,6 +92,15 @@ const WAITING_ROOM_TTL_MS =
 const MIN_CLOCK_MS = Number(process.env.CCHESS_MIN_CLOCK_MS ?? '') || 60_000;
 const MAX_CLOCK_MS = 3_600_000;
 
+// Nhóm 5 abuse control. Messages are tiny JSON (a move is 4 chars, chat caps at
+// 120) so a 16 KB frame cap is generous; anything larger is rejected by ws.
+const MAX_PAYLOAD_BYTES = Number(process.env.CCHESS_MAX_PAYLOAD ?? '') || 16_384;
+// Inbound message token bucket: burst of RL_CAPACITY, sustained RL_REFILL/sec.
+// A socket that floods past RL_MAX_DROPS dropped messages is terminated.
+const RL_CAPACITY = Number(process.env.CCHESS_RL_CAPACITY ?? '') || 50;
+const RL_REFILL_PER_SEC = Number(process.env.CCHESS_RL_REFILL ?? '') || 25;
+const RL_MAX_DROPS = 200;
+
 // A6 share link: room ids are 6 chars from an unambiguous alphabet.
 const ROOM_ID_REGEX = /^[A-Z0-9]{6}$/;
 
@@ -205,6 +214,36 @@ interface HeartbeatSocket extends WebSocket {
   // D1 fix: timestamp of the last inbound message (any type, incl. ping). The
   // heartbeat sweep terminates sockets silent longer than LIVENESS_TIMEOUT_MS.
   lastSeenAt?: number;
+  // Nhóm 5 abuse control: per-socket token bucket for inbound messages.
+  rlTokens?: number;
+  rlLast?: number;
+  rlDrops?: number;
+}
+
+/// Per-socket inbound rate limit (token bucket). Protects the server from a
+/// buggy/hostile client flooding move/find/create/etc. Normal play (a few
+/// messages plus a ping every ~5s) never comes close. Returns false when the
+/// message should be dropped.
+function rateLimitAllows(
+  sock: HeartbeatSocket,
+  capacity: number,
+  refillPerSec: number,
+): boolean {
+  const now = Date.now();
+  const last = sock.rlLast ?? now;
+  const refilled = Math.min(
+    capacity,
+    (sock.rlTokens ?? capacity) + ((now - last) / 1000) * refillPerSec,
+  );
+  sock.rlLast = now;
+  if (refilled < 1) {
+    sock.rlTokens = refilled;
+    sock.rlDrops = (sock.rlDrops ?? 0) + 1;
+    return false;
+  }
+  sock.rlTokens = refilled - 1;
+  sock.rlDrops = 0;
+  return true;
 }
 
 export interface CChessServer {
@@ -222,6 +261,22 @@ export interface CChessServerOptions {
   /// Persist a finished game + update ELO. Defaults to the real Firestore
   /// transaction. Tests inject a no-op so no Firebase is required.
   persist?: (room: Room) => Promise<PersistResult | null>;
+  /// Per-instance timing / limits. Each field defaults to its env-backed
+  /// module constant, so production (no config) is unchanged. The test lab
+  /// passes this PER SCENARIO — unlike env vars (read once at import), an
+  /// option is honoured on every createCChessServer() call, so scenarios in one
+  /// runner process can't silently inherit the first scenario's timing.
+  config?: {
+    reconnectGraceMs?: number;
+    waitingRoomTtlMs?: number;
+    heartbeatIntervalMs?: number;
+    livenessTimeoutMs?: number;
+    minClockMs?: number;
+    maxClockMs?: number;
+    maxPayloadBytes?: number;
+    rlCapacity?: number;
+    rlRefillPerSec?: number;
+  };
 }
 
 /// Build a fully-wired CChess WebSocket server WITHOUT starting to listen.
@@ -232,6 +287,20 @@ export interface CChessServerOptions {
 export function createCChessServer(options: CChessServerOptions = {}): CChessServer {
   const authenticate = options.authenticate ?? verifyIdToken;
   const persist = options.persist ?? persistGame;
+
+  // Resolve per-instance config; each field defaults to its env-backed const.
+  const c = options.config ?? {};
+  const cfg = {
+    reconnectGraceMs: c.reconnectGraceMs ?? RECONNECT_GRACE_MS,
+    waitingRoomTtlMs: c.waitingRoomTtlMs ?? WAITING_ROOM_TTL_MS,
+    heartbeatIntervalMs: c.heartbeatIntervalMs ?? HEARTBEAT_INTERVAL_MS,
+    livenessTimeoutMs: c.livenessTimeoutMs ?? LIVENESS_TIMEOUT_MS,
+    minClockMs: c.minClockMs ?? MIN_CLOCK_MS,
+    maxClockMs: c.maxClockMs ?? MAX_CLOCK_MS,
+    maxPayloadBytes: c.maxPayloadBytes ?? MAX_PAYLOAD_BYTES,
+    rlCapacity: c.rlCapacity ?? RL_CAPACITY,
+    rlRefillPerSec: c.rlRefillPerSec ?? RL_REFILL_PER_SEC,
+  };
 
   // socket -> uid (only after successful auth)
   const sessions = new Map<WebSocket, string>();
@@ -265,7 +334,7 @@ export function createCChessServer(options: CChessServerOptions = {}): CChessSer
     res.end();
   });
 
-  const wss = new WebSocketServer({ server: httpServer });
+  const wss = new WebSocketServer({ server: httpServer, maxPayload: cfg.maxPayloadBytes });
 
   /// Step 6 + matchmaking shared: start the game once a room has 2 players.
   /// Sets status='playing', initializes engine + clocks, broadcasts per-socket
@@ -425,7 +494,7 @@ export function createCChessServer(options: CChessServerOptions = {}): CChessSer
       // control-frame heartbeat below was masked for ~3 min by TCP timeouts.
       if (
         sock.lastSeenAt !== undefined &&
-        now - sock.lastSeenAt > LIVENESS_TIMEOUT_MS
+        now - sock.lastSeenAt > cfg.livenessTimeoutMs
       ) {
         console.log('[ws] liveness timeout → terminate');
         sock.terminate(); // fires 'close' event → grace/finishGame path
@@ -443,7 +512,7 @@ export function createCChessServer(options: CChessServerOptions = {}): CChessSer
         // ignore — terminate will be called next tick
       }
     });
-  }, HEARTBEAT_INTERVAL_MS);
+  }, cfg.heartbeatIntervalMs);
 
   // Step A3 polish: re-check matchmaking queue every 5s so waiting players
   // get paired when their tolerance grows (no new enqueue needed).
@@ -491,6 +560,20 @@ export function createCChessServer(options: CChessServerOptions = {}): CChessSer
         return;
       }
 
+      // Nhóm 5: per-socket flood control. Drop the message when the bucket is
+      // empty; report once per burst (no per-message amplification); terminate
+      // a socket that keeps hammering far past the limit.
+      const hb = socket as HeartbeatSocket;
+      if (!rateLimitAllows(hb, cfg.rlCapacity, cfg.rlRefillPerSec)) {
+        if ((hb.rlDrops ?? 0) > RL_MAX_DROPS) {
+          console.warn('[ws] rate-limit flood → terminate');
+          socket.terminate();
+          return;
+        }
+        if (hb.rlDrops === 1) send(socket, { type: 'error', code: 'rate-limited' });
+        return;
+      }
+
       let msg: {
         type?: string;
         token?: string;
@@ -515,6 +598,13 @@ export function createCChessServer(options: CChessServerOptions = {}): CChessSer
 
       // ── Auth handshake ────────────────────────────────────────────────
       if (msg.type === 'auth') {
+        // A socket authenticates ONCE. Re-auth (especially changing uid mid-
+        // session) would desync the seat/uid bookkeeping for an in-progress
+        // game, so refuse it outright.
+        if (sessions.has(socket)) {
+          send(socket, { type: 'error', code: 'already-authed' });
+          return;
+        }
         if (typeof msg.token !== 'string' || msg.token.length === 0) {
           send(socket, { type: 'error', code: 'missing-token' });
           return;
@@ -555,7 +645,7 @@ export function createCChessServer(options: CChessServerOptions = {}): CChessSer
         }
         const rawClock = (msg as { clockMs?: number }).clockMs;
         const clockMs =
-          typeof rawClock === 'number' && rawClock >= MIN_CLOCK_MS && rawClock <= MAX_CLOCK_MS
+          typeof rawClock === 'number' && rawClock >= cfg.minClockMs && rawClock <= cfg.maxClockMs
             ? rawClock
             : undefined;
         // Fetch current ELO from Firestore so bucket matchmaking can pair fairly
@@ -612,7 +702,7 @@ export function createCChessServer(options: CChessServerOptions = {}): CChessSer
         // Step A5: optional initial clock from lobby (clamp to sane range)
         const rawClock = (msg as { clockMs?: number }).clockMs;
         const clockMs =
-          typeof rawClock === 'number' && rawClock >= MIN_CLOCK_MS && rawClock <= MAX_CLOCK_MS
+          typeof rawClock === 'number' && rawClock >= cfg.minClockMs && rawClock <= cfg.maxClockMs
             ? rawClock
             : undefined;
         const room = createRoom(socket, { initialClockMs: clockMs });
@@ -621,18 +711,18 @@ export function createCChessServer(options: CChessServerOptions = {}): CChessSer
           room.waitingTimer = undefined;
           if (room.status !== 'waiting') return;
           console.log(
-            `[room] ${room.id} expired — no opponent joined within ${WAITING_ROOM_TTL_MS}ms`,
+            `[room] ${room.id} expired — no opponent joined within ${cfg.waitingRoomTtlMs}ms`,
           );
           for (const s of [...room.members]) {
             send(s, { type: 'room-expired', roomId: room.id });
             leaveRoom(s); // last leaver deletes the room
           }
-        }, WAITING_ROOM_TTL_MS);
+        }, cfg.waitingRoomTtlMs);
         send(socket, {
           type: 'room-created',
           roomId: room.id,
           initialClockMs: room.initialClockMs,
-          waitingTtlMs: WAITING_ROOM_TTL_MS,
+          waitingTtlMs: cfg.waitingRoomTtlMs,
         });
         console.log(
           `[room] ${room.id} created by ${uid} (clock=${clockMs ?? 'default'}ms)`,
@@ -1059,15 +1149,15 @@ export function createCChessServer(options: CChessServerOptions = {}): CChessSer
                 opponentOf(color) === 'red' ? 'red-win' : 'black-win';
               finishGame(beforeRoom, winner, 'disconnect');
             }
-          }, RECONNECT_GRACE_MS);
-          grace.set(color, { timer, deadline: Date.now() + RECONNECT_GRACE_MS, uid });
+          }, cfg.reconnectGraceMs);
+          grace.set(color, { timer, deadline: Date.now() + cfg.reconnectGraceMs, uid });
           broadcastToRoom(beforeRoom, socket, {
             type: 'peer-disconnected',
             uid,
-            graceMs: RECONNECT_GRACE_MS,
+            graceMs: cfg.reconnectGraceMs,
           });
           console.log(
-            `[match] ${beforeRoom.id} ${color} (${uid}) disconnected, grace ${RECONNECT_GRACE_MS}ms (inGrace=${grace.size})`,
+            `[match] ${beforeRoom.id} ${color} (${uid}) disconnected, grace ${cfg.reconnectGraceMs}ms (inGrace=${grace.size})`,
           );
         }
       }

@@ -460,6 +460,83 @@ export const scenarios: Scenario[] = [
       lab.assertHealthy('after rematch restart');
     },
   },
+
+  // ── Nhóm 5: abuse / DoS guards ───────────────────────────────────────────
+  {
+    name: 'message flooding is rate-limited',
+    why: 'A socket spamming messages past the token bucket gets rate-limited instead of driving unbounded server work.',
+    timing: { rlCapacity: 5, rlRefillPerSec: 2 },
+    async run(lab) {
+      const a = await lab.bot('flooder');
+      for (let i = 0; i < 20; i++) a.listActiveRooms(); // burst well past capacity
+      const err = await a.waitFor(
+        (m) => m.type === 'error' && m.code === 'rate-limited',
+      );
+      assert(err.code === 'rate-limited', 'flood should be rate-limited');
+      lab.assertHealthy('after flood');
+    },
+  },
+
+  {
+    name: 're-authentication is rejected',
+    why: 'A socket authenticates once; a second auth (e.g. trying to change uid mid-session) must be refused.',
+    async run(lab) {
+      const a = await lab.bot('once');
+      a.send({ type: 'auth', token: 'someone-else' });
+      const err = await a.waitFor(
+        (m) => m.type === 'error' && m.code === 'already-authed',
+      );
+      assert(err.code === 'already-authed', 'second auth refused');
+      lab.assertHealthy('after re-auth attempt');
+    },
+  },
+
+  // ── Locked behaviours (product decisions — keep current, guard them) ─────
+  {
+    name: 'spectators CAN chat (intended)',
+    why: 'Decision: spectator chat stays enabled; a watcher message reaches the players.',
+    async run(lab) {
+      const a = await lab.bot('host');
+      const b = await lab.bot('guest');
+      a.createRoom();
+      const created = await a.waitType('room-created');
+      const roomId = created.roomId as string;
+      b.joinRoom(roomId);
+      await a.waitType('game-start');
+      await b.waitType('game-start');
+
+      const c = await lab.bot('fan');
+      c.spectateRoom(roomId);
+      await c.waitType('spectate-started');
+      c.chat('đỉnh!');
+      const got = await a.waitFor(
+        (m) => m.type === 'chat-message' && m.from === 'fan',
+      );
+      assert(got.from === 'fan', 'spectator chat reaches a player');
+      lab.assertHealthy('after spectator chat');
+    },
+  },
+
+  {
+    name: 'clock keeps running while a player is in grace (intended)',
+    why: 'Decision: the clock is NOT frozen on disconnect — a player can still lose on time during the grace window.',
+    timing: { minClockMs: 200, reconnectGraceMs: 5000, livenessTimeoutMs: 60_000 },
+    async run(lab) {
+      const red = await lab.bot('rr');
+      const black = await lab.bot('bb');
+      red.createRoom(700); // red is on move; 700ms each
+      const created = await red.waitType('room-created');
+      black.joinRoom(created.roomId as string);
+      await red.waitType('game-start');
+      await black.waitType('game-start');
+
+      red.drop(); // red disconnects on its own move, well inside the 5s grace
+      const ended = await black.waitType('game-ended', 4000);
+      assert(ended.reason === 'timeout', `expected timeout, got ${ended.reason}`);
+      assert(ended.result === 'black-win', 'red loses on time despite being in grace');
+      lab.assertHealthy('after clock-in-grace timeout');
+    },
+  },
 ];
 
 // Re-export so the runner can show invariant rules in its report header.

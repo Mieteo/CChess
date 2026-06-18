@@ -66,6 +66,19 @@ npm run lab:smoke      # black-box test trên server thật (onrender)
 - **Double-finish:** kết thúc ván 2 lần → cộng ELO 2 lần (đã guard idempotent).
 - **Same-uid double-disconnect:** grace key theo uid gộp 2 ghế → reconnect 1 ghế xóa grace ghế kia (đã đổi sang key theo ghế).
 
+## Nhóm 5 — chống lạm dụng / DoS
+
+- **Rate-limit** mọi message theo token-bucket per-socket (`rate-limited`; flood quá mức → terminate).
+- **Re-auth bị chặn** (`already-authed`) — một socket auth đúng một lần.
+- **Giới hạn payload** 16 KB (ws `maxPayload`).
+- Hành vi sản phẩm đã chốt (khóa bằng scenario): spectator **được** chat; đồng hồ **vẫn chạy** khi đối thủ trong grace.
+
+## Lưu ý harness (config-threading)
+
+Timing/limits truyền qua `createCChessServer({ config })` **mỗi instance**, KHÔNG qua env.
+Env chỉ đọc một lần lúc import → bị module-cache đóng băng → các scenario sau sẽ
+âm thầm chạy sai config. `config` thì áp đúng cho từng lần gọi (mỗi scenario một server).
+
 ## Thêm kịch bản
 
 Thêm một entry vào mảng `scenarios` trong `scenarios.ts`. Mỗi bước dùng `Bot`

@@ -24,6 +24,11 @@ export interface LabTiming {
   /// Lowest per-side clock the server will accept (ms). Lowered far below the
   /// 60s production floor so timeout flows finish in ~1s.
   minClockMs?: number;
+  /// Inbound rate-limit token bucket. Defaults are effectively unlimited so
+  /// normal scenarios / the fuzzer aren't throttled; the flood scenario lowers
+  /// them to assert the limiter actually bites.
+  rlCapacity?: number;
+  rlRefillPerSec?: number;
 }
 
 const DEFAULTS: Required<LabTiming> = {
@@ -32,21 +37,31 @@ const DEFAULTS: Required<LabTiming> = {
   heartbeatIntervalMs: 500,
   livenessTimeoutMs: 1500,
   minClockMs: 200,
+  rlCapacity: 100_000,
+  rlRefillPerSec: 100_000,
 };
 
 export async function startLabServer(timing: LabTiming = {}): Promise<LabServer> {
   const t = { ...DEFAULTS, ...timing };
+  // Only NO_LISTEN must be set before import (it gates the production listen +
+  // Firebase init). All timing/limits go through createCChessServer's `config`
+  // so they apply PER INSTANCE — env vars would be read once at import and then
+  // frozen by the module cache, silently giving later scenarios the wrong config.
   process.env.CCHESS_NO_LISTEN = '1';
-  process.env.CCHESS_RECONNECT_GRACE_MS = String(t.reconnectGraceMs);
-  process.env.CCHESS_WAITING_ROOM_TTL_MS = String(t.waitingRoomTtlMs);
-  process.env.CCHESS_HEARTBEAT_INTERVAL_MS = String(t.heartbeatIntervalMs);
-  process.env.CCHESS_LIVENESS_TIMEOUT_MS = String(t.livenessTimeoutMs);
-  process.env.CCHESS_MIN_CLOCK_MS = String(t.minClockMs);
 
   const { createCChessServer } = await import('../src/server');
   const server = createCChessServer({
     authenticate: async (token: string) => ({ uid: token }),
     persist: async () => null,
+    config: {
+      reconnectGraceMs: t.reconnectGraceMs,
+      waitingRoomTtlMs: t.waitingRoomTtlMs,
+      heartbeatIntervalMs: t.heartbeatIntervalMs,
+      livenessTimeoutMs: t.livenessTimeoutMs,
+      minClockMs: t.minClockMs,
+      rlCapacity: t.rlCapacity,
+      rlRefillPerSec: t.rlRefillPerSec,
+    },
   });
 
   const url: string = await new Promise((resolve) => {
