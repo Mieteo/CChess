@@ -539,4 +539,260 @@ void main() {
       expect(count, 1, reason: 'exactly one reconnect-room despite the burst');
     });
   });
+
+  group('B1 — chat (C1/C3/C4/C5/C6/C7)', () {
+    Map<String, dynamic> chatMsg({
+      required String id,
+      String from = 'black-uid',
+      String text = 'gg',
+      int ts = 1000,
+      String? roomId,
+    }) => {
+      'type': 'chat-message',
+      'id': id,
+      'from': from,
+      'text': text,
+      'ts': ts,
+      'roomId': ?roomId,
+    };
+
+    Future<void> driveToSpectating() async {
+      socket.emit({
+        'type': 'spectate-started',
+        'roomId': 'ROOM01',
+        'redUid': 'red-uid',
+        'blackUid': 'black-uid',
+        'moves': <String>[],
+        'chat': <Map<String, dynamic>>[],
+        'currentTurn': 'red',
+        'clock': {'red': 600000, 'black': 600000},
+        'spectatorCount': 1,
+      });
+      await pump();
+    }
+
+    test('C1 — an incoming chat message is appended with from/text', () async {
+      await driveToPlaying();
+      socket.emit(chatMsg(id: 'm1', from: 'black-uid', text: 'gg wp'));
+      await pump();
+
+      expect(ctrl.state.chatMessages, hasLength(1));
+      final m = ctrl.state.chatMessages.single;
+      expect(m.fromUid, 'black-uid');
+      expect(m.text, 'gg wp');
+    });
+
+    test('duplicate chat ids are de-duplicated', () async {
+      await driveToPlaying();
+      socket.emit(chatMsg(id: 'm1', text: 'first'));
+      socket.emit(chatMsg(id: 'm1', text: 'first'));
+      await pump();
+
+      expect(ctrl.state.chatMessages, hasLength(1));
+    });
+
+    test('chat addressed to a different room is ignored', () async {
+      await driveToPlaying(); // roomId == ROOM01
+      socket.emit(chatMsg(id: 'm1', roomId: 'OTHER'));
+      await pump();
+
+      expect(ctrl.state.chatMessages, isEmpty);
+    });
+
+    test('C3 — chat-rate-limited surfaces a Vietnamese message, keeps playing',
+        () async {
+      await driveToPlaying();
+      socket.emit({'type': 'error', 'code': 'chat-rate-limited'});
+      await pump();
+
+      expect(ctrl.state.errorMessage, 'Bạn gửi chat quá nhanh.');
+      expect(ctrl.state.phase, OnlineMatchPhase.playing);
+    });
+
+    test('C4 — invalid-chat surfaces a Vietnamese message, keeps playing',
+        () async {
+      await driveToPlaying();
+      socket.emit({'type': 'error', 'code': 'invalid-chat'});
+      await pump();
+
+      expect(ctrl.state.errorMessage, 'Tin nhắn không hợp lệ hoặc quá dài.');
+      expect(ctrl.state.phase, OnlineMatchPhase.playing);
+    });
+
+    test('C4 — the client blocks > 120 chars before sending', () async {
+      await driveToPlaying();
+      ctrl.sendChatMessage('a' * 121);
+
+      expect(ctrl.state.errorMessage, 'Tin nhắn tối đa 120 ký tự.');
+      expect(socket.sentTypes, isNot(contains('chat-message')));
+    });
+
+    test('blank / whitespace-only chat is a no-op', () async {
+      await driveToPlaying();
+      ctrl.sendChatMessage('   ');
+
+      expect(socket.sentTypes, isNot(contains('chat-message')));
+    });
+
+    test('a valid message is collapsed/trimmed and sent', () async {
+      await driveToPlaying();
+      ctrl.sendChatMessage('  hello   world  ');
+
+      expect(socket.sentTypes, contains('chat-message'));
+    });
+
+    test('C5 — a spectator can receive chat', () async {
+      await driveToSpectating();
+      expect(ctrl.state.isSpectating, isTrue);
+      expect(ctrl.state.canChat, isTrue);
+
+      socket.emit(chatMsg(id: 's1', from: 'red-uid', text: 'nice'));
+      await pump();
+
+      expect(ctrl.state.chatMessages.single.text, 'nice');
+    });
+
+    test('C6 — the reconnect snapshot restores chat history', () async {
+      await driveToPlaying();
+      socket.onConnectionLost!();
+      await pump();
+      socket.emit({'type': 'authed', 'uid': 'me'});
+      await pump();
+      socket.emit({
+        'type': 'reconnected',
+        'roomId': 'ROOM01',
+        'redUid': 'red-uid',
+        'blackUid': 'black-uid',
+        'yourColor': 'red',
+        'moves': <String>[],
+        'clock': {'red': 600000, 'black': 600000},
+        'currentTurn': 'red',
+        'chat': [
+          {'id': 'h1', 'from': 'red-uid', 'text': 'hi', 'ts': 1},
+          {'id': 'h2', 'from': 'black-uid', 'text': 'hello', 'ts': 2},
+        ],
+      });
+      await pump();
+
+      expect(ctrl.state.chatMessages.map((m) => m.text), ['hi', 'hello']);
+    });
+
+    test('C7 — chat is blocked once the game has ended', () async {
+      await driveToEnded();
+      expect(ctrl.state.canChat, isFalse);
+
+      ctrl.sendChatMessage('too late');
+
+      expect(socket.sentTypes, isNot(contains('chat-message')));
+    });
+  });
+
+  group('B2 — reconnect banners + lifecycle (D2/D3/D4)', () {
+    test('D2 — peer-disconnected enters the countdown phase with grace data',
+        () async {
+      await driveToPlaying();
+      socket.emit({'type': 'peer-disconnected', 'graceMs': 60000});
+      await pump();
+
+      expect(ctrl.state.phase, OnlineMatchPhase.peerDisconnected);
+      expect(ctrl.state.peerDisconnectGraceMs, 60000);
+      expect(ctrl.state.peerDisconnectedAtMs, isNotNull);
+      expect(ctrl.state.isPlaying, isTrue); // the game is still alive
+    });
+
+    test('peer-disconnected without graceMs falls back to 60s', () async {
+      await driveToPlaying();
+      socket.emit({'type': 'peer-disconnected'});
+      await pump();
+
+      expect(ctrl.state.peerDisconnectGraceMs, 60000);
+    });
+
+    test('D2 — peer-reconnected clears the banner and resumes playing',
+        () async {
+      await driveToPlaying();
+      socket.emit({'type': 'peer-disconnected', 'graceMs': 60000});
+      await pump();
+
+      socket.emit({'type': 'peer-reconnected'});
+      await pump();
+
+      expect(ctrl.state.phase, OnlineMatchPhase.playing);
+      expect(ctrl.state.peerDisconnectedAtMs, isNull);
+      expect(ctrl.state.peerDisconnectGraceMs, isNull);
+    });
+
+    test('a spectator is NOT pushed into the countdown phase', () async {
+      socket.emit({
+        'type': 'spectate-started',
+        'roomId': 'ROOM01',
+        'redUid': 'red-uid',
+        'blackUid': 'black-uid',
+        'moves': <String>[],
+        'chat': <Map<String, dynamic>>[],
+        'currentTurn': 'red',
+        'clock': {'red': 600000, 'black': 600000},
+        'spectatorCount': 1,
+      });
+      await pump();
+
+      socket.emit({'type': 'peer-disconnected', 'graceMs': 60000});
+      await pump();
+
+      expect(ctrl.state.phase, OnlineMatchPhase.spectating);
+    });
+
+    test('D3 — grace expiry ends the game with reason disconnect', () async {
+      await driveToPlaying(myColor: PieceColor.red);
+      socket.emit({'type': 'peer-disconnected', 'graceMs': 60000});
+      await pump();
+      expect(ctrl.state.phase, OnlineMatchPhase.peerDisconnected);
+
+      socket.emit({
+        'type': 'game-ended',
+        'result': 'red-win',
+        'reason': 'disconnect',
+      });
+      await pump();
+
+      expect(ctrl.state.phase, OnlineMatchPhase.ended);
+      expect(ctrl.state.endReason, 'disconnect');
+      expect(ctrl.state.peerDisconnectedAtMs, isNull); // banner cleared
+    });
+
+    test('D4 — backgrounding keeps the reconnect store for relaunch', () async {
+      await driveToPlaying();
+      expect(store.saved, 'ROOM01');
+
+      await ctrl.disconnectKeepingReconnectState();
+
+      expect(store.saved, 'ROOM01',
+          reason: 'the next app launch must still find the room');
+      expect(ctrl.state.phase, OnlineMatchPhase.idle);
+    });
+
+    test('D4 — leave() abandons the match and clears the reconnect store',
+        () async {
+      await driveToPlaying();
+      expect(store.saved, 'ROOM01');
+
+      await ctrl.leave();
+
+      expect(store.saved, isNull);
+      expect(ctrl.state.phase, OnlineMatchPhase.idle);
+    });
+
+    test('D4 — tryAutoReconnect resumes a saved room from the lobby', () async {
+      // setUp left us at phase=authed with an empty store.
+      expect(await ctrl.tryAutoReconnect(), isFalse);
+      expect(socket.sentTypes, isNot(contains('reconnect-room')));
+
+      store.saved = 'ROOM01';
+      final issued = await ctrl.tryAutoReconnect();
+
+      expect(issued, isTrue);
+      expect(socket.sentTypes, contains('reconnect-room'));
+      expect(ctrl.state.phase, OnlineMatchPhase.reconnecting);
+    });
+  });
 }

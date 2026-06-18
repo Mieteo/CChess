@@ -14,6 +14,7 @@ import '../../theme/app_text_styles.dart';
 import '../../widgets/chess/chess_board.dart';
 import '../profile/profile_controller.dart';
 import 'online_match_controller.dart';
+import 'online_result_format.dart';
 import 'share_room_sheet.dart';
 
 /// Quick-chat presets (A5). Sent as plain `chat-message` text — the server's
@@ -84,16 +85,8 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
   }
 
   /// Seconds remaining in peer-disconnect grace, or null if not in that phase.
-  int? _remainingGraceSec(OnlineMatchState s) {
-    if (s.phase != OnlineMatchPhase.peerDisconnected) return null;
-    final start = s.peerDisconnectedAtMs;
-    final grace = s.peerDisconnectGraceMs;
-    if (start == null || grace == null) return null;
-    final elapsed = DateTime.now().millisecondsSinceEpoch - start;
-    final remaining = grace - elapsed;
-    if (remaining <= 0) return 0;
-    return (remaining / 1000).ceil();
-  }
+  int? _remainingGraceSec(OnlineMatchState s) =>
+      onlineRemainingGraceSec(s, DateTime.now().millisecondsSinceEpoch);
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState lifeState) {
@@ -223,14 +216,15 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
           prev?.phase != OnlineMatchPhase.ended) {
         _showResultDialog();
         if (next.myColor != null) {
-          // Step Group-1 polish: ELO + win/loss counters đã update trên cloud,
-          // pull về local để Profile screen hiển thị ngay sau dialog dismiss.
-          () async {
-            await ref.read(cloudSyncServiceProvider).refreshFromCloud();
-            if (mounted) {
-              await ref.read(profileControllerProvider.notifier).refresh();
-            }
-          }();
+          // G5: ELO + win/loss counters đã update trên cloud, pull về local để
+          // Profile screen hiển thị ngay sau dialog dismiss (guard unmount).
+          refreshProfileAfterRankedGame(
+            refreshFromCloud: () =>
+                ref.read(cloudSyncServiceProvider).refreshFromCloud(),
+            refreshProfile: () =>
+                ref.read(profileControllerProvider.notifier).refresh(),
+            stillMounted: () => mounted,
+          );
         }
       }
       // Sprint 12 rematch: both sides accepted → server restarted the room and
@@ -624,66 +618,29 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
     _chatCtrl.clear();
   }
 
-  String _resultTitle(OnlineMatchState state) {
-    final myColor = state.myColor;
-    if (state.result == 'draw') return 'Hòa';
-    if (myColor != null) {
-      final iWon =
-          (state.result == 'red-win' && myColor == PieceColor.red) ||
-          (state.result == 'black-win' && myColor == PieceColor.black);
-      return iWon ? 'Bạn thắng!' : 'Bạn thua';
-    }
-    return switch (state.result) {
-      'red-win' => 'Đỏ thắng',
-      'black-win' => 'Đen thắng',
-      'draw' => 'Hòa',
-      _ => 'Kết quả: ${state.result}',
-    };
-  }
+  String _resultTitle(OnlineMatchState state) =>
+      onlineResultTitle(state.result, state.myColor);
 
-  String _reasonLabel(String? reason) {
-    return switch (reason) {
-      'timeout' => 'Hết giờ',
-      'resign' => 'Xin thua',
-      'disconnect' => 'Đối thủ mất kết nối',
-      'checkmate' => 'Chiếu bí',
-      'stalemate' => 'Hết nước đi (thua)',
-      null => '—',
-      _ => reason,
-    };
-  }
+  String _reasonLabel(String? reason) => onlineReasonLabel(reason);
 
   /// Step A2: my-side ELO change widget, or null if server didn't send ELO.
   Widget? _buildEloWidget(OnlineMatchState state) {
-    final myColor = state.myColor;
-    final eloUpdate = state.eloUpdate;
-    if (eloUpdate == null || myColor == null) return null;
-    final myEloSide = myColor == PieceColor.red
-        ? eloUpdate['red'] as Map<String, dynamic>?
-        : eloUpdate['black'] as Map<String, dynamic>?;
-    if (myEloSide == null) return null;
-    final delta = (myEloSide['delta'] as num?)?.toInt() ?? 0;
-    final newElo = (myEloSide['new'] as num?)?.toInt();
-    final isUp = delta > 0;
-    final isFlat = delta == 0;
-    final color = isFlat
-        ? AppColors.parchmentTan
-        : (isUp ? AppColors.tealSuccess : AppColors.vermilionRed);
-    final sign = isUp ? '+' : '';
+    final elo = OnlineEloDelta.fromUpdate(state.eloUpdate, state.myColor);
+    if (elo == null) return null;
+    final (color, icon) = switch (elo.direction) {
+      EloDeltaDirection.up => (AppColors.tealSuccess, Icons.trending_up),
+      EloDeltaDirection.down => (AppColors.vermilionRed, Icons.trending_down),
+      EloDeltaDirection.flat => (AppColors.parchmentTan, Icons.remove),
+    };
+    final newElo = elo.newElo;
     return Padding(
       padding: const EdgeInsets.only(top: AppSpacing.sm),
       child: Row(
         children: [
-          Icon(
-            isFlat
-                ? Icons.remove
-                : (isUp ? Icons.trending_up : Icons.trending_down),
-            color: color,
-            size: 18,
-          ),
+          Icon(icon, color: color, size: 18),
           const SizedBox(width: 6),
           Text(
-            'ELO: $sign$delta${newElo != null ? "  →  $newElo" : ""}',
+            'ELO: ${elo.sign}${elo.delta}${newElo != null ? "  →  $newElo" : ""}',
             style: AppTextStyles.headingMd.copyWith(color: color),
           ),
         ],

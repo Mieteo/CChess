@@ -1,0 +1,36 @@
+# Flutter correctness gate (P-D3). Runs static analysis + the unit/widget/
+# controller suite on every push/PR that touches the Flutter app, so the
+# Phase B tests (chat, reconnect, result dialog) become a gate before merge.
+name: flutter-ci
+
+on:
+  push:
+    paths:
+      - 'cchess/**'
+      - '.github/workflows/flutter-ci.yml'
+  pull_request:
+    paths:
+      - 'cchess/**'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: cchess
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.38.5'
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Analyze
+        run: flutter analyze
+
+      - name: Unit + widget tests
+        run: flutter test
