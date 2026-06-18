@@ -1,12 +1,13 @@
 # ✅ KẾ HOẠCH TEST — CChess (các mục chưa xác nhận đã test)
 
-> Tài liệu sống — tạo ngày **2026-06-07**, cập nhật **2026-06-11** (đợt 3).
+> Tài liệu sống — tạo ngày **2026-06-07**, cập nhật **2026-06-18** (bổ sung kế hoạch chuyển test tay sang test tự động).
 > Mục đích: liệt kê **các kịch bản còn tồn đọng chưa test xong** để sắp lịch test dần.
 > Phạm vi: tập trung các tính năng **online/multiplayer Sprint 12** (Đấu lại, Chat, Spectate, Reconnect, Matchmaking) + **engine service Pikafish / nút Gợi ý** (Sprint 15 sớm) — phần engine/offline (Sprint 1–7) đã có unit test xanh, không lặp lại ở đây.
 > Tham chiếu: [`05_KE_HOACH_DU_AN.md`](05_KE_HOACH_DU_AN.md), [`08_HUONG_DAN_BACKEND_WEBSOCKET.md`](08_HUONG_DAN_BACKEND_WEBSOCKET.md), [`09_BACKEND_SERVER_HOAT_DONG.md`](09_BACKEND_SERVER_HOAT_DONG.md), [`11_KE_HOACH_TICH_HOP_ENGINE.md`](11_KE_HOACH_TICH_HOP_ENGINE.md).
 >
 > **Trạng thái test tự động 2026-06-15:** Backend `cd cchess-backend && npm test` → **32/32 xanh** (9 file). Flutter `cd cchess && flutter test` → **163/163 xanh** (19 file). Chi tiết ở Nhóm T (§8).
 > **Test tay:** đợt 1 (2026-06-12) Nhóm R 11/12, bug R9 sửa cùng ngày; đợt 2 (2026-06-13) **R9 retest PASS → Nhóm R đóng 12/12**, **C8 PASS** (rate-limit nâng 1.5s→2s), **H1–H3 PASS** (tuning best-effort, theo dõi H4), **S1–S12 PASS** → feedback UX sinh 3 case mới S13–S15 (số mắt xem cho người chơi, dialog người xem 1 nút Thoát + tự xem tiếp khi rematch, phòng chờ tự hủy 1 phút) — **đã test tay PASS 2026-06-13 → Nhóm S đóng 15/15** (lưu ý: S15 chỉ chạy đúng sau khi `npm run build` lại backend — server chạy từ `dist/`).
+> **Kế hoạch tự động hóa 2026-06-18:** Tổng còn lại vẫn là **23 case chưa PASS test tay** (§9), nhưng phần lõi của nhiều case đã hoặc có thể chuyển sang test tự động bằng backend lab, Flutter controller/widget test, smoke script staging/prod. Xem §8b.
 
 ---
 
@@ -193,6 +194,68 @@
 
 ---
 
+## 8b. Kế hoạch chuyển test tay còn lại sang test tự động
+
+> Mục tiêu: giảm số bước phải bấm tay lặp lại, đặc biệt các flow online nhiều socket. Không đổi trạng thái `- [ ]` ở các nhóm C/D/M/G/H cho tới khi test tương ứng được code, chạy xanh, và nếu cần vẫn được xác nhận một vòng tay cuối.
+
+### 8b.1. Phân loại 23 case còn lại
+
+| Nhóm còn lại | Còn lại | Đã có test tự động/lab phủ lõi | Nên tự động hóa thêm | Vẫn nên test tay cuối |
+|---|:---:|---|---|---|
+| C — Chat | 7 | T8 đã phủ server cho C1/C3/C4/C7 | C1–C7 bằng Flutter controller/widget + backend lab cho spectator/reconnect chat | Gần như không, trừ kiểm cảm giác chat sheet trên thiết bị thật |
+| D — Reconnect | 4 | T7/T10/T15 + lab đã phủ snapshot, double-disconnect, liveness | D2–D5 bằng lab kịch bản rút ngắn timer + Flutter state/widget banner | D4 Home/kill app, bật/tắt mạng thật, Render sau redeploy |
+| M — Matchmaking/ELO | 5 | Lab đã có M1/M3 cơ bản; match/unit đã phủ clock một phần | M1–M5 bằng backend integration, unit matchmaking tolerance, fake persistence/Firestore emulator | M5 một vòng với 2 tài khoản Firebase thật trước release |
+| G — Lifecycle | 6 | T2/T5 + lab đã phủ timeout/resign/rollback một phần | G1–G6 bằng backend integration + Flutter dialog/profile-refresh test | Dialog kết quả nên nhìn lại một vòng trên mobile |
+| H — Gợi ý | 1 | T13 đã đo budget best-effort + T11 logic hint | H4 bằng benchmark/script fixed positions + smoke Pikafish thật | Chất lượng nước gợi ý vẫn cần người chơi đánh giá |
+
+**Kết luận khuyến nghị:** phần có thể đưa vào automation gate thường xuyên là **C, phần lớn D, M1–M4, G1–G6**. Phần còn phải test tay không nên biến mất hoàn toàn gồm **D4 lifecycle/OS thật**, **M5 với hạ tầng Firebase thật**, **H4 chất lượng chủ quan**, và một vòng visual UX cuối cho dialog/chat/reconnect.
+
+### 8b.2. Phase A — Mở rộng backend protocol/lab
+
+**Mục tiêu:** biến các flow cần 2–3 người chơi thành kịch bản bot chạy lặp lại được qua `cchess-backend/lab`.
+
+- [ ] **A1 — Chat protocol nâng cao.** Thêm scenario/test cho **C5** spectator gửi/nhận chat; **C6** reconnect nhận lại `chat` history trong snapshot; assert thứ tự, `from`, trim lịch sử, và không duplicate message. Có thể đặt trong `server.test.ts` nếu muốn vào `npm test`, hoặc trong `lab/scenarios.ts` nếu muốn chạy qua `npm run lab`.
+- [ ] **A2 — Reconnect hết grace + double-disconnect UI data.** Mở rộng lab cho **D3/D5**: dùng `reconnectGraceMs` rút ngắn, assert `game-ended{reason:"disconnect"}`, người thắng đúng, room cleanup, `peerInGrace` có đủ dữ liệu cho client vẽ banner.
+- [ ] **A3 — Matchmaking tolerance/clock.** Thêm `matchmaking.test.ts` unit cho `toleranceForWait()` và `tryMatch()`; nếu cần sửa code nhẹ theo hướng inject clock/test helper để set `joinedAt`. Thêm integration/lab cho **M1/M2/M3/M4**: cùng clock được ghép, khác clock không ghép nhầm, chênh ELO chỉ ghép sau khi tolerance nới, clock per-room đúng 3/5/10/15/30 phút.
+- [ ] **A4 — Lifecycle server.** Thêm integration cho **G1/G2/G3**: checkmate auto-finish bằng chuỗi nước cố định hoặc fixture engine, timeout bằng `minClockMs`, resign idempotent không bắn `game-ended` lần 2.
+- [ ] **A5 — Đưa lab vào tài liệu/gate rõ ràng.** Vì GitHub Actions đã chạy `npm run lab`, `lab:load`, `lab:fuzz`, cập nhật dòng tổng test tự động sau khi thêm scenario để bảng T không chỉ phản ánh `npm test`.
+
+### 8b.3. Phase B — Flutter controller/widget tests
+
+**Mục tiêu:** thay phần bấm UI lặp lại bằng fake socket + widget test; server đã đúng chưa đủ nếu UI không phản ứng đúng.
+
+- [ ] **B1 — Chat UI/controller.** Mở rộng `online_match_controller_test.dart` cho **C1/C3/C4/C5/C6/C7**: nhận chat append đúng, spectator chat vào state, reconnect snapshot khôi phục history, lỗi `chat-rate-limited`/`invalid-chat` map sang tiếng Việt, `canChat=false` sau `game-ended`. Thêm widget test nhẹ cho **C2**: nút Chat hiện `(n)` và disable khi hết ván.
+- [ ] **B2 — Reconnect banners/state.** Thêm controller/widget test cho **D2/D3/D5**: `peer-disconnected` hiển thị countdown, `peer-reconnected` xoá banner, hết grace chuyển ended/disconnect, `peerInGrace` từ snapshot vẽ banner ngay sau reconnect. **D4** chỉ tự động hóa được phần controller (`AppLifecycleState.paused/hidden/detached`), còn hành vi OS thật vẫn test tay.
+- [ ] **B3 — Matchmaking/lobby UI.** Test `findMatch/cancelMatching/createRoom(clockMs)` gửi đúng command, clock đang chọn truyền xuống socket, state chờ/huỷ/ghép trận phản ánh đúng. Nếu lobby widget khó dựng, tách helper/presenter nhỏ để unit test trước.
+- [ ] **B4 — Result dialog/profile refresh.** Widget test cho **G4**: tiêu đề Thắng/Thua/Hòa, lý do tiếng Việt, ELO delta đúng dấu/màu. Test fake `cloudSync.refreshFromCloud` + `profileController.refresh` cho **G5** để đảm bảo đóng/hiện dialog xong sẽ refresh profile. **G6** đã có lõi T5, nên chỉ cần bổ sung snackbar/text rollback nếu muốn kiểm UI.
+
+### 8b.4. Phase C — Persistence/ELO tự động
+
+**Mục tiêu:** phủ phần hiện khó test tay là ghi ELO/counters/game_records hai chiều.
+
+- [ ] **P-C1 — Fake persistence contract.** Dùng option `createCChessServer({ persist })` để inject fake persist trả `elo`, rồi assert `game-ended.elo` đúng shape cho **M5/G4/R11** mà không cần Firebase.
+- [ ] **P-C2 — Tách adapter Firestore hoặc chạy emulator.** Sửa `persistence.ts` theo hướng adapter nhỏ (`getUser`, `updateUserStats`, `writeGameRecord`) để unit test transaction bằng fake store; hoặc thêm profile Firestore Emulator nếu muốn giống thật hơn. Assert: winner +điểm, loser -điểm, draw 0/đúng công thức K=32, counters `wins/losses/draws/totalGames`, mirror `game_records` cho cả 2 bên.
+- [ ] **P-C3 — Idempotency.** Có test double-finish không gọi persist/ELO lần 2; nếu đã phủ bằng lab thì ghi rõ mapping sang **M5/G lifecycle**.
+
+### 8b.5. Phase D — Smoke/staging scripts
+
+**Mục tiêu:** kiểm deploy thật nhưng không biến CI thành bài test phá dữ liệu production.
+
+- [ ] **P-D1 — Mở rộng `npm run lab:smoke`.** Hiện smoke prod-safe chưa để game bắt đầu. Thêm chế độ opt-in `SMOKE_ALLOW_RANKED_WRITE=1` hoặc trỏ staging để chạy create/join/resign/reconnect thật, xác nhận **D2/D3/M1/M3/G3** trên server deploy.
+- [ ] **P-D2 — Engine smoke thật.** Thêm script `engine:smoke` cho `cchess-engine`: gọi health/best-move với vài FEN/X-FEN cố định, timeout budget, auth/rate-limit, cache hit. Script này tự động hóa phần hạ tầng của **H4** và mục smoke Pikafish thật trong [`11_KE_HOACH_TICH_HOP_ENGINE.md`](11_KE_HOACH_TICH_HOP_ENGINE.md).
+- [ ] **P-D3 — Flutter CI.** Backend CI đã có; thêm workflow Flutter chạy `flutter test` khi chạm `cchess/**`, để các test Phase B trở thành gate trước merge.
+
+### 8b.6. Phase E — Manual test còn giữ lại
+
+Các mục này vẫn nên giữ ở lịch test tay, vì tự động hóa chỉ kiểm được một phần:
+
+- [ ] **P-E1 — D4 lifecycle thật:** Home/Resume, app switcher kill, đổi mạng Wi-Fi/4G, OS background policy trên Android/iOS.
+- [ ] **P-E2 — Render/prod sau redeploy:** cold start, restart xoá state rò rỉ, smoke sau deploy, độ trễ mạng thật.
+- [ ] **P-E3 — Native UX:** clipboard/share sheet/QR/deep link OS-level nếu mở ngoài app.
+- [ ] **P-E4 — H4 chất lượng nước gợi ý:** benchmark tự động đo nhanh/chậm và hợp lệ, nhưng "nước có hay không" cần người chơi/engine mạnh đối chiếu.
+
+---
+
 ## 9. Bảng theo dõi tiến độ
 
 | Nhóm | Tổng case | Đã PASS | Bug | Còn lại |
@@ -218,10 +281,12 @@
 | Flutter `test/chess_engine/`, `test/game/`, `test/puzzle/`, `test/data/`, … | Unit thuần Dart | Không | `flutter test` |
 | Flutter `test/online/` (controller + room_share) | Unit với fake socket | Không (socket giả) | `flutter test test/online` |
 | Backend `rooms.test.ts`, `match.test.ts` | Unit thuần TS | Không | `npm test` |
-| Backend `server.test.ts`, `server.disconnect.test.ts` | **Integration WS thật** (in-process, auth/persist inject giả) | Không cần Firebase | `npm test` |
+| Backend `server.test.ts`, `server.disconnect.test.ts`, `server.waitingroom.test.ts`, `server.liveness.test.ts` | **Integration WS thật** (in-process, auth/persist inject giả) | Không cần Firebase | `npm test` |
+| Backend `lab/*` | Scenario bot + invariant + load/fuzz cho realtime server | Không cần Firebase | `npm run lab`, `npm run lab:load`, `npm run lab:fuzz` |
+| Backend `lab:smoke` | Black-box smoke trên server deploy thật | Cần Firebase Anonymous + endpoint deploy | `npm run lab:smoke` / workflow `post-deploy-smoke` |
 | Backend `engine-service/*.test.ts` | Unit + HTTP integration (fake engine process) | **Không cần binary Pikafish** | `npm test` |
-| Smoke test Pikafish thật (mục 11 của [`11_KE_HOACH_TICH_HOP_ENGINE.md`](11_KE_HOACH_TICH_HOP_ENGINE.md)) | Thủ công / script curl | **Cần binary + NNUE thật** | tay (chưa làm) |
+| Smoke test Pikafish thật (mục 11 của [`11_KE_HOACH_TICH_HOP_ENGINE.md`](11_KE_HOACH_TICH_HOP_ENGINE.md)) | Thủ công hiện tại / nên chuyển thành `engine:smoke` | **Cần binary + NNUE thật** | tay hoặc script (chưa làm) |
 
 ---
 
-*Tạo 2026-06-07 cùng đợt hoàn thiện nút "Đấu lại". Cập nhật 2026-06-07 (đợt 2): đóng hết Nhóm T — thêm `cchess-backend/src/server.test.ts` (integration WS) cho T3 rematch handshake + T7 reconnect + T8 chat; tách `server.ts` thành `createCChessServer()` factory để test in-process không cần Firebase. Cập nhật 2026-06-11 (đợt 3): hardening double-disconnect (D5) + test T10; nút Gợi ý in-game (Nhóm H + T11); chip chat nhanh (C8); ghi nhận bộ test engine-service (T9) vào tài liệu. Cập nhật 2026-06-12 (đợt 4): **kết quả test tay Nhóm R đầu tiên — 11/12 PASS**; bug R9 (độ trễ ~10s khi đối thủ rời phòng) tìm ra 3 nguyên nhân gốc và sửa cùng ngày + T12 regression. Cập nhật 2026-06-13 (đợt 5): **R9 retest PASS → Nhóm R đóng 12/12; C8 PASS** (rate-limit chat nâng 1.5s→2s theo feedback); **H1–H3 PASS** với feedback "gợi ý hơi lâu/hơi kém" → tuning best-effort (bỏ delay 1.2s, iterative deepening ngân sách 2s, depth tối đa 6) + T13, thêm case H4 theo dõi. Cập nhật 2026-06-13 (đợt 6): **S1–S12 PASS hết**; theo feedback UX code thêm: số mắt xem hiển thị cho cả người chơi, dialog kết quả người xem chỉ còn nút "Thoát" + tự xem tiếp khi rematch (sửa kèm bug spectator-thành-người-chơi-Đỏ sau rematch), phòng chờ tự hủy sau 1 phút (`room-expired`, TTL override env `CCHESS_WAITING_ROOM_TTL_MS`) → 3 case test tay mới S13–S15 + T14 (4 test tự động); tổng backend 28/28 + Flutter 156/156. Lần cập nhật kế tiếp: sau phiên test S13–S15 + Nhóm D.*
+*Tạo 2026-06-07 cùng đợt hoàn thiện nút "Đấu lại". Cập nhật 2026-06-07 (đợt 2): đóng hết Nhóm T — thêm `cchess-backend/src/server.test.ts` (integration WS) cho T3 rematch handshake + T7 reconnect + T8 chat; tách `server.ts` thành `createCChessServer()` factory để test in-process không cần Firebase. Cập nhật 2026-06-11 (đợt 3): hardening double-disconnect (D5) + test T10; nút Gợi ý in-game (Nhóm H + T11); chip chat nhanh (C8); ghi nhận bộ test engine-service (T9) vào tài liệu. Cập nhật 2026-06-12 (đợt 4): **kết quả test tay Nhóm R đầu tiên — 11/12 PASS**; bug R9 (độ trễ ~10s khi đối thủ rời phòng) tìm ra 3 nguyên nhân gốc và sửa cùng ngày + T12 regression. Cập nhật 2026-06-13 (đợt 5): **R9 retest PASS → Nhóm R đóng 12/12; C8 PASS** (rate-limit chat nâng 1.5s→2s theo feedback); **H1–H3 PASS** với feedback "gợi ý hơi lâu/hơi kém" → tuning best-effort (bỏ delay 1.2s, iterative deepening ngân sách 2s, depth tối đa 6) + T13, thêm case H4 theo dõi. Cập nhật 2026-06-13 (đợt 6): **S1–S12 PASS hết**; theo feedback UX code thêm: số mắt xem hiển thị cho cả người chơi, dialog kết quả người xem chỉ còn nút "Thoát" + tự xem tiếp khi rematch (sửa kèm bug spectator-thành-người-chơi-Đỏ sau rematch), phòng chờ tự hủy sau 1 phút (`room-expired`, TTL override env `CCHESS_WAITING_ROOM_TTL_MS`) → 3 case test tay mới S13–S15 + T14 (4 test tự động); tổng backend 28/28 + Flutter 156/156. Cập nhật 2026-06-18: thêm §8b — phân loại 23 case còn lại theo khả năng tự động hóa và lập phase A–E để chuyển dần test tay sang backend lab, Flutter controller/widget test, persistence/ELO test, smoke/staging script. Lần cập nhật kế tiếp: khi bắt đầu code Phase A/B hoặc sau phiên test D/M/G/H4.*
