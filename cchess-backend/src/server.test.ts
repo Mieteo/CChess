@@ -29,11 +29,17 @@ interface Msg {
 /// is already set — otherwise importing it would init Firebase + bind PORT.
 /// (Dynamic import inside an async fn also sidesteps the CJS no-top-level-await
 /// limitation of the tsx test transform.)
-async function startTestServer(): Promise<{ server: CChessServer; url: string }> {
+type PersistFn = NonNullable<
+  Parameters<typeof import('./server').createCChessServer>[0]
+>['persist'];
+
+async function startTestServer(
+  opts: { persist?: PersistFn } = {},
+): Promise<{ server: CChessServer; url: string }> {
   const { createCChessServer } = await import('./server');
   const server = createCChessServer({
     authenticate: async (token: string) => ({ uid: token }),
-    persist: async () => null,
+    persist: opts.persist ?? (async () => null),
   });
   return new Promise((resolve) => {
     server.httpServer.listen(0, '127.0.0.1', () => {
@@ -340,6 +346,138 @@ test('chat enforces rate limit, length cap, and finished-game block', async () =
     const np = await black.waitType('error');
     assert.equal(np.code, 'not-playing');
 
+    await Promise.all([red.close(), black.close()]);
+  } finally {
+    await server.close();
+  }
+});
+
+// ── G3 lifecycle: resign result/reason + idempotency ─────────────────────
+
+test('G3: resign ends the game with reason=resign and the opponent winning', async () => {
+  const { server, url } = await startTestServer();
+  try {
+    const { red, black } = await startGame(url, 'gina', 'hugo');
+
+    // Red resigns → both sides see the same result: black wins by resignation.
+    red.send({ type: 'resign' });
+    const redEnd = await red.waitType('game-ended');
+    const blackEnd = await black.waitType('game-ended');
+
+    assert.equal(redEnd.reason, 'resign');
+    assert.equal(redEnd.result, 'black-win', 'the resigner (red) loses');
+    assert.equal(blackEnd.reason, 'resign');
+    assert.equal(blackEnd.result, 'black-win');
+
+    await Promise.all([red.close(), black.close()]);
+  } finally {
+    await server.close();
+  }
+});
+
+test('resign is idempotent: a second resign does not emit a second game-ended', async () => {
+  const { server, url } = await startTestServer();
+  try {
+    const { red, black } = await startGame(url, 'ivy', 'jack');
+
+    red.send({ type: 'resign' });
+    await red.waitType('game-ended');
+    await black.waitType('game-ended');
+
+    // Resign again on the already-finished game. endMatch() must guard the
+    // playing→finished transition, so NO new game-ended should arrive.
+    red.send({ type: 'resign' });
+    await assert.rejects(
+      red.waitFor((m) => m.type === 'game-ended', 400),
+      /timeout/,
+      'a duplicate game-ended would be a double-persist / double-ELO bug',
+    );
+
+    await Promise.all([red.close(), black.close()]);
+  } finally {
+    await server.close();
+  }
+});
+
+// ── P-C1: ELO deltas from persist are wired into game-ended (M5/G4/R11) ───
+
+test('P-C1: injected persist ELO is mapped into game-ended for both sides', async () => {
+  // Fake persist returns a known EloUpdate so we assert the server's mapping
+  // PersistResult.elo → game-ended.elo (the shape the Flutter dialog reads)
+  // WITHOUT needing Firebase. Red won by resignation below, so red gains.
+  const fakePersist: PersistFn = async () => ({
+    gameId: 'test-game',
+    elo: {
+      redOld: 1000,
+      redNew: 1016,
+      redDelta: 16,
+      blackOld: 1000,
+      blackNew: 984,
+      blackDelta: -16,
+    },
+  });
+
+  const { server, url } = await startTestServer({ persist: fakePersist });
+  try {
+    const { red, black } = await startGame(url, 'kara', 'liam');
+
+    // Black resigns → red wins, matching the +16/-16 fake above.
+    black.send({ type: 'resign' });
+    const end = await red.waitType('game-ended');
+
+    assert.equal(end.result, 'red-win');
+    assert.deepEqual(end.elo, {
+      red: { old: 1000, new: 1016, delta: 16 },
+      black: { old: 1000, new: 984, delta: -16 },
+    });
+
+    await Promise.all([red.close(), black.close()]);
+  } finally {
+    await server.close();
+  }
+});
+
+test('game-ended carries elo:null when persistence yields nothing', async () => {
+  // Default persist returns null (Firebase unavailable in tests). The game
+  // must still end cleanly — just without ELO numbers.
+  const { server, url } = await startTestServer();
+  try {
+    const { red, black } = await startGame(url, 'mia', 'noah');
+    red.send({ type: 'resign' });
+    const end = await red.waitType('game-ended');
+    assert.equal(end.elo, null);
+    await Promise.all([red.close(), black.close()]);
+  } finally {
+    await server.close();
+  }
+});
+
+// ── M4: per-room clock chosen at create-room reaches both players ─────────
+
+test('M4: the creator\'s clock choice initialises both sides equally', async () => {
+  const { server, url } = await startTestServer();
+  try {
+    const FIVE_MIN = 5 * 60_000;
+    const red = await connectAuthed(url, 'olive');
+    const black = await connectAuthed(url, 'pete');
+
+    red.send({ type: 'create-room', clockMs: FIVE_MIN });
+    const roomId = (await red.waitType('room-created')).roomId as string;
+    black.send({ type: 'join-room', roomId });
+
+    const redStart = await red.waitType('game-start');
+    const blackStart = await black.waitType('game-start');
+
+    // Both clocks start full at the chosen budget; turn is red's.
+    for (const start of [redStart, blackStart]) {
+      const clock = start.clock as { red: number; black: number; currentTurn: string };
+      assert.equal(clock.red, FIVE_MIN, 'red clock = chosen budget');
+      assert.equal(clock.black, FIVE_MIN, 'black clock = chosen budget');
+      assert.equal(clock.currentTurn, 'red');
+    }
+
+    red.send({ type: 'resign' });
+    await red.waitType('game-ended');
     await Promise.all([red.close(), black.close()]);
   } finally {
     await server.close();
