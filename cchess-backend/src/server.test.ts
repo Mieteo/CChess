@@ -399,6 +399,39 @@ test('resign is idempotent: a second resign does not emit a second game-ended', 
   }
 });
 
+test('P-C3: a double end-condition calls persist exactly once', async () => {
+  // The endMatch() guard is the single source of truth for playing→finished.
+  // If it ever leaked, persist (→ ELO + counters) would run twice on one game.
+  // Inject a counting persist and fire two end-conditions to prove it doesn't.
+  let persistCalls = 0;
+  const countingPersist: PersistFn = async () => {
+    persistCalls++;
+    return null;
+  };
+
+  const { server, url } = await startTestServer({ persist: countingPersist });
+  try {
+    const { red, black } = await startGame(url, 'quinn', 'remy');
+
+    red.send({ type: 'resign' });
+    await red.waitType('game-ended');
+    await black.waitType('game-ended');
+
+    // Second end-condition on the finished game (resign again).
+    red.send({ type: 'resign' });
+    await assert.rejects(
+      red.waitFor((m) => m.type === 'game-ended', 400),
+      /timeout/,
+    );
+
+    assert.equal(persistCalls, 1, 'persist/ELO must run once per game, not twice');
+
+    await Promise.all([red.close(), black.close()]);
+  } finally {
+    await server.close();
+  }
+});
+
 // ── P-C1: ELO deltas from persist are wired into game-ended (M5/G4/R11) ───
 
 test('P-C1: injected persist ELO is mapped into game-ended for both sides', async () => {
