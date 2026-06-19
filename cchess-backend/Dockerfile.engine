@@ -1,16 +1,19 @@
 # Multi-stage build for the standalone cchess-engine service.
-# The build stage compiles a generic x86-64 Pikafish binary to avoid CPU
-# feature crashes on cloud hosts, then the runtime stage starts the Node API.
+# The engine stage downloads an official Pikafish Linux release artifact instead
+# of compiling C++ on Render's builder, which is too slow for the free build box.
 
 FROM debian:stable-slim AS pikafish
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends git build-essential ca-certificates curl \
+  && apt-get install -y --no-install-recommends ca-certificates curl libarchive-tools \
   && rm -rf /var/lib/apt/lists/*
-RUN git clone --depth 1 https://github.com/official-pikafish/Pikafish /pikafish
-WORKDIR /pikafish/src
-RUN make -j2 build ARCH=x86-64
-RUN make net
-RUN ./pikafish bench
+WORKDIR /tmp/pikafish
+ARG PIKAFISH_RELEASE_URL=https://github.com/official-pikafish/Pikafish/releases/download/Pikafish-2026-01-02/Pikafish.2026-01-02.7z
+RUN curl -fsSL "$PIKAFISH_RELEASE_URL" -o pikafish.7z \
+  && bsdtar -xf pikafish.7z \
+  && mkdir -p /engine \
+  && install -m 755 Linux/pikafish-sse41-popcnt /engine/pikafish \
+  && install -m 644 pikafish.nnue /engine/pikafish.nnue \
+  && /engine/pikafish bench
 
 FROM node:20-slim AS build
 WORKDIR /app
@@ -28,7 +31,7 @@ ENV EVAL_FILE=/app/engine/pikafish.nnue
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev && npm cache clean --force
 COPY --from=build /app/dist ./dist
-COPY --from=pikafish /pikafish/src/pikafish /app/engine/pikafish
-COPY --from=pikafish /pikafish/src/*.nnue /app/engine/pikafish.nnue
+COPY --from=pikafish /engine/pikafish /app/engine/pikafish
+COPY --from=pikafish /engine/pikafish.nnue /app/engine/pikafish.nnue
 EXPOSE 8090
 CMD ["node", "dist/engine-service/server.js"]
