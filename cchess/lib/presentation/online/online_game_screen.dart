@@ -13,6 +13,7 @@ import '../../theme/app_spacing.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/chess/chess_board.dart';
 import '../profile/profile_controller.dart';
+import 'online_game_widgets.dart';
 import 'online_match_controller.dart';
 import 'online_result_format.dart';
 import 'share_room_sheet.dart';
@@ -350,12 +351,10 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
                 Row(
                   children: [
                     Expanded(
-                      child: OutlinedButton.icon(
-                        icon: const Icon(Icons.chat_bubble_outline),
-                        label: Text(
-                          'Chat${state.chatMessages.isNotEmpty ? " (${state.chatMessages.length})" : ""}',
-                        ),
-                        onPressed: state.canChat ? _showChatSheet : null,
+                      child: OnlineChatButton(
+                        messageCount: state.chatMessages.length,
+                        canChat: state.canChat,
+                        onPressed: _showChatSheet,
                       ),
                     ),
                     if (!isSpectating) ...[
@@ -370,83 +369,10 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
                     ],
                   ],
                 ),
-                if (state.phase == OnlineMatchPhase.peerDisconnected) ...[
-                  AppSpacing.vGapSm,
-                  Builder(
-                    builder: (_) {
-                      final sec = _remainingGraceSec(state);
-                      final String label;
-                      if (sec == null) {
-                        label = 'Đối thủ mất kết nối — chờ reconnect…';
-                      } else if (sec > 0) {
-                        label =
-                            'Đối thủ mất kết nối — còn ${sec}s để reconnect';
-                      } else {
-                        // Local countdown finished; server's grace timer fires
-                        // ~ within seconds. Avoid showing a stale "0s".
-                        label = 'Hết thời gian chờ — đang xác nhận kết quả…';
-                      }
-                      return Container(
-                        padding: const EdgeInsets.all(AppSpacing.sm),
-                        decoration: BoxDecoration(
-                          color: AppColors.accentGold.withValues(alpha: 0.18),
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: AppColors.accentGold),
-                        ),
-                        child: Row(
-                          children: [
-                            const Icon(
-                              Icons.wifi_off,
-                              size: 16,
-                              color: AppColors.accentGold,
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                label,
-                                style: AppTextStyles.captionSm.copyWith(
-                                  color: AppColors.accentGold,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      );
-                    },
-                  ),
-                ],
-                if (state.phase == OnlineMatchPhase.reconnecting) ...[
-                  AppSpacing.vGapSm,
-                  Container(
-                    padding: const EdgeInsets.all(AppSpacing.sm),
-                    decoration: BoxDecoration(
-                      color: AppColors.accentGold.withValues(alpha: 0.18),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: AppColors.accentGold),
-                    ),
-                    child: Row(
-                      children: [
-                        const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: AppColors.accentGold,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            'Mất kết nối — đang kết nối lại…',
-                            style: AppTextStyles.captionSm.copyWith(
-                              color: AppColors.accentGold,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
+                OnlineReconnectBanner(
+                  phase: state.phase,
+                  remainingGraceSec: _remainingGraceSec(state),
+                ),
                 if (state.errorMessage != null) ...[
                   AppSpacing.vGapSm,
                   Text(
@@ -618,75 +544,6 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
     _chatCtrl.clear();
   }
 
-  String _resultTitle(OnlineMatchState state) =>
-      onlineResultTitle(state.result, state.myColor);
-
-  String _reasonLabel(String? reason) => onlineReasonLabel(reason);
-
-  /// Step A2: my-side ELO change widget, or null if server didn't send ELO.
-  Widget? _buildEloWidget(OnlineMatchState state) {
-    final elo = OnlineEloDelta.fromUpdate(state.eloUpdate, state.myColor);
-    if (elo == null) return null;
-    final (color, icon) = switch (elo.direction) {
-      EloDeltaDirection.up => (AppColors.tealSuccess, Icons.trending_up),
-      EloDeltaDirection.down => (AppColors.vermilionRed, Icons.trending_down),
-      EloDeltaDirection.flat => (AppColors.parchmentTan, Icons.remove),
-    };
-    final newElo = elo.newElo;
-    return Padding(
-      padding: const EdgeInsets.only(top: AppSpacing.sm),
-      child: Row(
-        children: [
-          Icon(icon, color: color, size: 18),
-          const SizedBox(width: 6),
-          Text(
-            'ELO: ${elo.sign}${elo.delta}${newElo != null ? "  →  $newElo" : ""}',
-            style: AppTextStyles.headingMd.copyWith(color: color),
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// Highlighted info tile inside the result dialog for rematch status.
-  Widget _rematchTile(String text, IconData icon, {bool showSpinner = false}) {
-    return Padding(
-      padding: const EdgeInsets.only(top: AppSpacing.sm),
-      child: Container(
-        padding: const EdgeInsets.all(AppSpacing.sm),
-        decoration: BoxDecoration(
-          color: AppColors.accentGold.withValues(alpha: 0.18),
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: AppColors.accentGold),
-        ),
-        child: Row(
-          children: [
-            if (showSpinner)
-              const SizedBox(
-                width: 16,
-                height: 16,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: AppColors.accentGold,
-                ),
-              )
-            else
-              Icon(icon, size: 16, color: AppColors.accentGold),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                text,
-                style: AppTextStyles.captionSm.copyWith(
-                  color: AppColors.accentGold,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   Future<void> _leaveToCompete(BuildContext dialogCtx) async {
     Navigator.pop(dialogCtx);
     await _ctrl.leave();
@@ -717,134 +574,11 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
               return const SizedBox.shrink();
             }
 
-            // Opponent already gone (left/disconnected) → rematch impossible.
-            // `opponentLeftRoom` flips the moment the server broadcasts
-            // peer-left (R9), so the dialog reacts without a failed offer.
-            final opponentGone =
-                state.endReason == 'disconnect' || state.opponentLeftRoom;
-            final meOffered = state.rematchOfferedByMe;
-            final oppOffered = state.rematchOfferedByOpponent;
-            // Spectators (myColor == null) get a read-only dialog: a single
-            // "Thoát" button. If the players start a rematch, phase flips to
-            // spectating and the auto-close above resumes watching.
-            final watching = state.myColor == null;
-
-            final content = <Widget>[
-              Text('Lý do: ${_reasonLabel(state.endReason)}'),
-            ];
-            final eloWidget = _buildEloWidget(state);
-            if (eloWidget != null) content.add(eloWidget);
-
-            if (watching) {
-              content.add(
-                state.opponentLeftRoom
-                    ? _rematchTile(
-                        'Một kỳ thủ đã rời — trận đấu khép lại.',
-                        Icons.person_off_outlined,
-                      )
-                    : _rematchTile(
-                        'Nếu hai kỳ thủ đấu lại, ván mới sẽ tự mở.',
-                        Icons.visibility_outlined,
-                      ),
-              );
-              return AlertDialog(
-                title: Text(_resultTitle(state)),
-                content: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: content,
-                ),
-                actions: [
-                  TextButton(
-                    onPressed: () => _leaveToCompete(dialogCtx),
-                    child: const Text('Thoát'),
-                  ),
-                ],
-              );
-            }
-
-            if (opponentGone) {
-              content.add(
-                _rematchTile(
-                  'Đối thủ đã rời — không thể đấu lại.',
-                  Icons.person_off_outlined,
-                ),
-              );
-            } else if (meOffered) {
-              content.add(
-                _rematchTile(
-                  'Đang chờ đối thủ đồng ý đấu lại…',
-                  Icons.hourglass_top,
-                  showSpinner: true,
-                ),
-              );
-            } else if (oppOffered) {
-              content.add(
-                _rematchTile('Đối thủ muốn đấu lại!', Icons.sports_kabaddi),
-              );
-            }
-            if (state.errorMessage != null) {
-              content.add(
-                Padding(
-                  padding: const EdgeInsets.only(top: AppSpacing.sm),
-                  child: Text(
-                    state.errorMessage!,
-                    style: AppTextStyles.captionSm.copyWith(
-                      color: Colors.redAccent,
-                    ),
-                  ),
-                ),
-              );
-            }
-
-            final leaveButton = TextButton(
-              onPressed: () => _leaveToCompete(dialogCtx),
-              child: const Text('Về Đối Đầu'),
-            );
-
-            final List<Widget> actions;
-            if (opponentGone) {
-              actions = [leaveButton];
-            } else if (meOffered) {
-              // Waiting for opponent — allow retracting or leaving.
-              actions = [
-                TextButton(
-                  onPressed: _ctrl.declineRematch,
-                  child: const Text('Hủy'),
-                ),
-                leaveButton,
-              ];
-            } else if (oppOffered) {
-              // Opponent offered — accept (→ restart) or decline.
-              actions = [
-                TextButton(
-                  onPressed: _ctrl.declineRematch,
-                  child: const Text('Từ chối'),
-                ),
-                FilledButton(
-                  onPressed: _ctrl.offerRematch,
-                  child: const Text('Đồng ý'),
-                ),
-              ];
-            } else {
-              actions = [
-                leaveButton,
-                FilledButton.icon(
-                  onPressed: _ctrl.offerRematch,
-                  icon: const Icon(Icons.refresh),
-                  label: const Text('Đấu lại'),
-                ),
-              ];
-            }
-
-            return AlertDialog(
-              title: Text(_resultTitle(state)),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: content,
-              ),
-              actions: actions,
+            return OnlineResultDialog(
+              state: state,
+              onLeave: () => _leaveToCompete(dialogCtx),
+              onOfferRematch: _ctrl.offerRematch,
+              onDeclineRematch: _ctrl.declineRematch,
             );
           },
         );
