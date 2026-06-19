@@ -8,7 +8,7 @@ RUN apt-get update \
   && rm -rf /var/lib/apt/lists/*
 RUN git clone --depth 1 https://github.com/official-pikafish/Pikafish /pikafish
 WORKDIR /pikafish/src
-RUN make -j build ARCH=x86-64
+RUN make -j2 build ARCH=x86-64
 RUN make net
 RUN ./pikafish bench
 
