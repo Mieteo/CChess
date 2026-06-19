@@ -35,7 +35,9 @@ services:
     rootDir: cchess-backend
     dockerfilePath: ./Dockerfile.engine
     dockerContext: .
-    plan: standard
+    # Free is enough for product smoke testing; upgrade to standard before real
+    # traffic if latency/cold-starts become unacceptable.
+    plan: free
     region: singapore
     healthCheckPath: /health
     envVars:
@@ -53,3 +55,11 @@ services:
         value: 1
       - key: DEFAULT_MOVETIME_MS
         value: 600
+      - key: ENGINE_TASK_TIMEOUT_MS
+        value: 30000
+      - key: ENGINE_SEARCH_TIMEOUT_MS
+        value: 30000
+      - key: ENGINE_INIT_TIMEOUT_MS
+        value: 30000
+      - key: MAX_MOVETIME_MS
+        value: 3000
