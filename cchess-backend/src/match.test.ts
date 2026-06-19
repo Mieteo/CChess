@@ -15,6 +15,13 @@ import { PieceColor, uciOfMove, XiangqiGame } from './engine';
 
 const sockets: WebSocket[] = [];
 
+// G1 fixture: red can deliver mate in one with Ra8-a9. The red chariot on e1
+// blocks flying-generals while also covering e8, so black's general has no
+// legal escape after the back-rank check lands.
+const RED_WIN_CHECKMATE_FEN =
+  '4k4/R8/9/9/9/9/9/9/4R4/4K4 w - - 0 1';
+const RED_WIN_CHECKMATE_UCI = 'a8a9';
+
 function fakeSocket(name: string): WebSocket {
   const socket = { name } as unknown as WebSocket;
   sockets.push(socket);
@@ -123,6 +130,29 @@ test('applyMove returns time-out when the mover has no clock left', () => {
   assert.deepEqual(res, { ok: false, code: 'time-out' });
   assert.equal(room.clockMsByColor!.red, 0);
   assert.equal(room.movesUci?.length, 0, 'a timed-out move must not be recorded');
+});
+
+test('G1: applyMove auto-finishes when a move gives checkmate', () => {
+  const { room, red } = startPlayingRoom('checkmate');
+  room.engine = XiangqiGame.fromFen(RED_WIN_CHECKMATE_FEN);
+  room.currentTurn = 'red';
+  room.turnStartedAt = Date.now();
+  room.movesUci = [];
+  room.moveCount = 0;
+
+  const res = applyMove(room, red, RED_WIN_CHECKMATE_UCI);
+
+  assert.equal(res.ok, true);
+  if (res.ok) {
+    assert.equal(res.color, 'red');
+    assert.equal(res.moveNumber, 1);
+    assert.deepEqual(res.autoFinish, {
+      result: 'red-win',
+      reason: 'checkmate',
+    });
+  }
+  assert.equal(room.currentTurn, 'black');
+  assert.deepEqual(room.movesUci, [RED_WIN_CHECKMATE_UCI]);
 });
 
 test('startRematch swaps colors and resets all game state', () => {

@@ -18,11 +18,19 @@ import { WebSocket } from 'ws';
 
 import type { CChessServer } from './server';
 import { PieceColor, uciOfMove, XiangqiGame } from './engine';
+import { getRoomById } from './rooms';
 
 interface Msg {
   type: string;
   [k: string]: unknown;
 }
+
+// G1 fixture: one legal red move to checkmate. Red plays Ra8-a9; the chariot
+// on e1 blocks flying-generals and covers e8, while the back-rank chariot
+// covers d9/e9/f9.
+const RED_WIN_CHECKMATE_FEN =
+  '4k4/R8/9/9/9/9/9/9/4R4/4K4 w - - 0 1';
+const RED_WIN_CHECKMATE_UCI = 'a8a9';
 
 /// Start a fully-wired server on an ephemeral port with stubbed auth/persist.
 /// server.ts is imported here (not at module top) so the CCHESS_NO_LISTEN guard
@@ -368,6 +376,40 @@ test('G3: resign ends the game with reason=resign and the opponent winning', asy
     assert.equal(redEnd.result, 'black-win', 'the resigner (red) loses');
     assert.equal(blackEnd.reason, 'resign');
     assert.equal(blackEnd.result, 'black-win');
+
+    await Promise.all([red.close(), black.close()]);
+  } finally {
+    await server.close();
+  }
+});
+
+test('G1: checkmate move emits game-ended{reason:checkmate}', async () => {
+  const { server, url } = await startTestServer();
+  try {
+    const { red, black, roomId } = await startGame(url, 'mei', 'nam');
+    const room = getRoomById(roomId);
+    assert.ok(room, 'test room should exist');
+    room.engine = XiangqiGame.fromFen(RED_WIN_CHECKMATE_FEN);
+    room.currentTurn = 'red';
+    room.movesUci = [];
+    room.moveCount = 0;
+    room.turnStartedAt = Date.now();
+
+    red.send({ type: 'move', uci: RED_WIN_CHECKMATE_UCI });
+    const ack = await red.waitType('move-ack');
+    const seenByBlack = await black.waitType('opponent-move');
+    const redEnd = await red.waitType('game-ended');
+    const blackEnd = await black.waitType('game-ended');
+
+    assert.equal(ack.uci, RED_WIN_CHECKMATE_UCI);
+    assert.equal(seenByBlack.uci, RED_WIN_CHECKMATE_UCI);
+    for (const end of [redEnd, blackEnd]) {
+      assert.equal(end.roomId, roomId);
+      assert.equal(end.result, 'red-win');
+      assert.equal(end.reason, 'checkmate');
+      assert.deepEqual(end.moves, [RED_WIN_CHECKMATE_UCI]);
+      assert.equal(end.elo, null);
+    }
 
     await Promise.all([red.close(), black.close()]);
   } finally {
