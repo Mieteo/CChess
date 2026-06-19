@@ -13,6 +13,11 @@ on:
         description: WebSocket URL of the deployed server
         default: wss://cchess-backend.onrender.com
         required: true
+      allow_ranked_write:
+        description: Run opt-in smoke cases that start/end real ranked games
+        default: false
+        required: true
+        type: boolean
 
 jobs:
   smoke:
@@ -22,6 +27,7 @@ jobs:
         working-directory: cchess-backend
     env:
       CCHESS_BACKEND_URL: ${{ github.event.inputs.backend_url }}
+      SMOKE_ALLOW_RANKED_WRITE: ${{ github.event.inputs.allow_ranked_write == 'true' && '1' || '0' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

@@ -22,7 +22,11 @@ npm run lab:dashboard  # mở dashboard tại http://localhost:7700
 npm run lab:fuzz       # soak ngẫu nhiên (thêm --burst để săn race)
 npm run lab:load 150   # 150 ván song song rồi rút hết → phải về 0 phòng
 npm run lab:smoke      # black-box test trên server thật (onrender)
+SMOKE_ALLOW_RANKED_WRITE=1 npm run lab:smoke
+# opt-in: bắt đầu/kết thúc ván thật để smoke matchmaking, reconnect, resign
 ```
+
+`lab:smoke` mặc định **prod-safe**: xác thực, tạo/rời phòng chờ, enqueue/cancel matchmaking, nhưng không để ván bắt đầu nên không ghi `game_records`/ELO. Khi chạy với `SMOKE_ALLOW_RANKED_WRITE=1`, script cần 2 Firebase user khác nhau (tự mint anonymous users, hoặc truyền `FIREBASE_ID_TOKEN_A` + `FIREBASE_ID_TOKEN_B`) và sẽ tạo ván ranked thật để kiểm deploy end-to-end.
 
 ## Thành phần
 
@@ -36,7 +40,7 @@ npm run lab:smoke      # black-box test trên server thật (onrender)
 | `runner.ts` | Chạy hàng loạt kịch bản headless |
 | `fuzz.ts` | Soak ngẫu nhiên có seed (tái hiện được) + `--burst` (đua tin nhắn) |
 | `load.ts` | Test tải/rò rỉ: nhiều ván song song → khẳng định về bàn sạch |
-| `smoke.ts` | Smoke test trên server thật (auth Firebase ẩn danh, prod-safe) |
+| `smoke.ts` | Smoke test trên server thật (auth Firebase ẩn danh; prod-safe mặc định, có opt-in ranked-write) |
 | `render.ts` | Trigger + giám sát deploy Render (cần `RENDER_API_KEY`) |
 | `control.ts` + `public/` | Dashboard web: bot thủ công + nút chạy kịch bản |
 
