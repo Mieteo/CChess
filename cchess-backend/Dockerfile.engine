@@ -4,7 +4,7 @@
 
 FROM debian:stable-slim AS pikafish
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends ca-certificates curl libarchive-tools \
+  && apt-get install -y --no-install-recommends ca-certificates curl libarchive-tools libatomic1 \
   && rm -rf /var/lib/apt/lists/*
 WORKDIR /tmp/pikafish
 ARG PIKAFISH_RELEASE_URL=https://github.com/official-pikafish/Pikafish/releases/download/Pikafish-2026-01-02/Pikafish.2026-01-02.7z
@@ -28,6 +28,9 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV PIKAFISH_PATH=/app/engine/pikafish
 ENV EVAL_FILE=/app/engine/pikafish.nnue
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends libatomic1 \
+  && rm -rf /var/lib/apt/lists/*
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev && npm cache clean --force
 COPY --from=build /app/dist ./dist
