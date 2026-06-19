@@ -1,0 +1,47 @@
+# Black-box smoke test against the deployed cchess-engine HTTP service.
+# Manual trigger because it calls a live service and can optionally burn quota.
+name: engine-smoke
+
+on:
+  workflow_dispatch:
+    inputs:
+      engine_url:
+        description: HTTP URL of the deployed engine service
+        default: https://cchess-engine.onrender.com
+        required: true
+      auth_mode:
+        description: Auth expectation for the engine service
+        default: auto
+        required: true
+        type: choice
+        options:
+          - auto
+          - required
+          - disabled
+      check_quota:
+        description: Also verify free quota returns quota-exceeded
+        default: false
+        required: true
+        type: boolean
+
+jobs:
+  engine-smoke:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: cchess-backend
+    env:
+      CCHESS_ENGINE_URL: ${{ github.event.inputs.engine_url }}
+      ENGINE_SMOKE_AUTH: ${{ github.event.inputs.auth_mode }}
+      ENGINE_SMOKE_CHECK_QUOTA: ${{ github.event.inputs.check_quota == 'true' && '1' || '0' }}
+      ENGINE_FIREBASE_ID_TOKEN: ${{ secrets.CCHESS_ENGINE_FIREBASE_ID_TOKEN }}
+      FIREBASE_API_KEY: ${{ secrets.CCHESS_FIREBASE_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: cchess-backend/package-lock.json
+      - run: npm ci
+      - run: npm run engine:smoke

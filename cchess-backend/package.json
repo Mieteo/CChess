@@ -18,6 +18,7 @@
     "lab:fuzz": "tsx lab/fuzz.ts",
     "lab:load": "tsx lab/load.ts",
     "lab:smoke": "tsx lab/smoke.ts",
+    "engine:smoke": "tsx lab/engine_smoke.ts",
     "render:status": "tsx lab/render.ts status",
     "render:deploy": "tsx lab/render.ts deploy"
   },
