@@ -5,6 +5,7 @@ import { test } from 'node:test';
 import type { AddressInfo } from 'node:net';
 import type { Server } from 'node:http';
 
+import { DailyQuotaStore } from './quota';
 import type { EngineBestMove, EngineLimit } from './types';
 
 class FakePool {
@@ -53,6 +54,32 @@ test('engine HTTP server requires auth then returns a cached best move', async (
   }
 });
 
+test('engine HTTP server enforces free hint quota', async () => {
+  const { createEngineHttpServer } = await import('./server');
+  const service = createEngineHttpServer({
+    pool: new FakePool(),
+    authenticate: async (token) => ({ uid: token }),
+    requireAuth: true,
+    quota: new DailyQuotaStore({
+      bestMovePerDay: 10,
+      hintPerDay: 1,
+      analyzePerDay: 10,
+    }),
+  });
+
+  try {
+    const baseUrl = await listen(service.httpServer);
+    const first = await postHint(baseUrl, 'quota-user');
+    assert.equal(first.status, 200);
+    const second = await postHint(baseUrl, 'quota-user');
+    assert.equal(second.status, 429);
+    const body = await second.json() as Record<string, unknown>;
+    assert.equal(body.code, 'quota-exceeded');
+  } finally {
+    await service.close();
+  }
+});
+
 function listen(server: Server): Promise<string> {
   return new Promise((resolve) => {
     server.listen(0, '127.0.0.1', () => {
@@ -73,4 +100,15 @@ async function postBestMove(baseUrl: string, token: string): Promise<Record<stri
   });
   assert.equal(res.status, 200);
   return res.json() as Promise<Record<string, unknown>>;
+}
+
+async function postHint(baseUrl: string, token: string): Promise<Response> {
+  return fetch(`${baseUrl}/engine/hint`, {
+    method: 'POST',
+    headers: {
+      authorization: `Bearer ${token}`,
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({ fen: '4k4/9/9/9/9/9/9/9/9/4K4 w - - 0 1' }),
+  });
 }

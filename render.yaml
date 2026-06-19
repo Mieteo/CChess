@@ -63,3 +63,9 @@ services:
         value: 30000
       - key: MAX_MOVETIME_MS
         value: 3000
+      - key: FREE_BEST_MOVE_DAILY_LIMIT
+        value: 30
+      - key: FREE_HINT_DAILY_LIMIT
+        value: 3
+      - key: FREE_ANALYZE_DAILY_LIMIT
+        value: 3

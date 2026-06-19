@@ -11,6 +11,8 @@
 //
 // Optional quota smoke:
 //   ENGINE_SMOKE_CHECK_QUOTA=1 npm run engine:smoke
+//   npm run engine:smoke:quota
+//   npm run engine:smoke -- --quota --quota-limit=3
 //
 // Quota smoke mints a fresh anonymous Firebase user, calls /engine/hint until
 // the configured free limit is exhausted, then expects quota-exceeded.
@@ -25,8 +27,8 @@ const API_KEY =
 const REQUEST_TIMEOUT_MS = envInt('ENGINE_SMOKE_REQUEST_TIMEOUT_MS', 20_000);
 const MOVETIME_MS = envInt('ENGINE_SMOKE_MOVETIME_MS', 120);
 const MAX_BEST_MOVE_MS = envInt('ENGINE_SMOKE_MAX_BEST_MOVE_MS', 15_000);
-const CHECK_QUOTA = process.env.ENGINE_SMOKE_CHECK_QUOTA === '1';
-const HINT_QUOTA_LIMIT = envInt('ENGINE_SMOKE_HINT_QUOTA_LIMIT', 3);
+const CHECK_QUOTA = flagEnabled('ENGINE_SMOKE_CHECK_QUOTA', 'quota');
+const HINT_QUOTA_LIMIT = cliOrEnvInt('quota-limit', 'ENGINE_SMOKE_HINT_QUOTA_LIMIT', 3);
 
 const UCI_REGEX = /^[a-i][0-9][a-i][0-9]$/;
 
@@ -142,10 +144,15 @@ async function main(): Promise<void> {
     if (CHECK_QUOTA) {
       await run('quota limit eventually returns quota-exceeded', async () => {
         assert(resolvedAuth.required === true, 'quota smoke needs auth so each run can use a fresh uid');
+        assert(
+          HINT_QUOTA_LIMIT >= 1,
+          `ENGINE_SMOKE_HINT_QUOTA_LIMIT/--quota-limit must be >= 1, got ${HINT_QUOTA_LIMIT}`,
+        );
         const quotaUser = await anonSignIn();
         const quotaAuth: AuthContext = { required: true, token: quotaUser.idToken };
         for (let i = 0; i < HINT_QUOTA_LIMIT; i++) {
-          await postJson('/engine/hint', { fen: INITIAL_FEN, movetimeMs: MOVETIME_MS }, quotaAuth, [200]);
+          const res = await postJson('/engine/hint', { fen: INITIAL_FEN, movetimeMs: MOVETIME_MS }, quotaAuth, [200]);
+          assertBestMove(res.body, `quota hint ${i + 1}/${HINT_QUOTA_LIMIT}`);
         }
         const limited = await postJson(
           '/engine/hint',
@@ -160,7 +167,7 @@ async function main(): Promise<void> {
         );
       });
     } else {
-      console.log('  SKIP quota smoke (set ENGINE_SMOKE_CHECK_QUOTA=1 to enable)\n');
+      console.log('  SKIP quota smoke (set ENGINE_SMOKE_CHECK_QUOTA=1 or pass --quota to enable)\n');
     }
   }
 
@@ -339,6 +346,28 @@ function assert(cond: unknown, msg: string): asserts cond {
 function envInt(name: string, fallback: number): number {
   const value = Number(process.env[name]);
   return Number.isFinite(value) ? Math.trunc(value) : fallback;
+}
+
+function cliOrEnvInt(flag: string, envName: string, fallback: number): number {
+  const cli = cliValue(flag);
+  const value = Number(cli ?? process.env[envName]);
+  return Number.isFinite(value) ? Math.trunc(value) : fallback;
+}
+
+function flagEnabled(envName: string, flag: string): boolean {
+  const args = process.argv.slice(2);
+  if (args.includes(`--no-${flag}`)) return false;
+  if (args.includes(`--${flag}`)) return true;
+  return process.env[envName] === '1';
+}
+
+function cliValue(flag: string): string | undefined {
+  const args = process.argv.slice(2);
+  const inlinePrefix = `--${flag}=`;
+  const inline = args.find((arg) => arg.startsWith(inlinePrefix));
+  if (inline !== undefined) return inline.slice(inlinePrefix.length);
+  const index = args.indexOf(`--${flag}`);
+  return index >= 0 ? args[index + 1] : undefined;
 }
 
 function normalizeBaseUrl(raw: string): string {

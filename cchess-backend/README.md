@@ -88,6 +88,17 @@ Invoke-RestMethod `
   -Body '{"fen":"rnbakabnr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RNBAKABNR w - - 0 1","level":"grandmaster"}'
 ```
 
+Black-box smoke tự động:
+
+```powershell
+npm run engine:smoke
+npm run engine:smoke:quota
+npm run engine:smoke -- --quota --quota-limit=3
+```
+
+`engine:smoke:quota` mint một Firebase anonymous user mới, gọi `/engine/hint`
+đúng số quota free rồi xác nhận request kế tiếp trả `429 quota-exceeded`.
+
 ### Chạy local bằng binary tải tay trên Windows
 
 ```powershell

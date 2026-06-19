@@ -266,7 +266,7 @@
 
 ### 🟡 Sprint 15 — AI Coach (B3) + Pikafish server-side (engine lai) — code phần lớn xong, chờ hạ tầng thật
 > **Kế hoạch chi tiết + trạng thái:** [`11_KE_HOACH_TICH_HOP_ENGINE.md`](11_KE_HOACH_TICH_HOP_ENGINE.md) §10. Hướng cũ "Pikafish FFI on-device" đã **bỏ** do ràng buộc GPL-3.0 (app thương mại) + iOS App Store xung khắc GPL.
-- ✅ **Đã code (2026-06-07/11):** engine-service backend (UCI wrapper/pool/cache/quota/HTTP API + 6 test), Dockerfile.engine + render.yaml service riêng, Flutter `MoveEngine`/`EngineRouter` + fallback, bot **Đại Sư+**, replay analyze qua router, **nút Gợi ý in-game**, **attribution GPL trong Cài đặt**.
+- ✅ **Đã code (2026-06-07/11, cập nhật 2026-06-20):** engine-service backend (UCI wrapper/pool/cache/quota/HTTP API + 7 test), Dockerfile.engine + render.yaml service riêng, Flutter `MoveEngine`/`EngineRouter` + fallback, bot **Đại Sư+**, replay analyze qua router, **nút Gợi ý in-game**, **attribution GPL trong Cài đặt**, smoke gate `engine:smoke` + `engine:smoke:quota`.
 - ⬜ **Còn lại:** spike FEN/UCI với **binary Pikafish thật** (mục 11 của [11](11_KE_HOACH_TICH_HOP_ENGINE.md) — việc cần máy/Docker thật), deploy `cchess-engine` lên Render (~$25/tháng Standard), quota bền vững (Firestore/Redis thay in-memory), xác nhận **NNUE license thương mại**, AI Coach lớp diễn giải rule-based (B3 UI).
 
 ### ⬜ Sprint 16 — Khám Phá (Module D)

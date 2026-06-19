@@ -26,6 +26,7 @@ SMOKE_ALLOW_RANKED_WRITE=1 npm run lab:smoke
 # opt-in: bắt đầu/kết thúc ván thật để smoke matchmaking, reconnect, resign
 npm run engine:smoke   # black-box HTTP smoke cho cchess-engine
 ENGINE_SMOKE_CHECK_QUOTA=1 npm run engine:smoke
+npm run engine:smoke:quota
 # opt-in: kiểm quota free user đến khi nhận quota-exceeded
 ```
 

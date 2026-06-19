@@ -23,6 +23,10 @@ on:
         default: false
         required: true
         type: boolean
+      hint_quota_limit:
+        description: Expected free /engine/hint quota before quota-exceeded
+        default: '3'
+        required: true
 
 jobs:
   engine-smoke:
@@ -34,6 +38,7 @@ jobs:
       CCHESS_ENGINE_URL: ${{ github.event.inputs.engine_url }}
       ENGINE_SMOKE_AUTH: ${{ github.event.inputs.auth_mode }}
       ENGINE_SMOKE_CHECK_QUOTA: ${{ github.event.inputs.check_quota == 'true' && '1' || '0' }}
+      ENGINE_SMOKE_HINT_QUOTA_LIMIT: ${{ github.event.inputs.hint_quota_limit }}
       ENGINE_FIREBASE_ID_TOKEN: ${{ secrets.CCHESS_ENGINE_FIREBASE_ID_TOKEN }}
       FIREBASE_API_KEY: ${{ secrets.CCHESS_FIREBASE_API_KEY }}
     steps:
