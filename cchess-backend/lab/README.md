@@ -32,6 +32,12 @@ npm run engine:smoke:quota
 
 `lab:smoke` mặc định **prod-safe**: xác thực, tạo/rời phòng chờ, enqueue/cancel matchmaking, nhưng không để ván bắt đầu nên không ghi `game_records`/ELO. Khi chạy với `SMOKE_ALLOW_RANKED_WRITE=1`, script cần 2 Firebase user khác nhau (tự mint anonymous users, hoặc truyền `FIREBASE_ID_TOKEN_A` + `FIREBASE_ID_TOKEN_B`) và sẽ tạo ván ranked thật để kiểm deploy end-to-end.
 
+## CI / gate hiện tại
+
+- `backend-ci` chạy trên push/PR chạm `cchess-backend/**`: `npm run lint`, `npm run lab:check`, `npm test`, `npm run lab`, `npm run lab:load -- 40`, `npm run lab:fuzz` steady + burst.
+- `post-deploy-smoke` là workflow thủ công cho server deploy thật; mặc định prod-safe, bật `allow_ranked_write` mới tạo/kết thúc ván ranked thật.
+- `engine-smoke` là workflow thủ công cho `cchess-engine`; có input endpoint, auth mode, `check_quota`, `hint_quota_limit`. Product smoke trên `https://cchess-engine.onrender.com` đã PASS 8/8 ngày 2026-06-20, gồm bước `quota-exceeded`.
+
 ## Thành phần
 
 | File | Vai trò |

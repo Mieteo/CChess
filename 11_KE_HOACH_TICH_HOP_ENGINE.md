@@ -94,12 +94,12 @@
 
 > Mỗi giai đoạn có **đầu ra cụ thể** + **tiêu chí nghiệm thu**. Có thể dừng sau Phase 2 nếu chỉ cần "bot mạnh online", làm tiếp Phase 4–5 cho AI Coach.
 
-### Phase 0 — Spike & quyết định (1–2 ngày) ⬜
+### Phase 0 — Spike & quyết định (1–2 ngày) 🟡 *(smoke thật đã có; còn đối chiếu nhiều thế cố định)*
 **Mục tiêu:** gỡ rủi ro lớn nhất trước khi đầu tư.
-- [ ] **Tải Pikafish + network** về máy dev, chạy thử bằng tay: `position startpos` → `go movetime 1000` → xem `bestmove`.
-- [ ] ⚠️ **Spike A — FEN/UCI compatibility:** dựng bảng đối chiếu thế cờ ↔ FEN ↔ nước UCI giữa engine TS ([engine/index.ts](cchess-backend/src/engine/index.ts)) và Pikafish. Chốt định dạng FEN dùng chung.
-- [ ] Chốt **mức tài nguyên mặc định**: ví dụ live bot `movetime 600ms`, analyze `movetime 300ms/nước`, hint `movetime 500ms`, `Threads=1`, `Hash=64–128MB`.
-- [ ] Chốt gói Render cho `cchess-engine` (xem §6).
+- [x] **Pikafish thật + network đã chạy qua smoke service**: `engine-smoke` gọi `/health`, `/engine/best-move`, cache, `/engine/hint`, `/engine/analyze`; product smoke Render PASS 8/8 ngày 2026-06-20.
+- [ ] ⚠️ **Spike A — FEN/UCI compatibility nâng cao:** dựng bảng đối chiếu thêm vài thế cờ cố định ↔ FEN ↔ nước UCI giữa engine TS ([engine/index.ts](cchess-backend/src/engine/index.ts)) và Pikafish. Smoke hiện đã kiểm UCI hợp lệ ở `INITIAL_FEN`, nhưng chưa đủ để kết luận chất lượng/định hướng mọi thế.
+- [x] Chốt **mức tài nguyên mặc định cho smoke/prototype**: `movetime` smoke thấp, `Threads=1`, `Hash=128MB`, `MAX_CONCURRENCY=1`, quota free qua env trong `render.yaml`.
+- [ ] Chốt gói Render production cho `cchess-engine` (xem §6): free đủ smoke/prototype, cần Standard trước traffic AI thật.
 
 **Nghiệm thu:** có hàm chuyển đổi FEN/move + 1 test đối chiếu xanh; biết chắc Pikafish chạy đúng trên 1 thế cờ thật của app.
 
@@ -125,15 +125,15 @@
 
 **Nghiệm thu:** gọi 3 endpoint qua `curl` với token hợp lệ trả đúng; không token → 401; vượt hạn mức → 429.
 
-### Phase 3 — Đóng gói & deploy (Docker + Render) 🟡 *(Dockerfile.engine + render.yaml xong; CHƯA deploy thật)*
+### Phase 3 — Đóng gói & deploy (Docker + Render) 🟡 *(Dockerfile.engine + Render smoke xong; chờ production hardening)*
 **Mục tiêu:** service engine chạy thật trên Render, tách khỏi realtime.
-- [ ] **Dockerfile** multi-stage: stage build compile Pikafish (⚠️ C) + tải `pikafish.nnue`; stage runtime `node:20-slim` copy binary + nnue + service (xem §5.3).
-- [ ] Thêm service `cchess-engine` vào `render.yaml` (Blueprint) — **plan ≥ Standard** (xem §6).
-- [ ] Env: `PIKAFISH_PATH`, `EVAL_FILE`, `ENGINE_THREADS`, `ENGINE_HASH_MB`, `MAX_CONCURRENCY`, `DEFAULT_MOVETIME_MS`.
+- [x] **Dockerfile** multi-stage: stage build/release Pikafish (⚠️ C) + tải `pikafish.nnue`; stage runtime `node:20-slim` copy binary + nnue + service (xem §5.3). Các fix gần đây: cài `curl`, giới hạn parallelism build, dùng release binary, cài `libatomic`.
+- [x] Thêm service `cchess-engine` vào `render.yaml` (Blueprint) — hiện để **free** cho smoke/prototype; **plan ≥ Standard** trước traffic thật (xem §6).
+- [x] Env smoke/prototype: `ENGINE_THREADS`, `ENGINE_HASH_MB`, `MAX_CONCURRENCY`, `DEFAULT_MOVETIME_MS`, timeout search/init/task, `MAX_MOVETIME_MS`, quota free best-move/hint/analyze.
 - [ ] Server realtime gọi sang qua URL nội bộ (Render private service networking) — **không phơi public** nếu chỉ backend gọi; nếu app gọi trực tiếp thì để public + auth.
-- [ ] Health check `/health` + log `[engine]`.
+- [x] Health check `/health` + `engine-smoke` workflow thủ công cho staging/prod.
 
-**Nghiệm thu:** `bestMove` qua endpoint production trả < ~1s; service realtime KHÔNG bị ảnh hưởng khi engine đang phân tích (đo đồng hồ ván không giật).
+**Nghiệm thu:** product smoke `https://cchess-engine.onrender.com` PASS 8/8 ngày 2026-06-20, gồm quota `429 quota-exceeded`. Trước khi mở traffic thật vẫn cần plan Standard, quan sát latency/cold-start và chạy lại smoke sau deploy.
 
 ### Phase 4 — Tích hợp app Flutter 🟡 *(abstraction/router/bot Đại Sư+/replay + nút Gợi ý + attribution xong 2026-06-11; còn màn AI Coach B3)*
 **Mục tiêu:** UI dùng engine qua lớp trừu tượng + fallback.
@@ -232,7 +232,7 @@ COPY --from=build /pf/src/*.nnue   /app/engine/pikafish.nnue
 | Hạng mục | Ước lượng | Ghi chú |
 |---|---|---|
 | Bản quyền Pikafish | **$0** | GPL-3.0, miễn phí (xem ràng buộc ⚠️ B) |
-| Render `cchess-engine` | **~$25/tháng (Standard ~1 vCPU/2GB)** trở lên | Free/Starter (0.1–0.5 vCPU) **không đủ** cho phân tích sâu. Bắt đầu Standard, scale theo tải |
+| Render `cchess-engine` | **Free cho smoke/prototype; ~Standard $25/tháng trở lên cho traffic thật** | Free đã đủ để product smoke PASS, nhưng cold-start/CPU không phù hợp khi user thật dùng bot mạnh/hint/analyze thường xuyên. Bắt đầu Standard trước launch AI, scale theo tải |
 | Render `cchess-backend` realtime | giữ **Free→Starter $7** | Không chạy engine nặng nên không cần mạnh |
 | Firestore (cache/quota) | không đáng kể | Đếm hạn mức + cache khai cuộc |
 | Dung lượng app | **+0 MB** | NNUE ở server, KHÔNG ship vào app — lợi thế của phương án lai |
@@ -256,11 +256,11 @@ COPY --from=build /pf/src/*.nnue   /app/engine/pikafish.nnue
 
 ## 8. Thứ tự ưu tiên đề xuất
 
-1. **Phase 0 (spike FEN/UCI)** — gỡ rủi ro #1, rẻ và nhanh, quyết định có nên đi tiếp.
-2. **Phase 1–2** — có "bot mạnh online" + hint dùng được (giá trị thấy ngay).
-3. **Phase 3** — deploy thật, đo ảnh hưởng tới service realtime.
-4. **Phase 4** — nối app + fallback + AI Coach/Phân tích sau ván.
-5. **Phase 5–6** — test, hardening, tối ưu chi phí.
+1. **Quota/VIP bền vững** — chuyển quota in-memory sang Firestore/Redis, reset theo ngày và bypass theo VIP trước khi mở tính năng AI cho user thật.
+2. **FEN/UCI + H4 chất lượng** — thêm bộ thế cố định để đối chiếu nước UCI/Pikafish với board app; dùng làm benchmark chất lượng gợi ý sau tuning.
+3. **Production hardening Render** — upgrade `cchess-engine` lên Standard khi có traffic, chạy `engine-smoke` sau mỗi deploy/config change, theo dõi latency/cold-start.
+4. **AI Coach B3** — xây lớp diễn giải rule-based trên kết quả `analyze`, UI sau ván và fallback minimax khi remote lỗi.
+5. **Phase 6 tối ưu** — cache bền vững, warm-up, điều chỉnh movetime theo tải.
 
 > Có thể dừng sau Phase 4 cho bản dùng được; Phase 6 làm dần khi có user thật.
 
@@ -311,8 +311,9 @@ COPY --from=build /pf/src/*.nnue   /app/engine/pikafish.nnue
 
 - ✅ **Nút gợi ý in-game — DONE 2026-06-11**: nút 💡 trong `GameActionBar` (ván bot/local), `_onHint` ở [game_screen.dart](cchess/lib/presentation/game/game_screen.dart) gọi `EngineRouter.bestMove(useCase: hint)` → remote Pikafish khi online, fallback minimax + snackbar khi offline; nước gợi ý vẽ marker **xanh ngọc** trên [chess_board.dart](cchess/lib/widgets/chess/chess_board.dart) (phân biệt với marker vàng của nước cuối); hint tự xoá khi đi nước/undo/ván mới. 6 unit test trong `game_controller_test.dart`. Test tay UI: Nhóm H trong [`10_KE_HOACH_TEST.md`](10_KE_HOACH_TEST.md).
 - ✅ **Attribution trong app — DONE 2026-06-11**: Cài đặt → Giới thiệu → "Engine cờ & giấy phép" (dialog nêu Pikafish GPL-3.0 chạy server-side không bundle vào app, NNUE thuộc official-pikafish/Networks có điều khoản riêng, link nguồn).
-- ⬜ **Spike FEN/UCI với Pikafish thật**: cần chạy binary thật (Docker hoặc tải tay theo mục 11), lấy vài thế cờ cố định, đối chiếu nước UCI trả về với board của app. *(Việc cần máy thật — không tự động hoá được bằng test hiện có.)*
-- ⬜ **Deploy `cchess-engine` lên Render**: render.yaml đã khai báo service; chưa bấm deploy (plan ≥ Standard ~$25/tháng — xem §6).
+- 🟡 **Spike FEN/UCI với Pikafish thật**: smoke thật đã PASS ở `INITIAL_FEN` + analyze 1 nước hợp lệ; còn cần vài thế cờ cố định để đối chiếu nước UCI trả về với board của app và đánh giá chất lượng H4.
+- ✅ **Deploy/smoke `cchess-engine` lên Render — DONE ở mức prototype 2026-06-20**: `https://cchess-engine.onrender.com` PASS 8/8 với `engine:smoke:quota`, gồm `/health`, auth probe, invalid FEN, best-move/cache, hint, analyze và quota `429 quota-exceeded`.
+- ⬜ **Production readiness cho `cchess-engine`**: upgrade Standard trước traffic thật, theo dõi cold-start/latency, chạy lại `engine-smoke` sau deploy/config change.
 - ⬜ **VIP thật + quota bền vững**: hiện quota là in-memory theo process; production nên dùng Firestore/Redis để không reset khi redeploy/restart.
 - ⚠️ **NNUE license cho thương mại**: mã nguồn Pikafish GPL-3.0, nhưng repo chính thức `official-pikafish/Networks` ghi `pikafish.nnue` **không dùng thương mại nếu chưa được phép**. Nếu app/backend có mục tiêu thương mại, phải xin phép hoặc chọn network/engine khác có giấy phép phù hợp trước khi dùng production.
 
@@ -421,4 +422,4 @@ EngineRouter(
 
 ---
 
-*Tạo 2026-06-07 sau khi chốt phương án lai (offline minimax Dart + online Pikafish server-side). Cập nhật 2026-06-07: đã triển khai service engine/API/pool/cache/quota cơ bản, Dockerfile engine, Flutter abstraction/router/fallback và đã nối bot/replay controller vào `EngineRouter`. Cập nhật 2026-06-11: **nút Gợi ý in-game + attribution GPL trong Cài đặt đã xong** (Phase 4 chỉ còn màn AI Coach B3 chuyên biệt); test engine-service 6/6 nằm trong `npm test` 25/25 (xem Nhóm T9 của [`10_KE_HOACH_TEST.md`](10_KE_HOACH_TEST.md)). Cập nhật 2026-06-19/20: đã thêm `npm run engine:smoke` + workflow `engine-smoke` để smoke black-box `/health`, auth, best-move/cache, hint, analyze; quota có gate riêng `npm run engine:smoke:quota` / `--quota --quota-limit=N` và regression HTTP 429 `quota-exceeded`. Product smoke quota trên Render `cchess-engine` đã PASS 8/8 ngày 2026-06-20. Bước tiếp theo là làm quota/VIP bền vững bằng Firestore/Redis.*
+*Tạo 2026-06-07 sau khi chốt phương án lai (offline minimax Dart + online Pikafish server-side). Cập nhật 2026-06-07: đã triển khai service engine/API/pool/cache/quota cơ bản, Dockerfile engine, Flutter abstraction/router/fallback và đã nối bot/replay controller vào `EngineRouter`. Cập nhật 2026-06-11: **nút Gợi ý in-game + attribution GPL trong Cài đặt đã xong** (Phase 4 chỉ còn màn AI Coach B3 chuyên biệt); test engine-service 6/6 nằm trong `npm test` 25/25 (xem Nhóm T9 của [`10_KE_HOACH_TEST.md`](10_KE_HOACH_TEST.md)). Cập nhật 2026-06-19/20: đã thêm `npm run engine:smoke` + workflow `engine-smoke` để smoke black-box `/health`, auth, best-move/cache, hint, analyze; quota có gate riêng `npm run engine:smoke:quota` / `--quota --quota-limit=N` và regression HTTP 429 `quota-exceeded`. Product smoke quota trên Render `cchess-engine` đã PASS 8/8 ngày 2026-06-20. Bước tiếp theo là quota/VIP bền vững bằng Firestore/Redis, đối chiếu FEN/UCI nhiều thế cố định, chốt NNUE license và nâng Render plan trước traffic thật.*

@@ -1,6 +1,6 @@
 # 📊 KẾ HOẠCH & TIẾN ĐỘ DỰ ÁN — CChess
 
-> Tài liệu sống — cập nhật ngày **2026-06-13** (đợt 2): **Nhóm S PASS 12/12**. Theo feedback UX đợt S code thêm: **số mắt xem hiển thị cho cả 2 người chơi**, **dialog kết quả người xem chỉ còn nút "Thoát"** + tự xem tiếp khi 2 kỳ thủ đấu lại (sửa kèm bug spectator bị biến thành "người chơi Đỏ" sau rematch), **phòng chờ tự hủy sau 1 phút** (`room-expired`). Trước đó cùng ngày: R đóng 12/12, C8 + H1–H3 PASS, chat rate-limit 2s, hint best-effort. Backend `npm test` **28/28**, Flutter `flutter test` **156/156**. Chi tiết: changelog cuối tài liệu.
+> Tài liệu sống — cập nhật ngày **2026-06-20**: chốt đợt T16–T24. Backend `npm test` **69/69** (12 file), Flutter `flutter test` **226/226** (21 file); `backend-ci` đã chạy `lint` + `lab:check` + `npm test` + lab/load/fuzz, `flutter-ci` chạy analyze/test, thêm gate thủ công `post-deploy-smoke` và `engine-smoke`. Engine service `https://cchess-engine.onrender.com` đã smoke thật **8/8 PASS** gồm quota `429 quota-exceeded`. Việc còn lại chuyển sang hardening sản phẩm: quota/VIP bền vững, license NNUE, test tay cuối D4/M5/H4 và AI Coach B3.
 > Mục đích: tổng kết **đã làm**, **chưa làm**, **đang chờ phụ thuộc** theo từng Sprint.
 > Tham chiếu chéo: [`01_FEATURE_SPECIFICATION.md`](01_FEATURE_SPECIFICATION.md), [`02_PROMPT_UI_UX.md`](02_PROMPT_UI_UX.md), [`03_PROMPT_FEATURES_ROADMAP.md`](03_PROMPT_FEATURES_ROADMAP.md), [`07_HUONG_DAN_THIET_LAP_FIREBASE.md`](07_HUONG_DAN_THIET_LAP_FIREBASE.md), [`08_HUONG_DAN_BACKEND_WEBSOCKET.md`](08_HUONG_DAN_BACKEND_WEBSOCKET.md), [`09_BACKEND_SERVER_HOAT_DONG.md`](09_BACKEND_SERVER_HOAT_DONG.md), [`10_KE_HOACH_TEST.md`](10_KE_HOACH_TEST.md) — **kế hoạch test các mục online chưa xác nhận**.
 
@@ -35,10 +35,10 @@
 | 9 | Game History + Replay AI | 🟢 | Local Hive + push `game_records` lên cloud subcollection ✓; backend cũng ghi mirror record có ELO change cho ván ranked |
 | 10 | Achievements + Daily Quests | 🟢 | Engine + UI xong, chờ Cloud Functions trigger server-side khi ván ranked đạt mốc |
 | 11 | Opening Library (Khai cuộc Đại sư) | 🟢 | Seed cứng 5 khai cuộc, chờ CMS |
-| 12 | Online Matchmaking + Spectate (A1, A5, A6) | 🟡 | **A1 Ranked done**; **A5 chat cơ bản done + chip chat nhanh 2026-06-11**; **A6 Spectate cơ bản + active room list done**; **A6 share link/QR done 2026-06-07**; **Đấu lại (rematch) code done 2026-06-07**; **test tự động WS đóng hết 2026-06-07**; **hardening double-disconnect done 2026-06-11** (grace theo uid + test T10). Còn lại **chỉ là việc bạn phải tự làm**: test tay E2E 2 thiết bị (Nhóm R/S/D/M/G/H + C8) + nâng cấp Render Starter $7/tháng |
+| 12 | Online Matchmaking + Spectate (A1, A5, A6) | 🟡 | **A1 Ranked done**; **A5 chat cơ bản + chip nhanh done**; **A6 Spectate/share link/QR done**; **Rematch done**; R/S đã đóng test tay. Đợt 2026-06-19/20 đã tự động hóa lõi C/D/M/G/ELO + widget online + smoke deploy. Còn lại: vòng nhìn-mắt cuối trên thiết bị thật cho D4 OS lifecycle, M5 Firebase thật, H4 chất lượng gợi ý, C2/D/G4 visual + nâng Render Starter khi có user thật |
 | 13 | Cờ Úp + Cờ Casual (A3, A2) | 🔒 | Chờ engine variant + invite-by-link flow |
 | 14 | Community (Bạn bè, Leaderboard, CLB) | 🔒 | Chờ S12 |
-| 15 | AI Coach (B3) + AI Replay nâng cao (B5) | 🟡 | **Engine lai code xong phần lớn 2026-06-07/11** — service Pikafish backend + abstraction Flutter + bot Đại Sư+ + replay analyze + **nút Gợi ý in-game (2026-06-11)** + attribution GPL. Còn: smoke test binary Pikafish thật, deploy `cchess-engine` Render, quota bền vững, NNUE license — xem [11](11_KE_HOACH_TICH_HOP_ENGINE.md) §10 |
+| 15 | AI Coach (B3) + AI Replay nâng cao (B5) | 🟡 | **Engine lai đã qua smoke thật 2026-06-20** — service Pikafish backend + abstraction Flutter + bot Đại Sư+ + replay analyze + **nút Gợi ý in-game** + attribution GPL + `cchess-engine` Render smoke 8/8 gồm quota. Còn: quota/VIP bền vững, đối chiếu FEN/UCI nhiều thế cố định, NNUE license, AI Coach B3 UI/diễn giải — xem [11](11_KE_HOACH_TICH_HOP_ENGINE.md) §10 |
 | 16 | Khám Phá (Shop, Inventory, Mail, Event) | ⬜ | Cần backend kinh tế |
 | 17 | VIP Center + IAP | ⬜ | Phụ thuộc store account |
 | 18 | OCR thế cờ (B7), học thuộc kỳ phổ (B8) | ⬜ | Giai đoạn 3 |
@@ -51,6 +51,7 @@
 > - **2026-06-07 (đợt 2) — đóng hết test tự động Sprint 12**: refactor `cchess-backend/src/server.ts` thành factory `createCChessServer({authenticate, persist})` (giữ nguyên hành vi production; entry point production được bọc trong guard `CCHESS_NO_LISTEN`). Thêm `server.test.ts` (integration WS thật, in-process, không cần Firebase): T3 rematch handshake (cả-2-mời → `game-start{rematch:true}` đổi màu / decline / not-finished), T7 reconnect snapshot trong grace, T8 chat broadcast + rate-limit + cap 120 ký tự + chặn sau `game-ended`. Backend `npm test` **17/17** (rooms 3 + match 8 + server 6).
 > - **2026-06-07 (đợt 3) — Sprint 15 khởi động sớm (engine lai)**: dựng `cchess-backend/src/engine-service/` (UCI wrapper + pool + cache + quota + HTTP API), `Dockerfile.engine`, service `cchess-engine` trong `render.yaml`; phía Flutter thêm `MoveEngine`/`LocalMinimaxEngine`/`RemotePikafishEngine`/`EngineRouter` + bot **Đại Sư+** + replay analyze qua router. Chi tiết [11](11_KE_HOACH_TICH_HOP_ENGINE.md) §10.
 > - **2026-06-11 — đợt code các phần không bị chặn**: (1) **nút Gợi ý in-game** (`EngineUseCase.hint`, remote → fallback minimax, marker xanh ngọc trên bàn, 6 unit test mới); (2) **attribution Pikafish GPL-3.0 + NNUE** trong Cài đặt → Giới thiệu; (3) **chip chat nhanh** trong chat sheet online (A5); (4) **hardening double-disconnect** (D5): `Room.disconnectGrace` map theo uid (2 người cùng rớt giữ 2 cửa sổ reconnect riêng), snapshot `reconnected` thêm `peerInGrace`, phòng tự dọn khi kết thúc không còn ai, grace override được qua env cho test — `server.disconnect.test.ts` 2 integration test mới. Backend **25/25**, Flutter **148/148**.
+> - **2026-06-19/20 — đợt tự động hóa và smoke hạ tầng**: backend M/G/ELO, persistence idempotency, checkmate fixture G1, Flutter chat/reconnect/result widgets, `backend-ci` lab/load/fuzz, `post-deploy-smoke` opt-in ranked-write, `engine-smoke` HTTP cho `cchess-engine`, quota gate `engine:smoke:quota`. Backend **69/69**, Flutter **226/226**; engine product smoke trên Render **8/8 PASS** gồm `quota-exceeded`.
 
 ---
 
@@ -183,7 +184,7 @@
 - **Deploy**: Render production endpoint `https://cchess-backend.onrender.com`; client dùng `wss://...` qua `CCHESS_BACKEND_URL`.
 - Flutter client: [game_socket_service.dart](cchess/lib/data/services/game_socket_service.dart), [online_lobby_screen.dart](cchess/lib/presentation/online/online_lobby_screen.dart), [online_game_screen.dart](cchess/lib/presentation/online/online_game_screen.dart), [online_match_controller.dart](cchess/lib/presentation/online/online_match_controller.dart).
 
-**Chưa làm:** server restart graceful / room persistence backend, double-disconnect refinement, test tự động online flow.
+**Chưa làm:** server restart graceful / room persistence backend. Double-disconnect và online flow lõi đã có lab/integration/widget test; vẫn giữ một vòng test tay cuối cho lifecycle OS thật.
 
 ---
 
@@ -249,7 +250,7 @@
 - ✅ **A5 Chat polish — chip tin nhắn nhanh done 2026-06-11.** Hàng `ActionChip` preset (👋🍀🔥😅👏🤝) trong chat sheet, gửi qua `chat-message` thường nên rate-limit/cap server áp dụng nguyên vẹn. Còn lại nếu cần: mute/report khi mở public.
 - ✅ **Hardening double-disconnect (D5) done 2026-06-11.** `Room.disconnectGrace: Map<uid, {timer, deadline}>` — cả 2 người chơi cùng rớt vẫn giữ cửa sổ reconnect riêng (bug cũ: người rớt sau ghi đè marker của người rớt trước → người trước không thể reconnect). Người rớt trước hết grace trước → xử thua trước. `reconnected` snapshot thêm `peerInGrace{uid, remainingMs}`. Phòng kết thúc khi cả 2 vắng mặt tự dọn khỏi memory. Test: `server.disconnect.test.ts` (2 integration test).
 - ⏳ **(việc của bạn) Render free tier** ngủ sau 15 phút → upgrade Starter $7/tháng khi launch thật
-- ⏳ **(việc của bạn) Test tay E2E 2 thiết bị** — Nhóm R/S/D/M/G (+ C8, H1–H3 mới) trong [`10_KE_HOACH_TEST.md`](10_KE_HOACH_TEST.md) (các nhánh UI + đa thiết bị mà test tự động không phủ được)
+- ⏳ **(việc của bạn) Test tay cuối 2 thiết bị** — R/S đã đóng; còn D4 OS-thật, M5 với Firebase thật, H4 chất lượng gợi ý và một vòng nhìn-mắt cho C2/D/G4 theo [`10_KE_HOACH_TEST.md`](10_KE_HOACH_TEST.md)
 - Online hardening còn lại (tuỳ chọn, chưa làm): graceful server restart / room persistence backend
 
 ### 🔒 Sprint 13 — Biến thể: Cờ Úp (A3), Cờ Casual (A2) (cần S12)
@@ -264,10 +265,10 @@
 - Giải đấu định kỳ (C4).
 - Tin tức + Tàn Cục Thách Đấu hàng ngày (C6).
 
-### 🟡 Sprint 15 — AI Coach (B3) + Pikafish server-side (engine lai) — code phần lớn xong, chờ hạ tầng thật
+### 🟡 Sprint 15 — AI Coach (B3) + Pikafish server-side (engine lai) — engine smoke thật xong, chờ hardening sản phẩm
 > **Kế hoạch chi tiết + trạng thái:** [`11_KE_HOACH_TICH_HOP_ENGINE.md`](11_KE_HOACH_TICH_HOP_ENGINE.md) §10. Hướng cũ "Pikafish FFI on-device" đã **bỏ** do ràng buộc GPL-3.0 (app thương mại) + iOS App Store xung khắc GPL.
-- ✅ **Đã code (2026-06-07/11, cập nhật 2026-06-20):** engine-service backend (UCI wrapper/pool/cache/quota/HTTP API + 7 test), Dockerfile.engine + render.yaml service riêng, Flutter `MoveEngine`/`EngineRouter` + fallback, bot **Đại Sư+**, replay analyze qua router, **nút Gợi ý in-game**, **attribution GPL trong Cài đặt**, smoke gate `engine:smoke` + `engine:smoke:quota`.
-- ⬜ **Còn lại:** spike FEN/UCI với **binary Pikafish thật** (mục 11 của [11](11_KE_HOACH_TICH_HOP_ENGINE.md) — việc cần máy/Docker thật), deploy `cchess-engine` lên Render (~$25/tháng Standard), quota bền vững (Firestore/Redis thay in-memory), xác nhận **NNUE license thương mại**, AI Coach lớp diễn giải rule-based (B3 UI).
+- ✅ **Đã code/chạy (2026-06-07/11, cập nhật 2026-06-20):** engine-service backend (UCI wrapper/pool/cache/quota/HTTP API + 7 test), Dockerfile.engine + render.yaml service riêng, Flutter `MoveEngine`/`EngineRouter` + fallback, bot **Đại Sư+**, replay analyze qua router, **nút Gợi ý in-game**, **attribution GPL trong Cài đặt**, smoke gate `engine:smoke` + `engine:smoke:quota`, `cchess-engine` Render smoke thật **8/8 PASS** gồm quota.
+- ⬜ **Còn lại:** quota/VIP bền vững (Firestore/Redis thay in-memory), xác nhận **NNUE license thương mại**, đối chiếu FEN/UCI thêm nhiều thế cố định + H4 chất lượng gợi ý, upgrade engine lên Standard trước traffic thật, AI Coach lớp diễn giải rule-based (B3 UI).
 
 ### ⬜ Sprint 16 — Khám Phá (Module D)
 - Shop (D1), Inventory (D2), Khung Avatar (D3), Mail (D4), Event (D5), Welfare/điểm danh (D6), Crafting (D7).
@@ -319,39 +320,40 @@
 
 ---
 
-## 6. Số liệu tổng (cập nhật 2026-06-11)
+## 6. Số liệu tổng (cập nhật 2026-06-20)
 
 - **Tổng file Dart `lib/`:** ~95 file (thêm `core/chess_engine/` lớp engine lai: move_engine / engine_router / local_minimax_engine / remote_pikafish_engine + transports / engine_providers).
-- **Backend TypeScript:** ~2000 dòng (realtime: server.ts + auth.ts + rooms.ts + match.ts + persistence.ts + elo.ts + matchmaking.ts + engine/ port; engine-service: server + uci_engine + engine_pool + analysis + cache + quota + fen).
-- **Test tự động:** Flutter **19 file / 156 test** xanh (`flutter test`); backend **8 file / 28 test** xanh (`npm test`). Phân loại nguồn test: xem bảng cuối [`10_KE_HOACH_TEST.md`](10_KE_HOACH_TEST.md).
-- **Test tay:** R **ĐÓNG 12/12**; **S1–S12 PASS**; C8 + H1–H3 PASS. Còn lại: S13–S15 (UX mới theo feedback), C1–C7, D, M, G, H4.
+- **Backend TypeScript:** realtime server + lab + engine-service (server, UCI wrapper, pool, analysis, cache, quota, FEN) đã có CI riêng.
+- **Test tự động:** Backend `npm test` **69/69** (12 file) + `backend-ci` chạy `lab`, `lab:load`, `lab:fuzz`; Flutter `flutter test` **226/226** (21 file) + `flutter analyze`. Phân loại nguồn test: xem bảng cuối [`10_KE_HOACH_TEST.md`](10_KE_HOACH_TEST.md).
+- **Test tay:** R **ĐÓNG 12/12**; S **ĐÓNG 15/15**; C8 + H1–H3 PASS. Còn lại chủ yếu là vòng thật/visual: D4 OS lifecycle, M5 Firebase thật, H4 chất lượng gợi ý, C2/D/G4 nhìn-mắt.
 - **Sprint hoàn thành (1 chiều):** 10/18 (1–7 + 8a + 8b + 8c).
 - **Sprint code xong, sync một phần:** 3/18 (S9, S10, S11).
 - **Sprint MVP done phase 1:** 1/18 (S12 — A1 Ranked production).
-- **Sprint đang dở:** S12 phase 2 (chỉ còn test tay + Render upgrade), S15 (engine lai — code xong phần lớn, chờ binary/deploy thật).
+- **Sprint đang dở:** S12 phase 2 (chỉ còn test tay cuối + Render upgrade khi có user thật), S15 (engine lai — smoke thật xong, chờ quota/VIP bền vững, license, plan production và AI Coach B3).
 - **Sprint locked:** S13 (Cờ Úp + Casual), S14 (Community), S16-18 (giai đoạn sau).
-- **Tỷ lệ hoàn thành code (ước lượng theo spec MVP+G2):** ~80% (tăng từ 75% sau engine lai + hint + hardening).
-- **Tỷ lệ tính năng end-to-end dùng được production:** ~55–60% (ranked online thật đã chạy; engine Pikafish chưa deploy nên hint/Đại Sư+ đang chạy fallback minimax).
-- **Production endpoint**: https://cchess-backend.onrender.com (Render free tier — ngủ sau 15 phút idle). Engine service `cchess-engine` **chưa deploy**.
+- **Tỷ lệ hoàn thành code (ước lượng theo spec MVP+G2):** ~82% (tăng sau automation gates, engine smoke thật và quota gate).
+- **Tỷ lệ tính năng end-to-end dùng được production:** ~60–65% (ranked online thật đã chạy; engine Pikafish đã smoke thật trên Render nhưng chưa harden quota/VIP/license/plan cho traffic thật).
+- **Production endpoint**: backend `https://cchess-backend.onrender.com` / `wss://cchess-backend.onrender.com`; engine `https://cchess-engine.onrender.com`. Cả hai đang ở Render free tier cho prototype/smoke; cần Starter/Standard trước khi mở user thật.
 - **Repo GitHub**: Mieteo/CChess, branch `main`.
 
 ---
 
 ## 7. Khuyến nghị bước tiếp theo
 
-### 7.1. Việc gấp nhất — verify các tính năng vừa code (xem [`10_KE_HOACH_TEST.md`](10_KE_HOACH_TEST.md))
+### 7.1. Stage tiếp theo — hardening trước khi mở user thật
 
-0. ✅ **Test E2E Đấu lại (Nhóm R) — ĐÓNG 12/12 (2026-06-13).** Bug R9 đúng như dự báo — sửa 2026-06-12, retest PASS 2026-06-13. **C8 + H1–H3 cũng PASS** cùng đợt. *Việc tiếp theo: test tay Nhóm S (spectate/share) + D (reconnect) trong một phiên 2 thiết bị; theo dõi H4 (chất lượng gợi ý sau tuning).*
-1. ✅ **Test tự động (Nhóm T) — vẫn đóng kín, 2026-06-11 nâng lên 25/25 backend + 148/148 Flutter** (thêm T9 engine-service, T10 double-disconnect, T11 hint). **Không còn khoảng trống test tự động cho Sprint 12.**
-2. **(việc của bạn) Render upgrade Starter** ($7/tháng) — bỏ sleep 15 phút, lúc nào có user thật phải bỏ.
-2b. **(việc của bạn) Smoke test Pikafish thật** — chạy theo mục 11 của [`11_KE_HOACH_TICH_HOP_ENGINE.md`](11_KE_HOACH_TICH_HOP_ENGINE.md) (Docker hoặc binary tay) để xác nhận FEN/UCI khớp trước khi deploy `cchess-engine`.
+0. ✅ **Automation gate đã đủ dày cho Sprint 12/Sprint 15 hạ tầng**: backend 69/69, Flutter 226/226, lab/load/fuzz, engine smoke 8/8. Tiếp theo không nên mở rộng test máy móc lan man, chỉ giữ các gate này chạy lại sau deploy/config change.
+1. **Quota/VIP bền vững cho engine** — chuyển quota in-memory sang Firestore/Redis, định nghĩa VIP bypass và reset theo ngày để không reset quota khi Render restart/redeploy.
+2. **Production hardening Render** — backend lên Starter khi có user thật; engine lên Standard trước traffic AI thật; bật lịch chạy `engine-smoke` sau deploy và `post-deploy-smoke` khi cần kiểm ranked-write.
+3. **Vòng test tay cuối** — D4 OS lifecycle thật, M5 Firebase thật, H4 chất lượng nước gợi ý/Pikafish, và nhìn-mắt C2/D/G4 trên thiết bị.
+4. **License/commercial check** — chốt NNUE license trước khi dùng engine trong production thương mại.
 
 ### 7.2. Sprint 12 phase 2 (2-3 tuần) — hoàn thiện online
 
-3. **A6 Spectate polish tiếp** — ✅ share link/QR done (2026-06-07); còn spectator count UX rõ hơn trong lobby/game, mở rộng test tự động cho WS protocol end-to-end, OS-level deep link (Android intent-filter + iOS universal link) nếu cần mở link ngoài app.
-4. **A5 Chat polish** — emoji preset/whitelist, mute/report sau này nếu mở public.
+3. **OS-level deep link** — Android intent-filter + iOS universal link nếu muốn mở link `/r/<ID>` từ ngoài app, vì deep-link in-app đã có.
+4. **Moderation khi mở public** — mute/report chat, giới hạn spectator/chat nếu active-room list thành cộng đồng mở.
 5. **Push notification "tới lượt bạn"** — khi user background app + đến lượt, send FCM message tới device. Cần backend wire Cloud Messaging + client `firebase_messaging` setup.
-6. **Friends list (C1) — Sprint 14 prep** — Firestore schema `friendships`, sync presence (online/offline via Realtime Database).
+6. **Friends list (C1) — Sprint 14 prep** — Firestore schema `friendships`, sync presence (online/offline qua Realtime Database/Firestore presence).
 
 ### 7.3. Sprint 13 (1-2 tuần) — biến thể game
 
@@ -377,4 +379,4 @@
 
 *Cập nhật 2026-06-13 — **đợt test tay 2 + tuning theo feedback**: R9 retest PASS → **Nhóm R đóng 12/12**; C8 PASS → nâng `CHAT_RATE_LIMIT_MS` 1.5s→2s; H1–H3 PASS (online + offline) với feedback "gợi ý hơi lâu, hơi kém" → `BotEngine` thêm chế độ **best-effort** cho hint/analysis: bỏ delay nhân tạo `minThinkTime` 1.2s, bỏ randomness, iterative deepening ngân sách ~2s (depth 2→6, thế nhẹ đào sâu hơn, giữa ván nặng trả nhanh kết quả depth đã xong) + 2 test mới (T13).*
 
-*Cập nhật 2026-06-13 (đợt 2) — **Nhóm S PASS 12/12 + 3 cải tiến UX theo feedback**: (1) số mắt xem 👁 hiện trên app bar cho **cả người chơi** (trước chỉ người xem thấy); (2) **dialog kết quả người xem** giờ chỉ có 1 nút "Thoát", tự đóng + xem tiếp khi 2 kỳ thủ đấu lại, banner "Một kỳ thủ đã rời — trận đấu khép lại" khi có người thoát — sửa kèm bug tiềm ẩn rematch `game-start{yourColor:null}` biến người xem thành "người chơi Đỏ" trong state client; (3) **phòng chờ tự hủy sau 1 phút** không có đối thủ vào: server gửi `room-expired` + xóa phòng (TTL override env `CCHESS_WAITING_ROOM_TTL_MS`), lobby tự quay về màn chính kèm thông báo. Test mới (T14): backend `server.waitingroom.test.ts` 2 + Flutter 2. Backend `npm test` **28/28**, Flutter `flutter test` **156/156**, analyze sạch. Lưu ý thiết kế: "chờ đối thủ MỚI vào phòng cũ sau khi 1 người rời" KHÔNG nằm trong phạm vi này — phòng khép lại khi 1 kỳ thủ thoát; mời người mới = flow invite/casual của Sprint 13. Việc còn lại của người dùng: test tay S13–S15 + Nhóm D/M/G + C1–C7 + H4, Render Starter, smoke test Pikafish thật.*
+*Cập nhật 2026-06-13 (đợt 2) — **Nhóm S PASS 12/12 + 3 cải tiến UX theo feedback**: (1) số mắt xem 👁 hiện trên app bar cho **cả người chơi** (trước chỉ người xem thấy); (2) **dialog kết quả người xem** giờ chỉ có 1 nút "Thoát", tự đóng + xem tiếp khi 2 kỳ thủ đấu lại, banner "Một kỳ thủ đã rời — trận đấu khép lại" khi có người thoát — sửa kèm bug tiềm ẩn rematch `game-start{yourColor:null}` biến người xem thành "người chơi Đỏ" trong state client; (3) **phòng chờ tự hủy sau 1 phút** không có đối thủ vào: server gửi `room-expired` + xóa phòng (TTL override env `CCHESS_WAITING_ROOM_TTL_MS`), lobby tự quay về màn chính kèm thông báo. Test mới (T14): backend `server.waitingroom.test.ts` 2 + Flutter 2. Backend `npm test` **28/28**, Flutter `flutter test` **156/156**, analyze sạch. Lưu ý thiết kế: "chờ đối thủ MỚI vào phòng cũ sau khi 1 người rời" KHÔNG nằm trong phạm vi này — phòng khép lại khi 1 kỳ thủ thoát; mời người mới = flow invite/casual của Sprint 13. Các mục này sau đó đã được tự động hóa/smoke tiếp trong đợt 2026-06-19/20; xem phần đầu tài liệu và [`10_KE_HOACH_TEST.md`](10_KE_HOACH_TEST.md).*

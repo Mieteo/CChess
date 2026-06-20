@@ -96,8 +96,19 @@ npm run engine:smoke:quota
 npm run engine:smoke -- --quota --quota-limit=3
 ```
 
+Mặc định `engine:smoke` trỏ tới `https://cchess-engine.onrender.com`. Có thể override:
+
+```powershell
+$env:CCHESS_ENGINE_URL = "http://localhost:8090"
+$env:ENGINE_SMOKE_AUTH = "disabled" # local ENGINE_AUTH_DISABLED=1
+npm run engine:smoke
+```
+
 `engine:smoke:quota` mint một Firebase anonymous user mới, gọi `/engine/hint`
 đúng số quota free rồi xác nhận request kế tiếp trả `429 quota-exceeded`.
+Workflow thủ công `.github/workflows/engine-smoke.yml` có input `engine_url`,
+`auth_mode`, `check_quota`, `hint_quota_limit`; product smoke trên Render
+`cchess-engine` đã PASS 8/8 ngày 2026-06-20 gồm quota.
 
 ### Chạy local bằng binary tải tay trên Windows
 
@@ -179,11 +190,12 @@ Close codes:
 - [x] **Step 6** Server-side clock + timeout + resign + disconnect-loss — verified E2E 2026-05-23
 - [x] **Step 7** Persistence — Admin SDK writes `users/{uid}/game_records/` on game-ended — verified E2E 2026-05-23
 - [x] **Step 8** Reconnect grace — 60s room resume with move/chat snapshot
-- [x] **Sprint 12 A5** Basic in-game chat — `chat-message`, 120-char limit, 1.5s/user rate limit
+- [x] **Sprint 12 A5** Basic in-game chat — `chat-message`, 120-char limit, 2s/user rate limit
 - [x] **Sprint 12 A6** Basic spectate — `spectate-room`/`stop-spectating`, read-only viewers receive move/chat/end snapshots
 - [x] **Sprint 12 A6 polish** Active room list — `list-active-rooms` for lobby watch discovery
 - [x] **Sprint 12 A6 share link** HTTP landing page `GET /r/:id` (`?mode=join` variant) for shareable room links / QR
-- [x] **Backend tests** `npm test` covers spectator read-only, spectator leave, and active-room filtering
+- [x] **Backend tests/gates** `npm test` covers unit/integration server + engine-service; `backend-ci` also runs `lab`, `lab:load`, and seeded `lab:fuzz`
+- [x] **Engine service smoke** `npm run engine:smoke` / `npm run engine:smoke:quota` covers deployed `cchess-engine` (`/health`, auth, invalid FEN, best-move/cache, hint, analyze, quota)
 
 ## Deploy
 
@@ -197,15 +209,17 @@ For local prototype testing:
 1. Push repo lên GitHub
 2. Đăng nhập https://render.com → **New +** → **Blueprint**
 3. Chọn repo, Render detect [`../render.yaml`](../render.yaml) (ở root repo — Render chỉ scan root, không scan sub-folder)
-4. Render UI prompt nhập secret `FIREBASE_SERVICE_ACCOUNT_JSON`:
+4. Blueprint tạo 2 service: `cchess-backend` (WebSocket realtime) và `cchess-engine` (HTTP Pikafish).
+5. Render UI prompt nhập secret `FIREBASE_SERVICE_ACCOUNT_JSON` cho các service:
    - Tải `serviceAccount.json` từ Firebase Console
    - Mở file, **paste toàn bộ JSON** (1 dòng hoặc nhiều dòng đều OK)
    - Save
-5. Deploy. ~3 phút.
-6. URL public dạng `https://cchess-backend.onrender.com`
-7. Client Flutter đổi `AppConstants.defaultBackendWsUrl` thành `wss://cchess-backend.onrender.com` (chú ý: **wss** chứ không phải ws — Render serve HTTPS)
+6. Deploy. Backend thường ~3 phút; engine lâu hơn vì Docker image có Pikafish/NNUE.
+7. URL public dạng `https://cchess-backend.onrender.com` và `https://cchess-engine.onrender.com`.
+8. Client Flutter đổi `AppConstants.defaultBackendWsUrl` thành `wss://cchess-backend.onrender.com` (chú ý: **wss** chứ không phải ws — Render serve HTTPS). Engine URL dùng `CCHESS_ENGINE_URL=https://cchess-engine.onrender.com`.
 
 **Lưu ý Render free tier**: web service ngủ sau 15 phút idle. Lần WS connect đầu tiên sau ngủ mất ~30s wake-up. Upgrade Starter ($7/tháng) nếu cần always-on.
+`cchess-engine` free tier chỉ phù hợp smoke/prototype; nâng Standard trước khi mở bot mạnh/hint/analyze cho user thật. Quota free hiện cấu hình trong `render.yaml` (`FREE_BEST_MOVE_DAILY_LIMIT`, `FREE_HINT_DAILY_LIMIT`, `FREE_ANALYZE_DAILY_LIMIT`) nhưng vẫn là in-memory theo process, cần Firestore/Redis để production không reset khi restart/redeploy.
 
 ### Production — Railway / Fly.io / Cloud Run
 
