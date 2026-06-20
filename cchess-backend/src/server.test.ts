@@ -12,13 +12,14 @@
 process.env.CCHESS_NO_LISTEN = '1';
 
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { afterEach, test } from 'node:test';
 import type { AddressInfo } from 'node:net';
 import { WebSocket } from 'ws';
 
 import type { CChessServer } from './server';
 import { PieceColor, uciOfMove, XiangqiGame } from './engine';
 import { getRoomById } from './rooms';
+import { __resetQueueForLab, queueSize } from './matchmaking';
 
 interface Msg {
   type: string;
@@ -31,6 +32,10 @@ interface Msg {
 const RED_WIN_CHECKMATE_FEN =
   '4k4/R8/9/9/9/9/9/9/4R4/4K4 w - - 0 1';
 const RED_WIN_CHECKMATE_UCI = 'a8a9';
+
+afterEach(() => {
+  __resetQueueForLab();
+});
 
 /// Start a fully-wired server on an ephemeral port with stubbed auth/persist.
 /// server.ts is imported here (not at module top) so the CCHESS_NO_LISTEN guard
@@ -554,6 +559,80 @@ test('M4: the creator\'s clock choice initialises both sides equally', async () 
     red.send({ type: 'resign' });
     await red.waitType('game-ended');
     await Promise.all([red.close(), black.close()]);
+  } finally {
+    await server.close();
+  }
+});
+
+// ── M1/M3: matchmaking over the real WebSocket protocol ─────────────────
+
+test('M1/M4: find-match pairs two players and starts one room with the chosen clock', async () => {
+  const { server, url } = await startTestServer();
+  try {
+    const THREE_MIN = 3 * 60_000;
+    const red = await connectAuthed(url, 'match-red');
+    const black = await connectAuthed(url, 'match-black');
+
+    red.send({ type: 'find-match', clockMs: THREE_MIN });
+    const redQueued = await red.waitType('matching');
+    assert.equal(redQueued.elo, 1000);
+
+    black.send({ type: 'find-match', clockMs: THREE_MIN });
+    await black.waitType('matching');
+
+    const redFound = await red.waitType('match-found');
+    const blackFound = await black.waitType('match-found');
+    assert.equal(redFound.roomId, blackFound.roomId);
+    assert.equal(redFound.opponent, 'match-black');
+    assert.equal(blackFound.opponent, 'match-red');
+
+    const redStart = await red.waitType('game-start');
+    const blackStart = await black.waitType('game-start');
+    assert.equal(redStart.roomId, redFound.roomId);
+    assert.equal(blackStart.roomId, redFound.roomId);
+    assert.equal(redStart.yourColor, 'red');
+    assert.equal(blackStart.yourColor, 'black');
+    for (const start of [redStart, blackStart]) {
+      const clock = start.clock as { red: number; black: number; currentTurn: string };
+      assert.equal(clock.red, THREE_MIN);
+      assert.equal(clock.black, THREE_MIN);
+      assert.equal(clock.currentTurn, 'red');
+    }
+    assert.equal(queueSize(), 0, 'paired sockets leave the matchmaking queue');
+
+    red.send({ type: 'resign' });
+    await red.waitType('game-ended');
+    await black.waitType('game-ended');
+    await Promise.all([red.close(), black.close()]);
+  } finally {
+    await server.close();
+  }
+});
+
+test('M3: cancel-matching removes a queued socket before it can be paired', async () => {
+  const { server, url } = await startTestServer();
+  try {
+    const alice = await connectAuthed(url, 'cancel-alice');
+
+    alice.send({ type: 'find-match', clockMs: 5 * 60_000 });
+    await alice.waitType('matching');
+    assert.equal(queueSize(), 1);
+
+    alice.send({ type: 'cancel-matching' });
+    const canceled = await alice.waitType('matching-canceled');
+    assert.equal(canceled.removed, true);
+    assert.equal(queueSize(), 0);
+
+    // A later matcher should now wait alone, not be paired with Alice's stale entry.
+    const bob = await connectAuthed(url, 'cancel-bob');
+    bob.send({ type: 'find-match', clockMs: 5 * 60_000 });
+    await bob.waitType('matching');
+    assert.equal(queueSize(), 1);
+    await assert.rejects(bob.waitType('match-found', 400), /timeout/);
+
+    bob.send({ type: 'cancel-matching' });
+    await bob.waitType('matching-canceled');
+    await Promise.all([alice.close(), bob.close()]);
   } finally {
     await server.close();
   }
