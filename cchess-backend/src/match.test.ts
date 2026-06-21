@@ -5,8 +5,10 @@ import type { WebSocket } from 'ws';
 import {
   applyMove,
   colorOfSocket,
+  consumeTimeoutIfExpired,
   endMatch,
   INITIAL_CLOCK_MS,
+  MOVE_TIME_LIMIT_MS,
   startMatch,
   startRematch,
 } from './match';
@@ -72,6 +74,7 @@ test('startMatch assigns colors by insertion order + initial clock/turn/engine',
   assert.equal(room.currentTurn, 'red');
   assert.equal(room.clockMsByColor?.red, INITIAL_CLOCK_MS);
   assert.equal(room.clockMsByColor?.black, INITIAL_CLOCK_MS);
+  assert.equal(room.moveTimeLimitMs, MOVE_TIME_LIMIT_MS);
   assert.deepEqual(room.movesUci, []);
   assert.ok(room.engine, 'engine should be initialised');
   assert.equal(colorOfSocket(room, red), 'red');
@@ -132,6 +135,43 @@ test('applyMove returns time-out when the mover has no clock left', () => {
   assert.equal(room.movesUci?.length, 0, 'a timed-out move must not be recorded');
 });
 
+test('applyMove returns time-out when the per-move clock expires', () => {
+  const { room, red } = startPlayingRoom('move-timeout');
+  room.moveTimeLimitMs = 1_000;
+  room.turnStartedAt = Date.now() - 1_500;
+  const before = room.clockMsByColor!.red;
+
+  const res = applyMove(room, red, firstLegalUciFor(PieceColor.Red));
+
+  assert.deepEqual(res, { ok: false, code: 'time-out' });
+  assert.ok(room.clockMsByColor!.red < before);
+  assert.equal(room.movesUci?.length, 0, 'timed-out move must not be recorded');
+  assert.equal(room.currentTurn, 'red', 'turn stays on the losing side');
+});
+
+test('applyMove returns time-out even for an invalid move after per-move expiry', () => {
+  const { room, red } = startPlayingRoom('invalid-after-move-timeout');
+  room.moveTimeLimitMs = 1_000;
+  room.turnStartedAt = Date.now() - 1_500;
+
+  const res = applyMove(room, red, 'a0b1');
+
+  assert.deepEqual(res, { ok: false, code: 'time-out' });
+  assert.equal(room.movesUci?.length, 0);
+});
+
+test('consumeTimeoutIfExpired detects an idle player over per-move limit', () => {
+  const { room } = startPlayingRoom('idle-move-timeout');
+  room.moveTimeLimitMs = 1_000;
+  room.turnStartedAt = Date.now() - 1_500;
+  const before = room.clockMsByColor!.red;
+
+  const loser = consumeTimeoutIfExpired(room);
+
+  assert.equal(loser, 'red');
+  assert.ok(room.clockMsByColor!.red < before);
+});
+
 test('G1: applyMove auto-finishes when a move gives checkmate', () => {
   const { room, red } = startPlayingRoom('checkmate');
   room.engine = XiangqiGame.fromFen(RED_WIN_CHECKMATE_FEN);
@@ -182,6 +222,7 @@ test('startRematch swaps colors and resets all game state', () => {
   assert.equal(room.rematchOfferedBy, undefined);
   assert.equal(room.clockMsByColor?.red, INITIAL_CLOCK_MS);
   assert.equal(room.clockMsByColor?.black, INITIAL_CLOCK_MS);
+  assert.equal(room.moveTimeLimitMs, MOVE_TIME_LIMIT_MS);
   assert.ok(room.engine, 'engine should be re-initialised');
 });
 

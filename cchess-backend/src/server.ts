@@ -21,8 +21,8 @@ import {
   applyMove,
   clockSnapshot,
   colorOfSocket,
+  consumeTimeoutIfExpired,
   endMatch,
-  isTimedOut,
   opponentOf,
   RECONNECT_GRACE_MS,
   startMatch,
@@ -425,8 +425,8 @@ export function createCChessServer(options: CChessServerOptions = {}): CChessSer
         room.clockTimer = undefined;
         return;
       }
-      if (isTimedOut(room)) {
-        const loser = room.currentTurn;
+      const loser = consumeTimeoutIfExpired(room);
+      if (loser) {
         const winner: GameResult = loser === 'red' ? 'black-win' : 'red-win';
         finishGame(room, winner, 'timeout');
       }

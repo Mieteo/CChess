@@ -12,6 +12,10 @@ import { XiangqiGame, GameStatus, parseUci, EndReason as EngineEndReason } from 
 /// UX iteration.
 export const INITIAL_CLOCK_MS = 600_000;
 
+/// Hard cap per move. This keeps a connected-but-idle player from making the
+/// opponent wait until the whole-game clock runs out.
+export const MOVE_TIME_LIMIT_MS = 90_000;
+
 /// Step 8 reconnect: grace window after a player disconnects mid-game.
 /// If they reconnect with the same uid within this window, the room is
 /// resumed; otherwise the game ends with reason='disconnect'.
@@ -35,6 +39,7 @@ export function startMatch(room: Room, uidOf: (s: WebSocket) => string | undefin
   room.blackUid = uids[1];
   const clock = room.initialClockMs ?? INITIAL_CLOCK_MS;
   room.clockMsByColor = { red: clock, black: clock };
+  room.moveTimeLimitMs = MOVE_TIME_LIMIT_MS;
   room.currentTurn = 'red';
   const now = Date.now();
   room.turnStartedAt = now;
@@ -66,6 +71,7 @@ export function startRematch(room: Room): boolean {
 
   const clock = room.initialClockMs ?? INITIAL_CLOCK_MS;
   room.clockMsByColor = { red: clock, black: clock };
+  room.moveTimeLimitMs = MOVE_TIME_LIMIT_MS;
   room.currentTurn = 'red';
   const now = Date.now();
   room.turnStartedAt = now;
@@ -146,21 +152,23 @@ export function applyMove(
   const engine = engineOf(room);
   if (!engine) return { ok: false, code: 'engine-missing' };
 
-  // Parse + legality check BEFORE deducting clock — illegal moves don't cost time.
+  // Timeout blocks any move; invalid moves inside the window do not cost time.
+  const clocks = room.clockMsByColor!;
+  const moveLimit = room.moveTimeLimitMs ?? MOVE_TIME_LIMIT_MS;
+  const now = Date.now();
+  const elapsed = Math.max(0, now - (room.turnStartedAt ?? now));
+  if (elapsed >= clocks[color] || elapsed >= moveLimit) {
+    clocks[color] = Math.max(0, clocks[color] - elapsed);
+    return { ok: false, code: 'time-out' };
+  }
+
   const coords = parseUci(uci);
   if (!coords) return { ok: false, code: 'illegal-move' };
   if (!engine.isValidMove(coords.from, coords.to)) {
     return { ok: false, code: 'illegal-move' };
   }
 
-  const clocks = room.clockMsByColor!;
-  const now = Date.now();
-  const elapsed = now - (room.turnStartedAt ?? now);
-  clocks[color] -= elapsed;
-  if (clocks[color] <= 0) {
-    clocks[color] = 0;
-    return { ok: false, code: 'time-out' };
-  }
+  clocks[color] = Math.max(0, clocks[color] - elapsed);
 
   // Apply on engine (status auto-updates: checkmate/stalemate detection).
   try {
@@ -205,7 +213,26 @@ export function isTimedOut(room: Room): boolean {
   if (room.status !== 'playing') return false;
   if (!room.currentTurn || !room.turnStartedAt || !room.clockMsByColor) return false;
   const elapsed = Date.now() - room.turnStartedAt;
-  return elapsed >= room.clockMsByColor[room.currentTurn];
+  const moveLimit = room.moveTimeLimitMs ?? MOVE_TIME_LIMIT_MS;
+  return (
+    elapsed >= room.clockMsByColor[room.currentTurn] ||
+    elapsed >= moveLimit
+  );
+}
+
+/// Server-authoritative timeout check used by the room ticker. Mutates the
+/// moving player's total clock to reflect the elapsed turn before finishing.
+export function consumeTimeoutIfExpired(room: Room): Color | null {
+  if (!isTimedOut(room) || !room.currentTurn || !room.turnStartedAt || !room.clockMsByColor) {
+    return null;
+  }
+  const loser = room.currentTurn;
+  const elapsed = Math.max(0, Date.now() - room.turnStartedAt);
+  room.clockMsByColor[loser] = Math.max(
+    0,
+    room.clockMsByColor[loser] - elapsed,
+  );
+  return loser;
 }
 
 /// Transition the room to 'finished'. Returns true if THIS call performed the
@@ -236,10 +263,28 @@ export function clockSnapshot(room: Room): {
   red: number;
   black: number;
   currentTurn: Color | undefined;
+  turnStartedAt: number | undefined;
+  serverNow: number;
+  moveTimeLimitMs: number;
+  moveDeadlineAt: number | undefined;
+  moveRemainingMs: number;
 } {
+  const serverNow = Date.now();
+  const moveTimeLimitMs = room.moveTimeLimitMs ?? MOVE_TIME_LIMIT_MS;
+  const moveDeadlineAt = room.turnStartedAt
+    ? room.turnStartedAt + moveTimeLimitMs
+    : undefined;
+  const moveRemainingMs = moveDeadlineAt
+    ? Math.max(0, moveDeadlineAt - serverNow)
+    : moveTimeLimitMs;
   return {
     red: room.clockMsByColor?.red ?? 0,
     black: room.clockMsByColor?.black ?? 0,
     currentTurn: room.currentTurn,
+    turnStartedAt: room.turnStartedAt,
+    serverNow,
+    moveTimeLimitMs,
+    moveDeadlineAt,
+    moveRemainingMs,
   };
 }

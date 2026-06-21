@@ -27,6 +27,8 @@ enum OnlineMatchPhase {
   error,
 }
 
+const int onlineDefaultMoveClockMs = 90 * 1000;
+
 class OnlineChatMessage {
   const OnlineChatMessage({
     required this.id,
@@ -96,6 +98,46 @@ class OnlineActiveRoom {
   }
 }
 
+class _ClockUpdate {
+  const _ClockUpdate({
+    this.redClockMs,
+    this.blackClockMs,
+    this.currentTurn,
+    required this.moveClockLimitMs,
+    required this.moveClockRemainingMs,
+    required this.moveClockUpdatedAtMs,
+  });
+
+  final int? redClockMs;
+  final int? blackClockMs;
+  final PieceColor? currentTurn;
+  final int moveClockLimitMs;
+  final int moveClockRemainingMs;
+  final int moveClockUpdatedAtMs;
+}
+
+PieceColor? _pieceColorFromServer(Object? value) {
+  if (value == 'black') return PieceColor.black;
+  if (value == 'red') return PieceColor.red;
+  return null;
+}
+
+_ClockUpdate _clockUpdateFromServer(
+  Map<String, dynamic>? clock,
+  OnlineMatchState state,
+) {
+  final limit =
+      (clock?['moveTimeLimitMs'] as num?)?.toInt() ?? state.moveClockLimitMs;
+  return _ClockUpdate(
+    redClockMs: (clock?['red'] as num?)?.toInt(),
+    blackClockMs: (clock?['black'] as num?)?.toInt(),
+    currentTurn: _pieceColorFromServer(clock?['currentTurn']),
+    moveClockLimitMs: limit,
+    moveClockRemainingMs: (clock?['moveRemainingMs'] as num?)?.toInt() ?? limit,
+    moveClockUpdatedAtMs: DateTime.now().millisecondsSinceEpoch,
+  );
+}
+
 class OnlineMatchState {
   const OnlineMatchState({
     this.phase = OnlineMatchPhase.idle,
@@ -110,6 +152,9 @@ class OnlineMatchState {
     this.game,
     this.redClockMs = 30000,
     this.blackClockMs = 30000,
+    this.moveClockLimitMs = onlineDefaultMoveClockMs,
+    this.moveClockRemainingMs = onlineDefaultMoveClockMs,
+    this.moveClockUpdatedAtMs,
     this.currentTurn,
     this.result,
     this.endReason,
@@ -138,6 +183,9 @@ class OnlineMatchState {
   final XiangqiGame? game;
   final int redClockMs;
   final int blackClockMs;
+  final int moveClockLimitMs;
+  final int moveClockRemainingMs;
+  final int? moveClockUpdatedAtMs;
   final PieceColor? currentTurn;
   final String? result; // 'red-win' | 'black-win' | 'draw'
   final String? endReason; // 'timeout' | 'resign' | 'disconnect'
@@ -188,6 +236,9 @@ class OnlineMatchState {
     XiangqiGame? game,
     int? redClockMs,
     int? blackClockMs,
+    int? moveClockLimitMs,
+    int? moveClockRemainingMs,
+    int? moveClockUpdatedAtMs,
     PieceColor? currentTurn,
     String? result,
     String? endReason,
@@ -218,6 +269,9 @@ class OnlineMatchState {
       game: game ?? this.game,
       redClockMs: redClockMs ?? this.redClockMs,
       blackClockMs: blackClockMs ?? this.blackClockMs,
+      moveClockLimitMs: moveClockLimitMs ?? this.moveClockLimitMs,
+      moveClockRemainingMs: moveClockRemainingMs ?? this.moveClockRemainingMs,
+      moveClockUpdatedAtMs: moveClockUpdatedAtMs ?? this.moveClockUpdatedAtMs,
       currentTurn: currentTurn ?? this.currentTurn,
       result: result ?? this.result,
       endReason: endReason ?? this.endReason,
@@ -374,6 +428,8 @@ class OnlineMatchController extends StateNotifier<OnlineMatchState> {
     state = state.copyWith(
       game: game,
       currentTurn: game.turn,
+      moveClockRemainingMs: state.moveClockLimitMs,
+      moveClockUpdatedAtMs: DateTime.now().millisecondsSinceEpoch,
       clearError: true,
     );
     _socket.sendMove(move.toUci());
@@ -611,10 +667,7 @@ class OnlineMatchController extends StateNotifier<OnlineMatchState> {
         );
         break;
       case 'rematch-pending':
-        state = state.copyWith(
-          rematchOfferedByMe: true,
-          lastEventLog: newLog,
-        );
+        state = state.copyWith(rematchOfferedByMe: true, lastEventLog: newLog);
         break;
       case 'rematch-declined':
         state = state.copyWith(
@@ -644,11 +697,10 @@ class OnlineMatchController extends StateNotifier<OnlineMatchState> {
     final myColor = yourColor == 'black' ? PieceColor.black : PieceColor.red;
     final opponentUid = myColor == PieceColor.red ? blackUid : redUid;
     final clock = msg['clock'] as Map<String, dynamic>?;
+    final clockUpdate = _clockUpdateFromServer(clock, state);
     final roomId = msg['roomId'] as String?;
     state = state.copyWith(
-      phase: watching
-          ? OnlineMatchPhase.spectating
-          : OnlineMatchPhase.playing,
+      phase: watching ? OnlineMatchPhase.spectating : OnlineMatchPhase.playing,
       roomId: roomId,
       game: XiangqiGame.initial(),
       // copyWith ignores nulls, so a watcher keeps myColor/opponentUid null.
@@ -657,9 +709,12 @@ class OnlineMatchController extends StateNotifier<OnlineMatchState> {
       redUid: redUid,
       blackUid: blackUid,
       spectatorCount: watching ? state.spectatorCount : 0,
-      currentTurn: PieceColor.red,
-      redClockMs: (clock?['red'] as num?)?.toInt() ?? state.redClockMs,
-      blackClockMs: (clock?['black'] as num?)?.toInt() ?? state.blackClockMs,
+      currentTurn: clockUpdate.currentTurn ?? PieceColor.red,
+      redClockMs: clockUpdate.redClockMs ?? state.redClockMs,
+      blackClockMs: clockUpdate.blackClockMs ?? state.blackClockMs,
+      moveClockLimitMs: clockUpdate.moveClockLimitMs,
+      moveClockRemainingMs: clockUpdate.moveClockRemainingMs,
+      moveClockUpdatedAtMs: clockUpdate.moveClockUpdatedAtMs,
       lastEventLog: log,
       chatMessages: const <OnlineChatMessage>[],
       rematchOfferedByMe: false,
@@ -710,10 +765,12 @@ class OnlineMatchController extends StateNotifier<OnlineMatchState> {
       }
     }
     final clock = msg['clock'] as Map<String, dynamic>?;
+    final clockUpdate = _clockUpdateFromServer(clock, state);
     final currentTurnStr = msg['currentTurn'] as String?;
-    final currentTurn = currentTurnStr == 'black'
-        ? PieceColor.black
-        : (currentTurnStr == 'red' ? PieceColor.red : game.turn);
+    final currentTurn =
+        _pieceColorFromServer(currentTurnStr) ??
+        clockUpdate.currentTurn ??
+        game.turn;
     final chat =
         (msg['chat'] as List?)
             ?.whereType<Map>()
@@ -734,8 +791,11 @@ class OnlineMatchController extends StateNotifier<OnlineMatchState> {
       spectatorCount:
           (msg['spectatorCount'] as num?)?.toInt() ?? state.spectatorCount,
       currentTurn: currentTurn,
-      redClockMs: (clock?['red'] as num?)?.toInt() ?? state.redClockMs,
-      blackClockMs: (clock?['black'] as num?)?.toInt() ?? state.blackClockMs,
+      redClockMs: clockUpdate.redClockMs ?? state.redClockMs,
+      blackClockMs: clockUpdate.blackClockMs ?? state.blackClockMs,
+      moveClockLimitMs: clockUpdate.moveClockLimitMs,
+      moveClockRemainingMs: clockUpdate.moveClockRemainingMs,
+      moveClockUpdatedAtMs: clockUpdate.moveClockUpdatedAtMs,
       chatMessages: chat,
       lastEventLog: log,
       clearError: true,
@@ -758,10 +818,12 @@ class OnlineMatchController extends StateNotifier<OnlineMatchState> {
       }
     }
     final clock = msg['clock'] as Map<String, dynamic>?;
+    final clockUpdate = _clockUpdateFromServer(clock, state);
     final currentTurnStr = msg['currentTurn'] as String?;
-    final currentTurn = currentTurnStr == 'black'
-        ? PieceColor.black
-        : (currentTurnStr == 'red' ? PieceColor.red : game.turn);
+    final currentTurn =
+        _pieceColorFromServer(currentTurnStr) ??
+        clockUpdate.currentTurn ??
+        game.turn;
     final chat =
         (msg['chat'] as List?)
             ?.whereType<Map>()
@@ -781,8 +843,11 @@ class OnlineMatchController extends StateNotifier<OnlineMatchState> {
       blackUid: msg['blackUid'] as String?,
       spectatorCount: (msg['spectatorCount'] as num?)?.toInt() ?? 1,
       game: game,
-      redClockMs: (clock?['red'] as num?)?.toInt() ?? state.redClockMs,
-      blackClockMs: (clock?['black'] as num?)?.toInt() ?? state.blackClockMs,
+      redClockMs: clockUpdate.redClockMs ?? state.redClockMs,
+      blackClockMs: clockUpdate.blackClockMs ?? state.blackClockMs,
+      moveClockLimitMs: clockUpdate.moveClockLimitMs,
+      moveClockRemainingMs: clockUpdate.moveClockRemainingMs,
+      moveClockUpdatedAtMs: clockUpdate.moveClockUpdatedAtMs,
       currentTurn: currentTurn,
       lastEventLog: log,
       chatMessages: chat,
@@ -791,10 +856,14 @@ class OnlineMatchController extends StateNotifier<OnlineMatchState> {
 
   void _onMoveAck(Map<String, dynamic> msg, List<String> log) {
     final clock = msg['clock'] as Map<String, dynamic>?;
+    final clockUpdate = _clockUpdateFromServer(clock, state);
     state = state.copyWith(
-      redClockMs: (clock?['red'] as num?)?.toInt() ?? state.redClockMs,
-      blackClockMs: (clock?['black'] as num?)?.toInt() ?? state.blackClockMs,
-      currentTurn: state.game?.turn,
+      redClockMs: clockUpdate.redClockMs ?? state.redClockMs,
+      blackClockMs: clockUpdate.blackClockMs ?? state.blackClockMs,
+      currentTurn: clockUpdate.currentTurn ?? state.game?.turn,
+      moveClockLimitMs: clockUpdate.moveClockLimitMs,
+      moveClockRemainingMs: clockUpdate.moveClockRemainingMs,
+      moveClockUpdatedAtMs: clockUpdate.moveClockUpdatedAtMs,
       lastEventLog: log,
     );
   }
@@ -818,11 +887,15 @@ class OnlineMatchController extends StateNotifier<OnlineMatchState> {
       return;
     }
     final clock = msg['clock'] as Map<String, dynamic>?;
+    final clockUpdate = _clockUpdateFromServer(clock, state);
     state = state.copyWith(
       game: game,
-      currentTurn: game.turn,
-      redClockMs: (clock?['red'] as num?)?.toInt() ?? state.redClockMs,
-      blackClockMs: (clock?['black'] as num?)?.toInt() ?? state.blackClockMs,
+      currentTurn: clockUpdate.currentTurn ?? game.turn,
+      redClockMs: clockUpdate.redClockMs ?? state.redClockMs,
+      blackClockMs: clockUpdate.blackClockMs ?? state.blackClockMs,
+      moveClockLimitMs: clockUpdate.moveClockLimitMs,
+      moveClockRemainingMs: clockUpdate.moveClockRemainingMs,
+      moveClockUpdatedAtMs: clockUpdate.moveClockUpdatedAtMs,
       lastEventLog: log,
     );
   }
@@ -924,11 +997,19 @@ class OnlineMatchController extends StateNotifier<OnlineMatchState> {
   }
 
   void _onGameEnded(Map<String, dynamic> msg, List<String> log) {
+    final clock = msg['clock'] as Map<String, dynamic>?;
+    final clockUpdate = _clockUpdateFromServer(clock, state);
     state = state.copyWith(
       phase: OnlineMatchPhase.ended,
       result: msg['result'] as String?,
       endReason: msg['reason'] as String?,
       eloUpdate: msg['elo'] as Map<String, dynamic>?,
+      redClockMs: clockUpdate.redClockMs ?? state.redClockMs,
+      blackClockMs: clockUpdate.blackClockMs ?? state.blackClockMs,
+      currentTurn: clockUpdate.currentTurn ?? state.currentTurn,
+      moveClockLimitMs: clockUpdate.moveClockLimitMs,
+      moveClockRemainingMs: clockUpdate.moveClockRemainingMs,
+      moveClockUpdatedAtMs: clockUpdate.moveClockUpdatedAtMs,
       lastEventLog: log,
       clearPeerDisconnect: true,
     );

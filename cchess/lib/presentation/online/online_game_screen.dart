@@ -89,6 +89,14 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
   int? _remainingGraceSec(OnlineMatchState s) =>
       onlineRemainingGraceSec(s, DateTime.now().millisecondsSinceEpoch);
 
+  int _moveClockMs(OnlineMatchState s) {
+    final updatedAt = s.moveClockUpdatedAtMs;
+    if (updatedAt == null) return s.moveClockRemainingMs;
+    final elapsed = DateTime.now().millisecondsSinceEpoch - updatedAt;
+    final remaining = s.moveClockRemainingMs - elapsed;
+    return remaining <= 0 ? 0 : remaining;
+  }
+
   @override
   void didChangeAppLifecycleState(AppLifecycleState lifeState) {
     // Chỉ tiến hành disconnect khi `detached` (app sắp bị OS hủy hẳn — vd
@@ -208,8 +216,8 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
   Widget build(BuildContext context) {
     final state = ref.watch(onlineMatchControllerProvider);
 
-    // Start/stop countdown ticker based on current phase
-    _ensureCountdown(state.phase == OnlineMatchPhase.peerDisconnected);
+    // Start/stop ticker for reconnect countdown and the per-move clock.
+    _ensureCountdown(state.isPlaying || state.isSpectating);
 
     // Pop screen when game ends + show result dialog + refresh profile from cloud
     ref.listen<OnlineMatchState>(onlineMatchControllerProvider, (prev, next) {
@@ -257,6 +265,8 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
               ? _shortUid(state.opponentUid)
               : 'Đối thủ');
     final bottomLabel = isSpectating ? 'Đỏ ${_shortUid(state.redUid)}' : 'Bạn';
+
+    final moveClockMs = _moveClockMs(state);
 
     // PopScope routes the SYSTEM back gesture through the same leave logic
     // as the app-bar arrow — otherwise Android back exits the screen while
@@ -316,6 +326,9 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
                   clockMs: topColor == PieceColor.red
                       ? state.redClockMs
                       : state.blackClockMs,
+                  moveClockMs: state.currentTurn == topColor
+                      ? moveClockMs
+                      : null,
                   isMyTurn: state.currentTurn == topColor,
                 ),
                 AppSpacing.vGapSm,
@@ -345,6 +358,9 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
                   clockMs: bottomColor == PieceColor.red
                       ? state.redClockMs
                       : state.blackClockMs,
+                  moveClockMs: state.currentTurn == bottomColor
+                      ? moveClockMs
+                      : null,
                   isMyTurn: state.currentTurn == bottomColor,
                 ),
                 AppSpacing.vGapSm,
@@ -593,11 +609,13 @@ class _PlayerStrip extends StatelessWidget {
     required this.label,
     required this.color,
     required this.clockMs,
+    required this.moveClockMs,
     required this.isMyTurn,
   });
   final String label;
   final PieceColor color;
   final int clockMs;
+  final int? moveClockMs;
   final bool isMyTurn;
 
   String _formatClock(int ms) {
@@ -613,6 +631,10 @@ class _PlayerStrip extends StatelessWidget {
     final accent = color == PieceColor.red
         ? AppColors.vermilionRed
         : AppColors.inkBlack;
+    final moveMs = moveClockMs;
+    final moveClockColor = moveMs != null && moveMs <= 10 * 1000
+        ? Colors.redAccent
+        : (isMyTurn ? AppColors.accentGold : AppColors.onSurfaceVariant);
     return Container(
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.base,
@@ -637,11 +659,34 @@ class _PlayerStrip extends StatelessWidget {
           ),
           const SizedBox(width: 8),
           Expanded(child: Text(label, style: AppTextStyles.bodyMd)),
-          Text(
-            _formatClock(clockMs),
-            style: AppTextStyles.monoTimer.copyWith(
-              color: isMyTurn ? AppColors.accentGold : AppColors.onSurface,
-            ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                _formatClock(clockMs),
+                style: AppTextStyles.monoTimer.copyWith(
+                  color: isMyTurn ? AppColors.accentGold : AppColors.onSurface,
+                ),
+              ),
+              if (moveMs != null) ...[
+                const SizedBox(height: 2),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.timer_outlined, size: 14, color: moveClockColor),
+                    const SizedBox(width: 3),
+                    Text(
+                      _formatClock(moveMs),
+                      style: AppTextStyles.captionSm.copyWith(
+                        color: moveClockColor,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ],
           ),
         ],
       ),

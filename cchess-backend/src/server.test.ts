@@ -388,6 +388,30 @@ test('G3: resign ends the game with reason=resign and the opponent winning', asy
   }
 });
 
+test('per-move timeout ends an idle current player without any client move', async () => {
+  const { server, url } = await startTestServer();
+  try {
+    const { red, black, roomId } = await startGame(url, 'timer-red', 'timer-black');
+    const room = getRoomById(roomId);
+    assert.ok(room, 'test room should exist');
+    room.moveTimeLimitMs = 100;
+    room.turnStartedAt = Date.now() - 150;
+
+    const redEnd = await red.waitType('game-ended', 2500);
+    const blackEnd = await black.waitType('game-ended', 2500);
+
+    for (const end of [redEnd, blackEnd]) {
+      assert.equal(end.roomId, roomId);
+      assert.equal(end.result, 'black-win');
+      assert.equal(end.reason, 'timeout');
+    }
+
+    await Promise.all([red.close(), black.close()]);
+  } finally {
+    await server.close();
+  }
+});
+
 test('G1: checkmate move emits game-ended{reason:checkmate}', async () => {
   const { server, url } = await startTestServer();
   try {

@@ -29,6 +29,10 @@ export interface Room {
   /// lobby; falls back to engine default if absent.
   initialClockMs?: number;
 
+  /// Maximum thinking time for one move (ms). Starts at 90s for every game and
+  /// resets whenever a legal move changes the turn.
+  moveTimeLimitMs?: number;
+
   /// Waiting-room TTL: cancels a lobby-created room that nobody joined.
   /// Set by the create-room handler, cleared when the game starts.
   waitingTimer?: NodeJS.Timeout;
