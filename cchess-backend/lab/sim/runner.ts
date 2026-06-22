@@ -60,12 +60,16 @@ function printSummary(summary: Awaited<ReturnType<SimWorld['execute']>>): void {
   console.log(`games started: ${summary.gamesStarted}`);
   console.log(`games ended: ${summary.gamesEnded}`);
   console.log(`moves: ${summary.moves}`);
+  console.log(`reconnects: ${summary.reconnects}`);
+  console.log(`spectator sessions: ${summary.spectatorSessions}`);
   console.log(`chat messages: ${summary.chatMessages}`);
   console.log(`errors: ${summary.errors}`);
   console.log(`rooms after drain: ${summary.roomsAfterDrain}`);
   console.log(`invariant violations: ${summary.invariantViolations.length}`);
+  console.log(`protocol violations: ${summary.protocolViolations.length}`);
   console.log(`events: ${summary.reportDir}\\events.jsonl`);
   console.log(`replay: ${summary.replay}`);
+  if (summary.failureRule) console.log(`rule: ${summary.failureRule}`);
   if (summary.failure) console.log(`failure: ${summary.failure}`);
 }
 
@@ -99,4 +103,3 @@ async function main(): Promise<void> {
 }
 
 void main();
-

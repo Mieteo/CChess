@@ -5,7 +5,11 @@ import { resetState } from '../run-one';
 import type { PlayerAgent } from './agent';
 import type { SimColor } from './brain';
 import { RandomLegalPolicy } from './brains/random_legal';
-import { SimMonitor } from './monitor';
+import {
+  SimMonitor,
+  type ProtocolViolation,
+  type SimCommandType,
+} from './monitor';
 import { CasualPlayer } from './personas';
 import { SeededRandom } from './random';
 import { SimReporter, type SimSummary } from './reporter';
@@ -46,6 +50,8 @@ interface SimStats {
   moves: number;
   chatMessages: number;
   errors: number;
+  reconnects: number;
+  spectatorSessions: number;
 }
 
 export class SimWorld {
@@ -62,12 +68,18 @@ export class SimWorld {
     moves: 0,
     chatMessages: 0,
     errors: 0,
+    reconnects: 0,
+    spectatorSessions: 0,
   };
   private readonly lastChatAtByUid = new Map<string, number>();
+  private readonly probeAgents: CasualPlayer[] = [];
   private server?: LabServer;
   private wsUrl?: string;
   private stopAtMs = 0;
   private failure?: string;
+  private failureViolation?: ProtocolViolation;
+  private spectatorProbeDone = false;
+  private reconnectProbeDone = false;
 
   constructor(private readonly config: SimConfig) {
     this.run = {
@@ -103,7 +115,13 @@ export class SimWorld {
     }
 
     const snapshot = this.monitor.snapshot();
-    const ok = failure === undefined && snapshot.roomsAfterDrain === 0 && snapshot.violations.length === 0;
+    const protocolViolations = this.monitor.protocolViolations();
+    const firstProtocolViolation = this.failureViolation ?? protocolViolations[0];
+    const ok =
+      failure === undefined &&
+      snapshot.roomsAfterDrain === 0 &&
+      snapshot.violations.length === 0 &&
+      protocolViolations.length === 0;
     const summary: SimSummary = {
       ok,
       runId: this.run.runId,
@@ -117,11 +135,21 @@ export class SimWorld {
       moves: this.stats.moves,
       chatMessages: this.stats.chatMessages,
       errors: this.stats.errors,
+      reconnects: this.stats.reconnects,
+      spectatorSessions: this.stats.spectatorSessions,
       roomsAfterDrain: snapshot.roomsAfterDrain,
       invariantViolations: snapshot.violations,
+      protocolViolations,
       reportDir: this.reporter.reportDir,
       replay: `npm run lab:sim -- --target=${this.run.target} --users=${this.run.users} --duration=${this.run.durationMs}ms --seed=${this.run.seed} --run-id=${this.run.runId}`,
-      failure: failure ?? (ok ? undefined : 'simulation ended with leftover rooms or invariant violations'),
+      failureRule: firstProtocolViolation?.rule,
+      failureRoomId: firstProtocolViolation?.roomId,
+      failureAgents: firstProtocolViolation?.agents,
+      recentEvents: this.reporter.recentEvents(),
+      failure:
+        failure ??
+        firstProtocolViolation?.detail ??
+        (ok ? undefined : 'simulation ended with leftover rooms or invariant violations'),
     };
     this.reporter.writeSummary(summary);
     await this.reporter.close();
@@ -130,6 +158,7 @@ export class SimWorld {
 
   async connectBot(agent: PlayerAgent): Promise<Bot> {
     if (!this.wsUrl) throw new Error('simulation server is not started');
+    this.monitor.registerAgent(agent);
     const bot = new Bot(this.wsUrl, agent.uid);
     bot.observe((msg) => this.observeMessage(agent, bot, msg));
     await bot.connectAuthed();
@@ -150,6 +179,24 @@ export class SimWorld {
       roomId,
       data,
     });
+  }
+
+  private command(
+    type: SimCommandType,
+    agent: PlayerAgent,
+    roomId?: string,
+    data?: unknown,
+  ): boolean {
+    this.record(type, data, agent, roomId);
+    const violation = this.monitor.observeCommand({
+      type,
+      agentId: agent.id,
+      uid: agent.uid,
+      roomId,
+      data,
+    });
+    if (violation) this.fail(violation);
+    return violation === undefined;
   }
 
   private async start(): Promise<void> {
@@ -178,7 +225,7 @@ export class SimWorld {
   }
 
   private async stop(): Promise<void> {
-    await Promise.all(this.agents.map((agent) => agent.stop(this)));
+    await Promise.all([...this.agents, ...this.probeAgents].map((agent) => agent.stop(this)));
     this.record('sim-stop');
   }
 
@@ -213,18 +260,18 @@ export class SimWorld {
     const creatorBot = creator.requireBot();
     const joinerBot = joiner.requireBot();
 
-    creatorBot.createRoom(8000);
-    this.record('create-room', undefined, creator);
+    if (this.command('create-room', creator)) creatorBot.createRoom(8000);
     const created = await creator.waitFor((m) => m.type === 'room-created', 3000);
     const roomId = String(created.roomId);
-    joinerBot.joinRoom(roomId);
-    this.record('join-room', undefined, joiner, roomId);
+    if (this.command('join-room', joiner, roomId)) joinerBot.joinRoom(roomId);
 
     const creatorStart = await creator.waitFor((m) => m.type === 'game-start' && m.roomId === roomId, 3000);
     const joinerStart = await joiner.waitFor((m) => m.type === 'game-start' && m.roomId === roomId, 3000);
     const red = creatorStart.yourColor === 'red' ? creator : joinerStart.yourColor === 'red' ? joiner : null;
     const black = creatorStart.yourColor === 'black' ? creator : joinerStart.yourColor === 'black' ? joiner : null;
     if (!red || !black) throw new Error(`room ${roomId} did not assign both colors`);
+
+    await this.runSpectatorProbe(roomId);
 
     const maxMoves = this.rng.int(8, 28);
     for (let ply = 0; ply < maxMoves && !this.shouldStop() && !this.room(roomId).ended; ply++) {
@@ -242,28 +289,32 @@ export class SimWorld {
       });
       if (uci === null) break;
 
-      player.requireBot().move(uci);
-      this.record('move', { uci, color, ply }, player, roomId);
+      if (this.command('move', player, roomId, { uci, color, ply })) {
+        player.requireBot().move(uci);
+      }
       await player.waitFor((m) => m.type === 'move-ack' && m.uci === uci, 3000);
       await opponent.waitFor((m) => m.type === 'opponent-move' && m.uci === uci, 3000);
 
       if (this.rng.chance(0.08) && this.markChatAllowed(player)) {
-        player.requireBot().chat('gg');
-        this.record('chat', { text: 'gg' }, player, roomId);
+        if (this.command('chat', player, roomId, { text: 'gg' })) {
+          player.requireBot().chat('gg');
+        }
       }
+      if (ply >= 1) await this.runReconnectProbe(roomId, red, black);
       await sleep(this.rng.int(15, 80));
     }
 
     if (!this.room(roomId).ended) {
       const resigner = this.rng.chance(0.5) ? red : black;
-      resigner.requireBot().resign();
-      this.record('resign', undefined, resigner, roomId);
+      if (this.command('resign', resigner, roomId)) {
+        resigner.requireBot().resign();
+      }
     }
     await red.waitFor((m) => m.type === 'game-ended' && m.roomId === roomId, 4000);
     await black.waitFor((m) => m.type === 'game-ended' && m.roomId === roomId, 4000);
 
-    red.requireBot().leaveRoom();
-    black.requireBot().leaveRoom();
+    if (this.command('leave-room', red, roomId)) red.requireBot().leaveRoom();
+    if (this.command('leave-room', black, roomId)) black.requireBot().leaveRoom();
     await red.waitFor((m) => m.type === 'left-room' && m.roomId === roomId, 3000);
     await black.waitFor((m) => m.type === 'left-room' && m.roomId === roomId, 3000);
     await sleep(20);
@@ -273,8 +324,17 @@ export class SimWorld {
   private observeMessage(agent: PlayerAgent, bot: Bot, msg: Msg): void {
     const roomId = typeof msg.roomId === 'string' ? msg.roomId : bot.roomId;
     this.record('server-message', { message: msg }, agent, roomId);
+    const violation = this.monitor.observeServerMessage({
+      agentId: agent.id,
+      uid: agent.uid,
+      roomId,
+      message: msg,
+    });
+    if (violation) this.fail(violation);
     if (msg.type === 'error') this.stats.errors++;
     if (msg.type === 'chat-message') this.stats.chatMessages++;
+    if (msg.type === 'reconnected') this.stats.reconnects++;
+    if (msg.type === 'spectate-started') this.stats.spectatorSessions++;
     if (msg.type === 'game-start' && typeof msg.roomId === 'string') {
       const room = this.room(msg.roomId);
       if (!room.started) {
@@ -292,7 +352,12 @@ export class SimWorld {
     if (msg.type === 'game-ended' && typeof msg.roomId === 'string') {
       const room = this.room(msg.roomId);
       if (room.endedSeenBy.has(agent.id)) {
-        this.fail(`duplicate game-ended for ${agent.id} in room ${msg.roomId}`);
+        this.fail({
+          rule: 'game-ended-duplicate',
+          detail: `duplicate game-ended for ${agent.id} in room ${msg.roomId}`,
+          roomId: msg.roomId,
+          agents: [agent.id],
+        });
         return;
       }
       room.endedSeenBy.add(agent.id);
@@ -316,17 +381,66 @@ export class SimWorld {
     const existing = room.movesUci[index];
     if (existing === uci) return;
     if (existing !== undefined && existing !== uci) {
-      this.fail(`room ${roomId} move ${moveNumber} mismatch: ${existing} vs ${uci}`);
+      this.fail({
+        rule: 'move-count-mismatch',
+        detail: `room ${roomId} move ${moveNumber} mismatch: ${existing} vs ${uci}`,
+        roomId,
+      });
       return;
     }
     room.movesUci[index] = uci;
     this.stats.moves++;
   }
 
-  private fail(message: string): void {
+  private async runSpectatorProbe(roomId: string): Promise<void> {
+    if (this.spectatorProbeDone || this.shouldStop()) return;
+    this.spectatorProbeDone = true;
+    const spectator = new CasualPlayer(
+      `sim_spectator`,
+      `sim_spectator_${this.run.runId}`,
+      new RandomLegalPolicy(),
+    );
+    this.probeAgents.push(spectator);
+    await spectator.start(this);
+    if (this.command('spectate-room', spectator, roomId)) {
+      spectator.requireBot().spectateRoom(roomId);
+    }
+    await spectator.waitFor((m) => m.type === 'spectate-started' && m.roomId === roomId, 3000);
+    if (this.command('stop-spectating', spectator, roomId)) {
+      spectator.requireBot().stopSpectating();
+    }
+    await spectator.waitFor((m) => m.type === 'spectate-stopped' && m.roomId === roomId, 3000);
+  }
+
+  private async runReconnectProbe(
+    roomId: string,
+    player: CasualPlayer,
+    peer: CasualPlayer,
+  ): Promise<void> {
+    if (this.reconnectProbeDone || this.shouldStop() || this.room(roomId).ended) return;
+    this.reconnectProbeDone = true;
+    const oldBot = player.requireBot();
+    if (this.command('drop', player, roomId)) oldBot.drop();
+    await peer.waitFor((m) => m.type === 'peer-disconnected', 1500);
+
+    const newBot = await this.connectBot(player);
+    player.replaceBot(newBot);
+    if (this.command('reconnect-room', player, roomId)) {
+      newBot.reconnectRoom(roomId);
+    }
+    await player.waitFor((m) => m.type === 'reconnected' && m.roomId === roomId, 3000);
+    await peer.waitFor((m) => m.type === 'peer-reconnected', 3000);
+  }
+
+  private fail(violation: ProtocolViolation | string): void {
     if (this.failure) return;
-    this.failure = message;
-    this.record('monitor-failure', { message });
+    const normalized =
+      typeof violation === 'string'
+        ? { rule: 'simulation-failure', detail: violation }
+        : violation;
+    this.failure = normalized.detail;
+    this.failureViolation = normalized;
+    this.record('monitor-failure', normalized, undefined, normalized.roomId);
   }
 
   private markChatAllowed(agent: PlayerAgent): boolean {

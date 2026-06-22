@@ -32,8 +32,11 @@ export class CasualPlayer implements PlayerAgent {
     return this.bot;
   }
 
+  replaceBot(bot: Bot): void {
+    this.bot = bot;
+  }
+
   waitFor(match: (m: Msg) => boolean, timeoutMs?: number): Promise<Msg> {
     return this.requireBot().waitFor(match, timeoutMs);
   }
 }
-
