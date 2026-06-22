@@ -5,7 +5,8 @@ export type PersonaKind =
   | 'spectator'
   | 'abuse';
 
-export type BrainKind = 'random-legal' | 'scripted';
+export type BrainKind = 'random-legal' | 'scripted' | 'heuristic' | 'remote-engine';
+export type SimProfileName = 'mixed-local' | 'engine-staging' | 'engine-quota';
 
 export interface SimProfile {
   readonly name: string;
@@ -15,6 +16,8 @@ export interface SimProfile {
   readonly spectatorChance: number;
   readonly abuseChance: number;
   readonly rematchChance: number;
+  readonly failOnEngineError: boolean;
+  readonly engineRequired: boolean;
 }
 
 export const DEFAULT_PROFILE: SimProfile = {
@@ -27,14 +30,93 @@ export const DEFAULT_PROFILE: SimProfile = {
     abuse: 5,
   },
   brainWeights: {
-    'random-legal': 82,
+    'random-legal': 45,
     scripted: 18,
+    heuristic: 32,
+    'remote-engine': 5,
   },
   reconnectChance: 0.45,
   spectatorChance: 0.06,
   abuseChance: 0.03,
   rematchChance: 0.12,
+  failOnEngineError: false,
+  engineRequired: false,
 };
+
+export const ENGINE_STAGING_PROFILE: SimProfile = {
+  ...DEFAULT_PROFILE,
+  name: 'engine-staging',
+  brainWeights: {
+    'random-legal': 35,
+    scripted: 20,
+    heuristic: 40,
+    'remote-engine': 5,
+  },
+  failOnEngineError: true,
+  engineRequired: true,
+};
+
+export const ENGINE_QUOTA_PROFILE: SimProfile = {
+  ...DEFAULT_PROFILE,
+  name: 'engine-quota',
+  personaWeights: {
+    casual: 42,
+    'private-room': 28,
+    reconnect: 12,
+    spectator: 10,
+    abuse: 8,
+  },
+  brainWeights: {
+    'random-legal': 10,
+    scripted: 10,
+    heuristic: 15,
+    'remote-engine': 65,
+  },
+  reconnectChance: 0.35,
+  spectatorChance: 0.05,
+  abuseChance: 0.04,
+  rematchChance: 0.08,
+  failOnEngineError: true,
+  engineRequired: true,
+};
+
+const PROFILES: Readonly<Record<SimProfileName, SimProfile>> = {
+  'mixed-local': DEFAULT_PROFILE,
+  'engine-staging': ENGINE_STAGING_PROFILE,
+  'engine-quota': ENGINE_QUOTA_PROFILE,
+};
+
+const BRAIN_KINDS: readonly BrainKind[] = [
+  'scripted',
+  'heuristic',
+  'remote-engine',
+  'random-legal',
+];
+
+export function profileByName(name: string | undefined): SimProfile {
+  if (name === undefined) return DEFAULT_PROFILE;
+  const profile = PROFILES[name as SimProfileName];
+  if (!profile) {
+    throw new Error(`unknown simulation profile "${name}". Expected: ${Object.keys(PROFILES).join(', ')}`);
+  }
+  return profile;
+}
+
+export function profileForRun(
+  name: string | undefined,
+  engineConfigured: boolean,
+  failOnEngineError?: boolean,
+): SimProfile {
+  const profile = profileByName(name);
+  const shouldKeepEngine = engineConfigured || profile.engineRequired;
+  return {
+    ...profile,
+    brainWeights: shouldKeepEngine
+      ? profile.brainWeights
+      : { ...profile.brainWeights, 'remote-engine': 0 },
+    failOnEngineError: failOnEngineError ?? profile.failOnEngineError,
+  };
+}
 
 export function personaPlan(users: number, profile = DEFAULT_PROFILE): PersonaKind[] {
   if (users < 2) return [];
@@ -87,14 +169,14 @@ export function personaPlan(users: number, profile = DEFAULT_PROFILE): PersonaKi
 
 export function brainPlan(players: number, profile = DEFAULT_PROFILE): BrainKind[] {
   const counts = weightedCounts(players, profile.brainWeights);
-  if (players >= 4 && counts.scripted === 0) {
-    counts.scripted = 1;
-    counts['random-legal'] = Math.max(0, counts['random-legal'] - 1);
-  }
-  return [
-    ...repeat<BrainKind>('scripted', counts.scripted),
-    ...repeat<BrainKind>('random-legal', Math.max(0, players - counts.scripted)),
-  ];
+  ensureAtLeastOne(counts, 'scripted', players >= 4);
+  ensureAtLeastOne(counts, 'heuristic', players >= 6);
+  ensureAtLeastOne(
+    counts,
+    'remote-engine',
+    profile.brainWeights['remote-engine'] > 0 && players >= 2,
+  );
+  return BRAIN_KINDS.flatMap((kind) => repeat<BrainKind>(kind, counts[kind]));
 }
 
 function weightedCounts<T extends string>(
@@ -122,4 +204,18 @@ function weightedCounts<T extends string>(
 
 function repeat<T>(value: T, count: number): T[] {
   return Array.from({ length: Math.max(0, count) }, () => value);
+}
+
+function ensureAtLeastOne(
+  counts: Record<BrainKind, number>,
+  kind: BrainKind,
+  enabled: boolean,
+): void {
+  if (!enabled || counts[kind] > 0) return;
+  const donor = [...BRAIN_KINDS]
+    .filter((candidate) => candidate !== kind)
+    .sort((a, b) => counts[b] - counts[a])[0];
+  if (!donor || counts[donor] <= 0) return;
+  counts[donor]--;
+  counts[kind]++;
 }

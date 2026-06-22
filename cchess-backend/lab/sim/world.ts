@@ -4,8 +4,11 @@ import { startLabServer, sleep, type LabServer } from '../harness';
 import { resetState } from '../run-one';
 import type { PlayerAgent } from './agent';
 import type { SimColor } from './brain';
+import { HeuristicPolicy } from './brains/heuristic';
 import { RandomLegalPolicy } from './brains/random_legal';
+import { RemoteEnginePolicy } from './brains/remote_engine';
 import { ScriptedPolicy } from './brains/scripted';
+import { EngineConcurrencyLimiter, EngineMetrics } from './engine_metrics';
 import {
   SimMonitor,
   type ProtocolViolation,
@@ -21,8 +24,8 @@ import {
 } from './personas';
 import {
   brainPlan,
-  DEFAULT_PROFILE,
   personaPlan,
+  profileForRun,
   type BrainKind,
   type PersonaKind,
   type SimProfile,
@@ -48,6 +51,13 @@ export interface SimConfig {
   users: number;
   durationMs: number;
   wsUrl?: string;
+  profileName?: string;
+  engineUrl?: string;
+  engineAuthToken?: string;
+  engineTimeoutMs?: number;
+  engineConcurrency?: number;
+  engineMovetimeMs?: number;
+  engineStrict?: boolean;
 }
 
 interface SimRoomMemory {
@@ -84,10 +94,13 @@ export class SimWorld {
   readonly reporter: SimReporter;
   readonly monitor = new SimMonitor();
   readonly agents: PlayerAgent[] = [];
-  readonly profile: SimProfile = DEFAULT_PROFILE;
+  readonly profile: SimProfile;
 
   private readonly rooms = new Map<string, SimRoomMemory>();
   private readonly personaCounts = new Map<string, number>();
+  private readonly brainCounts = new Map<string, number>();
+  private readonly engineMetrics: EngineMetrics;
+  private readonly engineLimiter: EngineConcurrencyLimiter;
   private readonly stats: SimStats = {
     gamesStarted: 0,
     gamesEnded: 0,
@@ -120,6 +133,13 @@ export class SimWorld {
     };
     this.rng = new SeededRandom(config.seed);
     this.reporter = new SimReporter(config.runId);
+    this.profile = profileForRun(
+      config.profileName,
+      config.engineUrl !== undefined && config.engineUrl.trim().length > 0,
+      config.engineStrict,
+    );
+    this.engineMetrics = new EngineMetrics((record) => this.record('engine-call', record));
+    this.engineLimiter = new EngineConcurrencyLimiter(config.engineConcurrency ?? 2);
   }
 
   async execute(): Promise<SimSummary> {
@@ -145,16 +165,23 @@ export class SimWorld {
     const snapshot = this.monitor.snapshot();
     const protocolViolations = this.monitor.protocolViolations();
     const firstProtocolViolation = this.failureViolation ?? protocolViolations[0];
+    const engine = this.engineMetrics.snapshot();
+    const engineFailure =
+      this.profile.failOnEngineError && engine.errors > 0
+        ? `engine profile ${this.profile.name} saw ${engine.errors}/${engine.attempts} engine failures`
+        : undefined;
     const ok =
       failure === undefined &&
       snapshot.roomsAfterDrain === 0 &&
       snapshot.violations.length === 0 &&
-      protocolViolations.length === 0;
+      protocolViolations.length === 0 &&
+      engineFailure === undefined;
     const summary: SimSummary = {
       ok,
       runId: this.run.runId,
       seed: this.run.seed,
       target: this.run.target,
+      profile: this.profile.name,
       users: this.run.users,
       durationMs: this.run.durationMs,
       elapsedMs: Date.now() - t0,
@@ -170,11 +197,13 @@ export class SimWorld {
       privateRooms: this.stats.privateRooms,
       rematches: this.stats.rematches,
       personaCounts: Object.fromEntries(this.personaCounts),
+      brainCounts: Object.fromEntries(this.brainCounts),
+      engine,
       roomsAfterDrain: snapshot.roomsAfterDrain,
       invariantViolations: snapshot.violations,
       protocolViolations,
       reportDir: this.reporter.reportDir,
-      replay: `npm run lab:sim -- --target=${this.run.target} --users=${this.run.users} --duration=${this.run.durationMs}ms --seed=${this.run.seed} --run-id=${this.run.runId}`,
+      replay: this.replayCommand(),
       failureRule: firstProtocolViolation?.rule,
       failureRoomId: firstProtocolViolation?.roomId,
       failureAgents: firstProtocolViolation?.agents,
@@ -182,6 +211,7 @@ export class SimWorld {
       failure:
         failure ??
         firstProtocolViolation?.detail ??
+        engineFailure ??
         (ok ? undefined : 'simulation ended with leftover rooms or invariant violations'),
     };
     this.reporter.writeSummary(summary);
@@ -259,6 +289,9 @@ export class SimWorld {
       const agent = this.makeAgent(persona, id, uid, brainKind);
       this.agents.push(agent);
       this.personaCounts.set(agent.persona, (this.personaCounts.get(agent.persona) ?? 0) + 1);
+      if (isPlayerPersona(persona)) {
+        this.brainCounts.set(brainKind, (this.brainCounts.get(brainKind) ?? 0) + 1);
+      }
     }
     await Promise.all(this.agents.map((agent) => agent.start(this)));
     this.record('sim-start', {
@@ -266,6 +299,8 @@ export class SimWorld {
       users: this.agents.length,
       profile: this.profile.name,
       personas: Object.fromEntries(this.personaCounts),
+      brains: Object.fromEntries(this.brainCounts),
+      engineUrlConfigured: this.config.engineUrl !== undefined && this.config.engineUrl.trim().length > 0,
     });
   }
 
@@ -656,7 +691,23 @@ export class SimWorld {
   }
 
   private makeBrain(kind: BrainKind) {
-    return kind === 'scripted' ? new ScriptedPolicy() : new RandomLegalPolicy();
+    switch (kind) {
+      case 'scripted':
+        return new ScriptedPolicy();
+      case 'heuristic':
+        return new HeuristicPolicy();
+      case 'remote-engine':
+        return new RemoteEnginePolicy({
+          baseUrl: this.config.engineUrl,
+          authToken: this.config.engineAuthToken,
+          timeoutMs: this.config.engineTimeoutMs,
+          movetimeMs: this.config.engineMovetimeMs,
+          limiter: this.engineLimiter,
+          metrics: this.engineMetrics,
+        });
+      case 'random-legal':
+        return new RandomLegalPolicy();
+    }
   }
 
   private makeAgent(kind: PersonaKind, id: string, uid: string, brainKind: BrainKind): PlayerAgent {
@@ -673,6 +724,26 @@ export class SimWorld {
       case 'abuse':
         return new AbuseAgent(id, uid, brain);
     }
+  }
+
+  private replayCommand(): string {
+    const args = [
+      'npm run lab:sim --',
+      `--target=${this.run.target}`,
+      `--profile=${this.profile.name}`,
+      `--users=${this.run.users}`,
+      `--duration=${this.run.durationMs}ms`,
+      `--seed=${this.run.seed}`,
+      `--run-id=${this.run.runId}`,
+    ];
+    if (this.config.wsUrl) args.push(`--ws=${this.config.wsUrl}`);
+    if (this.config.engineUrl) args.push(`--engine-url=${this.config.engineUrl}`);
+    if (this.config.engineTimeoutMs) args.push(`--engine-timeout=${this.config.engineTimeoutMs}ms`);
+    if (this.config.engineConcurrency) args.push(`--engine-concurrency=${this.config.engineConcurrency}`);
+    if (this.config.engineMovetimeMs) args.push(`--engine-movetime=${this.config.engineMovetimeMs}ms`);
+    if (this.config.engineStrict === true) args.push('--engine-strict');
+    if (this.config.engineStrict === false) args.push('--engine-nonstrict');
+    return args.join(' ');
   }
 }
 

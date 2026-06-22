@@ -2,6 +2,7 @@ import { createWriteStream, existsSync, mkdirSync, writeFileSync } from 'node:fs
 import path from 'node:path';
 import type { Writable } from 'node:stream';
 import type { InvariantViolation } from '../invariants';
+import type { EngineMetricsSummary } from './engine_metrics';
 import type { ProtocolViolation } from './monitor';
 
 export interface SimEvent {
@@ -19,6 +20,7 @@ export interface SimSummary {
   runId: string;
   seed: number;
   target: string;
+  profile: string;
   users: number;
   durationMs: number;
   elapsedMs: number;
@@ -34,6 +36,8 @@ export interface SimSummary {
   privateRooms: number;
   rematches: number;
   personaCounts: Record<string, number>;
+  brainCounts: Record<string, number>;
+  engine: EngineMetricsSummary;
   roomsAfterDrain: number;
   invariantViolations: InvariantViolation[];
   protocolViolations: ProtocolViolation[];
@@ -94,7 +98,9 @@ export class SimReporter {
         summary.failureAgents?.length ? `agents: ${summary.failureAgents.join(', ')}` : undefined,
         `seed: ${summary.seed}`,
         `target: ${summary.target}`,
+        `profile: ${summary.profile}`,
         `users: ${summary.users}`,
+        `engine: ${summary.engine.errors}/${summary.engine.attempts} errors, ${summary.engine.fallbacks} fallbacks`,
         `events: ${this.eventsPath}`,
         `replay: ${summary.replay}`,
         '',
