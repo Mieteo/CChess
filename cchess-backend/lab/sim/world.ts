@@ -10,6 +10,22 @@ import { RemoteEnginePolicy } from './brains/remote_engine';
 import { ScriptedPolicy } from './brains/scripted';
 import { EngineConcurrencyLimiter, EngineMetrics } from './engine_metrics';
 import {
+  cleanupFirebaseRun,
+  DISABLED_CLEANUP_SUMMARY,
+  DISABLED_PERSISTENCE_SUMMARY,
+  readUserStats,
+  verifyPersistenceWithFirestore,
+  type FirebaseCleanupSummary,
+  type PersistenceVerificationSummary,
+  type SimGameFact,
+  type UserStatsSnapshot,
+} from './firebase_probe';
+import {
+  resolveSimIdentities,
+  type SimAuthMode,
+  type SimIdentity,
+} from './firebase_auth';
+import {
   SimMonitor,
   type ProtocolViolation,
   type SimCommandType,
@@ -58,6 +74,15 @@ export interface SimConfig {
   engineConcurrency?: number;
   engineMovetimeMs?: number;
   engineStrict?: boolean;
+  authMode?: SimAuthMode;
+  firebaseApiKey?: string;
+  firebaseIdTokens?: string[];
+  uidPrefix?: string;
+  verifyPersistence?: boolean;
+  cleanupAfter?: boolean;
+  cleanupDryRun?: boolean;
+  cleanupDeleteUserDocs?: boolean;
+  cleanupDeleteAuthUsers?: boolean;
 }
 
 interface SimRoomMemory {
@@ -70,6 +95,7 @@ interface SimRoomMemory {
   startedKeys: Set<string>;
   endedKeys: Set<string>;
   reconnectTested: boolean;
+  currentStartedAt: number | null;
 }
 
 interface SimStats {
@@ -101,6 +127,8 @@ export class SimWorld {
   private readonly brainCounts = new Map<string, number>();
   private readonly engineMetrics: EngineMetrics;
   private readonly engineLimiter: EngineConcurrencyLimiter;
+  private readonly authTokensByUid = new Map<string, string>();
+  private readonly completedGames: SimGameFact[] = [];
   private readonly stats: SimStats = {
     gamesStarted: 0,
     gamesEnded: 0,
@@ -119,6 +147,8 @@ export class SimWorld {
   private server?: LabServer;
   private wsUrl?: string;
   private stopAtMs = 0;
+  private identities: SimIdentity[] = [];
+  private persistenceBefore = new Map<string, UserStatsSnapshot>();
   private failure?: string;
   private failureViolation?: ProtocolViolation;
 
@@ -162,6 +192,8 @@ export class SimWorld {
       await this.closeServer();
     }
 
+    const persistence = await this.verifyPersistence();
+    const cleanup = await this.cleanupFirebase();
     const snapshot = this.monitor.snapshot();
     const protocolViolations = this.monitor.protocolViolations();
     const firstProtocolViolation = this.failureViolation ?? protocolViolations[0];
@@ -170,12 +202,22 @@ export class SimWorld {
       this.profile.failOnEngineError && engine.errors > 0
         ? `engine profile ${this.profile.name} saw ${engine.errors}/${engine.attempts} engine failures`
         : undefined;
+    const persistenceFailure =
+      persistence.enabled && !persistence.ok
+        ? `persistence verification failed for ${persistence.expectedGames} games`
+        : undefined;
+    const cleanupFailure =
+      cleanup.enabled && cleanup.errors.length > 0
+        ? `firebase cleanup saw ${cleanup.errors.length} errors`
+        : undefined;
     const ok =
       failure === undefined &&
       snapshot.roomsAfterDrain === 0 &&
       snapshot.violations.length === 0 &&
       protocolViolations.length === 0 &&
-      engineFailure === undefined;
+      engineFailure === undefined &&
+      persistenceFailure === undefined &&
+      cleanupFailure === undefined;
     const summary: SimSummary = {
       ok,
       runId: this.run.runId,
@@ -198,7 +240,16 @@ export class SimWorld {
       rematches: this.stats.rematches,
       personaCounts: Object.fromEntries(this.personaCounts),
       brainCounts: Object.fromEntries(this.brainCounts),
+      identities: this.identities.map((identity) => ({
+        agentId: identity.agentId,
+        uid: identity.uid,
+        authMode: identity.authMode,
+        createdBySimulator: identity.createdBySimulator,
+      })),
+      games: [...this.completedGames],
       engine,
+      persistence,
+      cleanup,
       roomsAfterDrain: snapshot.roomsAfterDrain,
       invariantViolations: snapshot.violations,
       protocolViolations,
@@ -212,6 +263,8 @@ export class SimWorld {
         failure ??
         firstProtocolViolation?.detail ??
         engineFailure ??
+        persistenceFailure ??
+        cleanupFailure ??
         (ok ? undefined : 'simulation ended with leftover rooms or invariant violations'),
     };
     this.reporter.writeSummary(summary);
@@ -224,7 +277,7 @@ export class SimWorld {
     this.monitor.registerAgent(agent);
     const bot = new Bot(this.wsUrl, agent.uid);
     bot.observe((msg) => this.observeMessage(agent, bot, msg));
-    await bot.connectAuthed();
+    await bot.connectAuthed(this.authTokensByUid.get(agent.uid) ?? agent.uid);
     return bot;
   }
 
@@ -263,28 +316,35 @@ export class SimWorld {
   }
 
   private async start(): Promise<void> {
-    if (this.config.target !== 'in-process') {
-      throw new Error(`Phase 1 supports only --target=in-process, got ${this.config.target}`);
-    }
-    resetState();
-    this.server = await startLabServer({
-      reconnectGraceMs: 700,
-      waitingRoomTtlMs: 900,
-      heartbeatIntervalMs: 5000,
-      livenessTimeoutMs: 60_000,
-      minClockMs: 200,
-    });
-    this.wsUrl = this.config.wsUrl ?? this.server.url;
+    await this.startTarget();
     this.stopAtMs = Date.now() + this.run.durationMs;
 
     const personas = personaPlan(this.run.users, this.profile);
+    this.identities = await resolveSimIdentities({
+      count: personas.length,
+      runId: this.run.runId,
+      target: this.run.target,
+      mode: this.config.authMode,
+      apiKey: this.config.firebaseApiKey,
+      idTokens: this.config.firebaseIdTokens,
+      uidPrefix: this.config.uidPrefix,
+    });
+    this.authTokensByUid.clear();
+    for (const identity of this.identities) {
+      this.authTokensByUid.set(identity.uid, identity.token);
+    }
+    if (this.shouldVerifyPersistence()) {
+      this.persistenceBefore = await readUserStats(this.identities.map((identity) => identity.uid));
+    }
+
     const playerCount = personas.filter(isPlayerPersona).length;
     const brains = brainPlan(playerCount, this.profile);
     let brainIndex = 0;
     for (let i = 0; i < personas.length; i++) {
       const persona = personas[i];
-      const id = `sim_${String(i).padStart(3, '0')}`;
-      const uid = `${id}_${this.run.runId}`;
+      const identity = this.identities[i];
+      const id = identity.agentId;
+      const uid = identity.uid;
       const brainKind = isPlayerPersona(persona) ? brains[brainIndex++] : 'random-legal';
       const agent = this.makeAgent(persona, id, uid, brainKind);
       this.agents.push(agent);
@@ -301,6 +361,8 @@ export class SimWorld {
       personas: Object.fromEntries(this.personaCounts),
       brains: Object.fromEntries(this.brainCounts),
       engineUrlConfigured: this.config.engineUrl !== undefined && this.config.engineUrl.trim().length > 0,
+      authModes: countBy(this.identities.map((identity) => identity.authMode)),
+      verifyPersistence: this.shouldVerifyPersistence(),
     });
   }
 
@@ -309,10 +371,54 @@ export class SimWorld {
     this.record('sim-stop');
   }
 
+  private async startTarget(): Promise<void> {
+    if (this.config.target === 'in-process') {
+      resetState();
+      this.server = await startLabServer({
+        reconnectGraceMs: 700,
+        waitingRoomTtlMs: 900,
+        heartbeatIntervalMs: 5000,
+        livenessTimeoutMs: 60_000,
+        minClockMs: 200,
+      });
+      this.wsUrl = this.config.wsUrl ?? this.server.url;
+      return;
+    }
+
+    this.wsUrl = this.config.wsUrl ?? defaultWsUrl(this.config.target);
+    if (!this.wsUrl) {
+      throw new Error(`--target=${this.config.target} requires --ws or CCHESS_BACKEND_URL`);
+    }
+  }
+
   private async closeServer(): Promise<void> {
     if (!this.server) return;
     await this.server.close();
     this.server = undefined;
+  }
+
+  private shouldVerifyPersistence(): boolean {
+    return this.config.verifyPersistence ?? this.profile.verifyPersistence;
+  }
+
+  private async verifyPersistence(): Promise<PersistenceVerificationSummary> {
+    if (!this.shouldVerifyPersistence()) return DISABLED_PERSISTENCE_SUMMARY;
+    return verifyPersistenceWithFirestore({
+      games: this.completedGames,
+      before: this.persistenceBefore,
+      uids: this.identities.map((identity) => identity.uid),
+    });
+  }
+
+  private async cleanupFirebase(): Promise<FirebaseCleanupSummary> {
+    if (!this.config.cleanupAfter) return DISABLED_CLEANUP_SUMMARY;
+    return cleanupFirebaseRun({
+      games: this.completedGames,
+      uids: this.identities.map((identity) => identity.uid),
+      deleteUserDocs: this.config.cleanupDeleteUserDocs ?? false,
+      deleteAuthUsers: this.config.cleanupDeleteAuthUsers ?? false,
+      dryRun: this.config.cleanupDryRun ?? false,
+    });
   }
 
   private async runPairs(): Promise<void> {
@@ -442,11 +548,15 @@ export class SimWorld {
       if (!room.startedKeys.has(startedKey)) {
         room.startedKeys.add(startedKey);
         this.stats.gamesStarted++;
+        room.currentStartedAt = typeof msg.startedAt === 'number' ? msg.startedAt : Date.now();
       }
       room.ended = false;
       room.endedSeenBy.clear();
       room.reconnectTested = false;
-      if (msg.rematch === true) room.movesUci = [];
+      if (msg.rematch === true) {
+        room.movesUci = [];
+        room.currentStartedAt = typeof msg.startedAt === 'number' ? msg.startedAt : Date.now();
+      }
       if (typeof msg.redUid === 'string') room.redUid = msg.redUid;
       if (typeof msg.blackUid === 'string') room.blackUid = msg.blackUid;
       return;
@@ -472,6 +582,7 @@ export class SimWorld {
         room.endedKeys.add(endedKey);
         room.ended = true;
         this.stats.gamesEnded++;
+        this.completedGames.push(gameFactFromEnded(room, msg));
       }
     }
   }
@@ -669,6 +780,7 @@ export class SimWorld {
         startedKeys: new Set<string>(),
         endedKeys: new Set<string>(),
         reconnectTested: false,
+        currentStartedAt: null,
       };
       this.rooms.set(roomId, room);
     }
@@ -743,6 +855,14 @@ export class SimWorld {
     if (this.config.engineMovetimeMs) args.push(`--engine-movetime=${this.config.engineMovetimeMs}ms`);
     if (this.config.engineStrict === true) args.push('--engine-strict');
     if (this.config.engineStrict === false) args.push('--engine-nonstrict');
+    if (this.config.authMode) args.push(`--auth-mode=${this.config.authMode}`);
+    if (this.config.uidPrefix) args.push(`--uid-prefix=${this.config.uidPrefix}`);
+    if (this.config.verifyPersistence === true) args.push('--verify-persistence');
+    if (this.config.verifyPersistence === false) args.push('--no-verify-persistence');
+    if (this.config.cleanupAfter) args.push('--cleanup-after');
+    if (this.config.cleanupDryRun) args.push('--cleanup-dry-run');
+    if (this.config.cleanupDeleteUserDocs) args.push('--cleanup-delete-user-docs');
+    if (this.config.cleanupDeleteAuthUsers) args.push('--cleanup-delete-auth-users');
     return args.join(' ');
   }
 }
@@ -765,4 +885,45 @@ function gameStartKey(msg: Msg): string {
 
 function gameEndedKey(msg: Msg): string {
   return `${String(msg.roomId)}:${String(msg.endedAt ?? 'unknown')}:${String(msg.result)}:${String(msg.reason)}`;
+}
+
+function gameFactFromEnded(room: SimRoomMemory, msg: Msg): SimGameFact {
+  const startedAt =
+    typeof msg.startedAt === 'number'
+      ? msg.startedAt
+      : room.currentStartedAt;
+  const moveList = Array.isArray(msg.moves)
+    ? msg.moves.filter((move): move is string => typeof move === 'string')
+    : [...room.movesUci];
+  return {
+    gameId: `${room.roomId}_${String(startedAt ?? 'unknown')}`,
+    roomId: room.roomId,
+    redUid: typeof msg.redUid === 'string' ? msg.redUid : room.redUid ?? 'unknown-red',
+    blackUid: typeof msg.blackUid === 'string' ? msg.blackUid : room.blackUid ?? 'unknown-black',
+    result: simGameResult(msg.result),
+    reason: typeof msg.reason === 'string' ? msg.reason : 'unknown',
+    moveList,
+    moveCount: moveList.length,
+    startedAt,
+    endedAt: typeof msg.endedAt === 'number' ? msg.endedAt : null,
+  };
+}
+
+function simGameResult(value: unknown): SimGameFact['result'] {
+  if (value === 'red-win' || value === 'black-win' || value === 'draw') return value;
+  return 'draw';
+}
+
+function defaultWsUrl(target: SimTarget): string | undefined {
+  const envUrl = process.env.CCHESS_BACKEND_URL ?? process.env.SIM_WS_URL;
+  if (envUrl) return envUrl;
+  if (target === 'local') return 'ws://127.0.0.1:8080';
+  if (target === 'prod-smoke') return 'wss://cchess-backend.onrender.com';
+  return undefined;
+}
+
+function countBy(items: readonly string[]): Record<string, number> {
+  const counts: Record<string, number> = {};
+  for (const item of items) counts[item] = (counts[item] ?? 0) + 1;
+  return counts;
 }

@@ -21,7 +21,7 @@
     "lab:sim:local": "tsx lab/sim/runner.ts --target=local",
     "lab:sim:staging": "tsx lab/sim/runner.ts --target=staging",
     "lab:sim:replay": "tsx lab/sim/runner.ts --replay",
-    "lab:sim:test": "tsx --test lab/sim/monitor.test.ts lab/sim/brains/phase4.test.ts",
+    "lab:sim:test": "tsx --test lab/sim/monitor.test.ts lab/sim/brains/phase4.test.ts lab/sim/firebase_probe.test.ts",
     "lab:smoke": "tsx lab/smoke.ts",
     "engine:smoke": "tsx lab/engine_smoke.ts",
     "engine:smoke:quota": "tsx lab/engine_smoke.ts --quota",

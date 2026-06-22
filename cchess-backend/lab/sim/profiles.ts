@@ -6,7 +6,7 @@ export type PersonaKind =
   | 'abuse';
 
 export type BrainKind = 'random-legal' | 'scripted' | 'heuristic' | 'remote-engine';
-export type SimProfileName = 'mixed-local' | 'engine-staging' | 'engine-quota';
+export type SimProfileName = 'mixed-local' | 'engine-staging' | 'engine-quota' | 'staging-system';
 
 export interface SimProfile {
   readonly name: string;
@@ -18,6 +18,7 @@ export interface SimProfile {
   readonly rematchChance: number;
   readonly failOnEngineError: boolean;
   readonly engineRequired: boolean;
+  readonly verifyPersistence: boolean;
 }
 
 export const DEFAULT_PROFILE: SimProfile = {
@@ -41,6 +42,7 @@ export const DEFAULT_PROFILE: SimProfile = {
   rematchChance: 0.12,
   failOnEngineError: false,
   engineRequired: false,
+  verifyPersistence: false,
 };
 
 export const ENGINE_STAGING_PROFILE: SimProfile = {
@@ -54,6 +56,7 @@ export const ENGINE_STAGING_PROFILE: SimProfile = {
   },
   failOnEngineError: true,
   engineRequired: true,
+  verifyPersistence: false,
 };
 
 export const ENGINE_QUOTA_PROFILE: SimProfile = {
@@ -78,12 +81,35 @@ export const ENGINE_QUOTA_PROFILE: SimProfile = {
   rematchChance: 0.08,
   failOnEngineError: true,
   engineRequired: true,
+  verifyPersistence: false,
+};
+
+export const STAGING_SYSTEM_PROFILE: SimProfile = {
+  ...DEFAULT_PROFILE,
+  name: 'staging-system',
+  personaWeights: {
+    casual: 45,
+    'private-room': 25,
+    reconnect: 15,
+    spectator: 10,
+    abuse: 5,
+  },
+  brainWeights: {
+    'random-legal': 35,
+    scripted: 20,
+    heuristic: 40,
+    'remote-engine': 5,
+  },
+  failOnEngineError: true,
+  engineRequired: true,
+  verifyPersistence: true,
 };
 
 const PROFILES: Readonly<Record<SimProfileName, SimProfile>> = {
   'mixed-local': DEFAULT_PROFILE,
   'engine-staging': ENGINE_STAGING_PROFILE,
   'engine-quota': ENGINE_QUOTA_PROFILE,
+  'staging-system': STAGING_SYSTEM_PROFILE,
 };
 
 const BRAIN_KINDS: readonly BrainKind[] = [

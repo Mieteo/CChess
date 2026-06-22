@@ -3,6 +3,11 @@ import path from 'node:path';
 import type { Writable } from 'node:stream';
 import type { InvariantViolation } from '../invariants';
 import type { EngineMetricsSummary } from './engine_metrics';
+import type {
+  FirebaseCleanupSummary,
+  PersistenceVerificationSummary,
+  SimGameFact,
+} from './firebase_probe';
 import type { ProtocolViolation } from './monitor';
 
 export interface SimEvent {
@@ -37,7 +42,11 @@ export interface SimSummary {
   rematches: number;
   personaCounts: Record<string, number>;
   brainCounts: Record<string, number>;
+  identities: Array<{ agentId: string; uid: string; authMode: string; createdBySimulator: boolean }>;
+  games: SimGameFact[];
   engine: EngineMetricsSummary;
+  persistence: PersistenceVerificationSummary;
+  cleanup: FirebaseCleanupSummary;
   roomsAfterDrain: number;
   invariantViolations: InvariantViolation[];
   protocolViolations: ProtocolViolation[];
@@ -101,6 +110,8 @@ export class SimReporter {
         `profile: ${summary.profile}`,
         `users: ${summary.users}`,
         `engine: ${summary.engine.errors}/${summary.engine.attempts} errors, ${summary.engine.fallbacks} fallbacks`,
+        `persistence: ${summary.persistence.enabled ? `${summary.persistence.ok ? 'ok' : 'fail'} (${summary.persistence.expectedGames} games)` : 'disabled'}`,
+        `cleanup: ${summary.cleanup.enabled ? `${summary.cleanup.recordsDeleted} records, ${summary.cleanup.userDocsDeleted} user docs, ${summary.cleanup.authUsersDeleted} auth users` : 'disabled'}`,
         `events: ${this.eventsPath}`,
         `replay: ${summary.replay}`,
         '',
