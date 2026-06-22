@@ -23,6 +23,7 @@ export class Bot {
     timer: NodeJS.Timeout;
   }> = [];
   private readonly queue: Msg[] = [];
+  private readonly observers: Array<(m: Msg) => void> = [];
 
   /// Last room/color the server told this bot about — handy for assertions.
   roomId?: string;
@@ -31,6 +32,14 @@ export class Bot {
   constructor(url: string, uid: string) {
     this.url = url;
     this.uid = uid;
+  }
+
+  observe(onMessage: (m: Msg) => void): () => void {
+    this.observers.push(onMessage);
+    return () => {
+      const i = this.observers.indexOf(onMessage);
+      if (i >= 0) this.observers.splice(i, 1);
+    };
   }
 
   // ── connection lifecycle ────────────────────────────────────────────────
@@ -86,6 +95,7 @@ export class Bot {
     }
     this.log.push(msg);
     if (this.log.length > 200) this.log.splice(0, this.log.length - 200);
+    for (const observer of this.observers) observer(msg);
 
     const i = this.waiters.findIndex((w) => w.match(msg));
     if (i >= 0) {
