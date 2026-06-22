@@ -1,0 +1,197 @@
+# Simulation Layer gate. This is intentionally separate from backend-ci so the
+# heavier soak/staging profiles can run on demand or nightly without slowing
+# every PR.
+name: simulation-layer
+
+on:
+  workflow_dispatch:
+    inputs:
+      sim_profile:
+        description: Simulation profile to run
+        default: realtime-soak
+        required: true
+        type: choice
+        options:
+          - smoke-local
+          - realtime-soak
+          - staging-system
+          - engine-quota
+      users:
+        description: Virtual users
+        default: '20'
+        required: true
+      duration:
+        description: Duration, e.g. 60s, 2m, 10m
+        default: 2m
+        required: true
+      seed:
+        description: Seed for deterministic replay
+        default: '63001'
+        required: true
+      backend_url:
+        description: WebSocket URL for staging profiles
+        default: ''
+        required: false
+      engine_url:
+        description: Engine HTTP URL for engine/staging profiles
+        default: ''
+        required: false
+      auth_mode:
+        description: Simulator auth mode for external targets
+        default: custom-token
+        required: true
+        type: choice
+        options:
+          - custom-token
+          - anonymous
+          - id-token-list
+          - stub
+      verify_persistence:
+        description: Verify Firestore game_records/ELO/counters after the run
+        default: true
+        required: true
+        type: boolean
+      cleanup_after:
+        description: Cleanup game_records after the run
+        default: false
+        required: true
+        type: boolean
+      cleanup_delete_user_docs:
+        description: Also delete users/{uid} docs during cleanup
+        default: false
+        required: true
+        type: boolean
+      cleanup_delete_auth_users:
+        description: Also delete Firebase Auth users created for the run
+        default: false
+        required: true
+        type: boolean
+  schedule:
+    # Nightly in-process soak. Staging profiles stay manual because they write
+    # Firestore/Auth data and may burn engine quota.
+    - cron: '0 18 * * *'
+
+jobs:
+  simulate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: cchess-backend
+    env:
+      SIM_PROFILE_INPUT: ${{ github.event.inputs.sim_profile }}
+      SIM_USERS_INPUT: ${{ github.event.inputs.users }}
+      SIM_DURATION_INPUT: ${{ github.event.inputs.duration }}
+      SIM_SEED_INPUT: ${{ github.event.inputs.seed }}
+      SIM_BACKEND_URL_INPUT: ${{ github.event.inputs.backend_url }}
+      SIM_ENGINE_URL_INPUT: ${{ github.event.inputs.engine_url }}
+      SIM_AUTH_MODE_INPUT: ${{ github.event.inputs.auth_mode }}
+      SIM_VERIFY_PERSISTENCE_INPUT: ${{ github.event.inputs.verify_persistence }}
+      SIM_CLEANUP_AFTER_INPUT: ${{ github.event.inputs.cleanup_after }}
+      SIM_CLEANUP_DELETE_USER_DOCS_INPUT: ${{ github.event.inputs.cleanup_delete_user_docs }}
+      SIM_CLEANUP_DELETE_AUTH_USERS_INPUT: ${{ github.event.inputs.cleanup_delete_auth_users }}
+      FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.CCHESS_FIREBASE_SERVICE_ACCOUNT_JSON }}
+      FIREBASE_API_KEY: ${{ secrets.CCHESS_FIREBASE_API_KEY }}
+      CCHESS_ENGINE_TOKEN: ${{ secrets.CCHESS_ENGINE_FIREBASE_ID_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: cchess-backend/package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      - name: Typecheck + simulation unit tests
+        run: |
+          npm run lab:check
+          npm run lab:sim:test
+
+      - name: Run simulation
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          profile="${SIM_PROFILE_INPUT:-realtime-soak}"
+          users="${SIM_USERS_INPUT:-20}"
+          duration="${SIM_DURATION_INPUT:-2m}"
+          seed="${SIM_SEED_INPUT:-63001}"
+          backend_url="${SIM_BACKEND_URL_INPUT:-}"
+          engine_url="${SIM_ENGINE_URL_INPUT:-}"
+          auth_mode="${SIM_AUTH_MODE_INPUT:-custom-token}"
+          verify_persistence="${SIM_VERIFY_PERSISTENCE_INPUT:-true}"
+          cleanup_after="${SIM_CLEANUP_AFTER_INPUT:-false}"
+          cleanup_delete_user_docs="${SIM_CLEANUP_DELETE_USER_DOCS_INPUT:-false}"
+          cleanup_delete_auth_users="${SIM_CLEANUP_DELETE_AUTH_USERS_INPUT:-false}"
+          run_id="sim-${profile}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          uid_prefix="sim_${GITHUB_RUN_ID}_${GITHUB_RUN_ATTEMPT}"
+
+          args=("--seed=${seed}" "--run-id=${run_id}" "--users=${users}" "--duration=${duration}")
+
+          case "${profile}" in
+            smoke-local)
+              args+=("--target=in-process" "--profile=mixed-local")
+              ;;
+            realtime-soak)
+              args+=("--target=in-process" "--profile=mixed-local")
+              ;;
+            staging-system)
+              if [[ -z "${backend_url}" ]]; then
+                echo "backend_url is required for staging-system" >&2
+                exit 1
+              fi
+              args+=("--target=staging" "--profile=staging-system" "--ws=${backend_url}" "--auth-mode=${auth_mode}" "--uid-prefix=${uid_prefix}")
+              if [[ -n "${engine_url}" ]]; then
+                args+=("--engine-url=${engine_url}" "--engine-strict")
+              fi
+              if [[ "${verify_persistence}" == "true" ]]; then
+                args+=("--verify-persistence")
+              else
+                args+=("--no-verify-persistence")
+              fi
+              ;;
+            engine-quota)
+              if [[ -z "${backend_url}" ]]; then
+                echo "backend_url is required for engine-quota" >&2
+                exit 1
+              fi
+              if [[ -z "${engine_url}" ]]; then
+                echo "engine_url is required for engine-quota" >&2
+                exit 1
+              fi
+              args+=("--target=staging" "--profile=engine-quota" "--ws=${backend_url}" "--engine-url=${engine_url}" "--engine-strict" "--auth-mode=${auth_mode}" "--uid-prefix=${uid_prefix}")
+              if [[ "${verify_persistence}" == "true" ]]; then
+                args+=("--verify-persistence")
+              else
+                args+=("--no-verify-persistence")
+              fi
+              ;;
+            *)
+              echo "unknown sim_profile: ${profile}" >&2
+              exit 1
+              ;;
+          esac
+
+          if [[ "${cleanup_after}" == "true" ]]; then
+            args+=("--cleanup-after")
+          fi
+          if [[ "${cleanup_delete_user_docs}" == "true" ]]; then
+            args+=("--cleanup-delete-user-docs")
+          fi
+          if [[ "${cleanup_delete_auth_users}" == "true" ]]; then
+            args+=("--cleanup-delete-auth-users")
+          fi
+
+          echo "npm run lab:sim -- ${args[*]}"
+          npm run lab:sim -- "${args[@]}"
+
+      - name: Upload simulation reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: simulation-layer-reports-${{ github.run_id }}-${{ github.run_attempt }}
+          path: cchess-backend/lab/reports/**
+          if-no-files-found: ignore

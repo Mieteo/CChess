@@ -194,7 +194,8 @@ Close codes:
 - [x] **Sprint 12 A6** Basic spectate — `spectate-room`/`stop-spectating`, read-only viewers receive move/chat/end snapshots
 - [x] **Sprint 12 A6 polish** Active room list — `list-active-rooms` for lobby watch discovery
 - [x] **Sprint 12 A6 share link** HTTP landing page `GET /r/:id` (`?mode=join` variant) for shareable room links / QR
-- [x] **Backend tests/gates** `npm test` covers unit/integration server + engine-service; `backend-ci` also runs `lab`, `lab:load`, and seeded `lab:fuzz`
+- [x] **Backend tests/gates** `npm test` covers unit/integration server + engine-service; `backend-ci` also runs `lab`, `lab:sim:test`, `lab:sim:ci`, `lab:load`, and seeded `lab:fuzz`
+- [x] **Simulation Layer Phase 1-6** `lab/sim` covers multi-user personas, protocol oracle, heuristic/remote-engine brains, staging Firebase persistence verification/cleanup, CI-light smoke, nightly/manual `simulation-layer` workflow, and report artifacts
 - [x] **Engine service smoke** `npm run engine:smoke` / `npm run engine:smoke:quota` covers deployed `cchess-engine` (`/health`, auth, invalid FEN, best-move/cache, hint, analyze, quota)
 
 ## Deploy

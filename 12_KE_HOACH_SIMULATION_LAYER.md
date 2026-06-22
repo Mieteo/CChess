@@ -78,8 +78,11 @@ Script trong `cchess-backend/package.json`:
 ```json
 {
   "lab:sim": "tsx lab/sim/runner.ts",
+  "lab:sim:ci": "tsx lab/sim/runner.ts --target=in-process --profile=mixed-local --users=8 --duration=20s --seed=61001",
+  "lab:sim:soak": "tsx lab/sim/runner.ts --target=in-process --profile=mixed-local --users=20 --duration=2m --seed=62001",
   "lab:sim:local": "tsx lab/sim/runner.ts --target=local",
   "lab:sim:staging": "tsx lab/sim/runner.ts --target=staging",
+  "lab:sim:staging-system": "tsx lab/sim/runner.ts --target=staging --profile=staging-system --verify-persistence",
   "lab:sim:replay": "tsx lab/sim/runner.ts --replay"
 }
 ```
@@ -89,6 +92,9 @@ Lenh muc tieu:
 ```bash
 npm run lab:sim -- --users=20 --duration=3m --seed=123 --target=local
 npm run lab:sim -- --users=50 --duration=10m --target=staging
+npm run lab:sim:ci
+npm run lab:sim:soak
+npm run lab:sim:staging-system -- --ws=wss://staging.example --engine-url=https://engine.example --cleanup-after
 npm run lab:sim -- --run-id=sim-20260622-001 --replay
 ```
 
@@ -638,6 +644,26 @@ Acceptance:
 
 - PR/commit khong bi cham qua muc.
 - Long run co the chay thu cong hoac nightly.
+
+Trang thai trien khai:
+
+- `backend-ci` chay them `npm run lab:sim:test` va `npm run lab:sim:ci` tren push/PR backend.
+- Workflow `.github/workflows/simulation-layer.yml` chay nightly `realtime-soak` va cho phep manual run cac profile `smoke-local`, `realtime-soak`, `staging-system`, `engine-quota`.
+- Tat ca workflow simulation upload `cchess-backend/lab/reports/**` lam artifact de lay `summary.json`, `events.jsonl`, va `failure.md` khi fail.
+- Staging manual workflow dung secrets `CCHESS_FIREBASE_SERVICE_ACCOUNT_JSON`, `CCHESS_FIREBASE_API_KEY`, va neu can engine auth thi `CCHESS_ENGINE_FIREBASE_ID_TOKEN`.
+- Cleanup co 2 cach:
+  - Trong cung run: them `--cleanup-after` va tuy chon `--cleanup-delete-user-docs`, `--cleanup-delete-auth-users`.
+  - Sau run: `npm run lab:sim -- --cleanup-run-id=<runId> --cleanup-dry-run` de xem se xoa gi, bo `--cleanup-dry-run` de xoa that.
+
+Lenh acceptance hien tai:
+
+```bash
+npm run lab:check
+npm run lab:sim:test
+npm run lab:sim:ci
+npm run lab:sim:soak
+npm run lab:sim:staging-system -- --ws=wss://staging.example --engine-url=https://engine.example --cleanup-after
+```
 
 ---
 

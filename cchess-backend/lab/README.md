@@ -28,13 +28,44 @@ npm run engine:smoke   # black-box HTTP smoke cho cchess-engine
 ENGINE_SMOKE_CHECK_QUOTA=1 npm run engine:smoke
 npm run engine:smoke:quota
 # opt-in: kiểm quota free user đến khi nhận quota-exceeded
+npm run lab:sim:test  # unit tests cho simulation monitor/brain/Firebase probe
+npm run lab:sim:ci    # CI-light simulation, in-process, ~20s
+npm run lab:sim:soak  # realtime soak nhe, in-process, 20 users / 2m
 ```
 
 `lab:smoke` mặc định **prod-safe**: xác thực, tạo/rời phòng chờ, enqueue/cancel matchmaking, nhưng không để ván bắt đầu nên không ghi `game_records`/ELO. Khi chạy với `SMOKE_ALLOW_RANKED_WRITE=1`, script cần 2 Firebase user khác nhau (tự mint anonymous users, hoặc truyền `FIREBASE_ID_TOKEN_A` + `FIREBASE_ID_TOKEN_B`) và sẽ tạo ván ranked thật để kiểm deploy end-to-end.
 
+## Simulation Layer
+
+Simulation Layer nằm ở `lab/sim/` và mô phỏng nhiều người dùng ảo cùng lúc:
+personas (casual/private-room/reconnect/spectator/abuse), brains
+(random/legal, scripted, heuristic, remote-engine), protocol oracle, engine
+metrics, Firebase persistence verifier, và JSONL report có replay command.
+
+Lệnh hay dùng:
+
+```bash
+npm run lab:sim -- --target=in-process --users=10 --duration=60s --seed=1
+npm run lab:sim:ci
+npm run lab:sim:soak
+npm run lab:sim -- --target=local --ws=ws://127.0.0.1:8080 --auth-mode=stub --users=12 --duration=60s
+npm run lab:sim:staging-system -- --ws=wss://staging.example --engine-url=https://engine.example --cleanup-after
+npm run lab:sim -- --cleanup-run-id=<runId> --cleanup-dry-run
+```
+
+Staging/Firebase mode:
+
+- `--auth-mode=custom-token` tạo Firebase users có UID prefix `sim_<runId>_NNN`; cần `FIREBASE_SERVICE_ACCOUNT_JSON` hoặc `GOOGLE_APPLICATION_CREDENTIALS`, và `FIREBASE_API_KEY`.
+- `--auth-mode=anonymous` mint anonymous users qua Identity Toolkit, UID do Firebase tạo.
+- `--auth-mode=id-token-list --firebase-id-tokens=a,b,c` dùng token có sẵn.
+- `--verify-persistence` đọc Firestore sau run và kiểm `users/{uid}/game_records/{gameId}`, mirror records, move list, result, ELO/counters.
+- `--cleanup-after` xóa mirror `game_records`; thêm `--cleanup-delete-user-docs` và `--cleanup-delete-auth-users` nếu muốn xóa sạch user test.
+- Report nằm trong `lab/reports/<runId>/summary.json`, `events.jsonl`, và `failure.md` nếu fail.
+
 ## CI / gate hiện tại
 
-- `backend-ci` chạy trên push/PR chạm `cchess-backend/**`: `npm run lint`, `npm run lab:check`, `npm test`, `npm run lab`, `npm run lab:load -- 40`, `npm run lab:fuzz` steady + burst.
+- `backend-ci` chạy trên push/PR chạm `cchess-backend/**`: `npm run lint`, `npm run lab:check`, `npm test`, `npm run lab:sim:test`, `npm run lab`, `npm run lab:sim:ci`, `npm run lab:load -- 40`, `npm run lab:fuzz` steady + burst. Workflow upload `lab/reports/**` làm artifact.
+- `simulation-layer` là workflow manual + nightly: nightly chạy `realtime-soak`; manual có `smoke-local`, `realtime-soak`, `staging-system`, `engine-quota`, có artifact report.
 - `post-deploy-smoke` là workflow thủ công cho server deploy thật; mặc định prod-safe, bật `allow_ranked_write` mới tạo/kết thúc ván ranked thật.
 - `engine-smoke` là workflow thủ công cho `cchess-engine`; có input endpoint, auth mode, `check_quota`, `hint_quota_limit`. Product smoke trên `https://cchess-engine.onrender.com` đã PASS 8/8 ngày 2026-06-20, gồm bước `quota-exceeded`.
 
@@ -52,6 +83,9 @@ npm run engine:smoke:quota
 | `load.ts` | Test tải/rò rỉ: nhiều ván song song → khẳng định về bàn sạch |
 | `smoke.ts` | Smoke test trên server thật (auth Firebase ẩn danh; prod-safe mặc định, có opt-in ranked-write) |
 | `engine_smoke.ts` | Smoke test HTTP cho `cchess-engine` (`/health`, auth, best-move, cache, hint, analyze, quota opt-in) |
+| `sim/runner.ts` | Simulation Layer CLI: multi-user personas, brains, report/replay, external targets |
+| `sim/monitor.ts` | Oracle protocol cho duplicate end, spectator/player, reconnect snapshot, move count |
+| `sim/firebase_probe.ts` | Firestore verifier + cleanup cho staging game_records/ELO/counters |
 | `render.ts` | Trigger + giám sát deploy Render (cần `RENDER_API_KEY`) |
 | `control.ts` + `public/` | Dashboard web: bot thủ công + nút chạy kịch bản |
 

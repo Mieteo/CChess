@@ -12,6 +12,7 @@ on:
     paths:
       - 'cchess-backend/**'
       - '.github/workflows/backend-ci.yml'
+      - '.github/workflows/simulation-layer.yml'
   pull_request:
     paths:
       - 'cchess-backend/**'
@@ -41,8 +42,14 @@ jobs:
       - name: Unit + integration tests
         run: npm test
 
+      - name: Simulation layer tests
+        run: npm run lab:sim:test
+
       - name: Lab scenarios
         run: npm run lab
+
+      - name: Simulation smoke (CI-light)
+        run: npm run lab:sim:ci
 
       - name: Load / leak test (40 concurrent games)
         run: npm run lab:load -- 40
@@ -54,3 +61,11 @@ jobs:
 
       - name: Fuzz (burst / race-hunting)
         run: npm run lab:fuzz -- 4000 --bots=8 --seed=99 --burst
+
+      - name: Upload simulation reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-ci-sim-reports
+          path: cchess-backend/lab/reports/**
+          if-no-files-found: ignore
