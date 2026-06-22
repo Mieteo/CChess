@@ -314,15 +314,17 @@ export class SimMonitor {
 
   private observeMove(agent: AgentMemory, roomId: string, msg: Msg): ProtocolViolation | undefined {
     const room = this.room(roomId);
-    if (room.status !== 'playing') {
-      return this.violate('move-after-finish', `room ${roomId} received ${msg.type} while status=${room.status}`, roomId, [agent.id], msg);
-    }
     const uci = String(msg.uci);
     const moveNumber = typeof msg.moveNumber === 'number' ? msg.moveNumber : room.movesUci.length + 1;
     if (!Number.isInteger(moveNumber) || moveNumber < 1) {
       return this.violate('move-count-mismatch', `invalid moveNumber ${String(msg.moveNumber)}`, roomId, [agent.id], msg);
     }
     const index = moveNumber - 1;
+    if (room.status !== 'playing') {
+      const existing = room.movesUci[index];
+      if (existing === uci) return undefined;
+      return this.violate('move-after-finish', `room ${roomId} received new ${msg.type} while status=${room.status}`, roomId, [agent.id], msg);
+    }
     if (index > room.movesUci.length) {
       return this.violate('move-count-mismatch', `moveNumber ${moveNumber} skipped from known length ${room.movesUci.length}`, roomId, [agent.id], msg);
     }

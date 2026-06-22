@@ -5,12 +5,28 @@ import { resetState } from '../run-one';
 import type { PlayerAgent } from './agent';
 import type { SimColor } from './brain';
 import { RandomLegalPolicy } from './brains/random_legal';
+import { ScriptedPolicy } from './brains/scripted';
 import {
   SimMonitor,
   type ProtocolViolation,
   type SimCommandType,
 } from './monitor';
-import { CasualPlayer } from './personas';
+import {
+  AbuseAgent,
+  BotBackedAgent,
+  CasualPlayer,
+  PrivateRoomPlayer,
+  ReconnectPlayer,
+  SpectatorAgent,
+} from './personas';
+import {
+  brainPlan,
+  DEFAULT_PROFILE,
+  personaPlan,
+  type BrainKind,
+  type PersonaKind,
+  type SimProfile,
+} from './profiles';
 import { SeededRandom } from './random';
 import { SimReporter, type SimSummary } from './reporter';
 
@@ -38,10 +54,12 @@ interface SimRoomMemory {
   roomId: string;
   redUid?: string;
   blackUid?: string;
-  started: boolean;
   ended: boolean;
   movesUci: string[];
   endedSeenBy: Set<string>;
+  startedKeys: Set<string>;
+  endedKeys: Set<string>;
+  reconnectTested: boolean;
 }
 
 interface SimStats {
@@ -52,7 +70,13 @@ interface SimStats {
   errors: number;
   reconnects: number;
   spectatorSessions: number;
+  abuseActions: number;
+  abuseErrors: number;
+  privateRooms: number;
+  rematches: number;
 }
+
+type GamePlayer = CasualPlayer | PrivateRoomPlayer | ReconnectPlayer;
 
 export class SimWorld {
   readonly run: SimRun;
@@ -60,8 +84,10 @@ export class SimWorld {
   readonly reporter: SimReporter;
   readonly monitor = new SimMonitor();
   readonly agents: PlayerAgent[] = [];
+  readonly profile: SimProfile = DEFAULT_PROFILE;
 
   private readonly rooms = new Map<string, SimRoomMemory>();
+  private readonly personaCounts = new Map<string, number>();
   private readonly stats: SimStats = {
     gamesStarted: 0,
     gamesEnded: 0,
@@ -70,16 +96,18 @@ export class SimWorld {
     errors: 0,
     reconnects: 0,
     spectatorSessions: 0,
+    abuseActions: 0,
+    abuseErrors: 0,
+    privateRooms: 0,
+    rematches: 0,
   };
   private readonly lastChatAtByUid = new Map<string, number>();
-  private readonly probeAgents: CasualPlayer[] = [];
+  private readonly busySupportAgents = new Set<string>();
   private server?: LabServer;
   private wsUrl?: string;
   private stopAtMs = 0;
   private failure?: string;
   private failureViolation?: ProtocolViolation;
-  private spectatorProbeDone = false;
-  private reconnectProbeDone = false;
 
   constructor(private readonly config: SimConfig) {
     this.run = {
@@ -137,6 +165,11 @@ export class SimWorld {
       errors: this.stats.errors,
       reconnects: this.stats.reconnects,
       spectatorSessions: this.stats.spectatorSessions,
+      abuseActions: this.stats.abuseActions,
+      abuseErrors: this.stats.abuseErrors,
+      privateRooms: this.stats.privateRooms,
+      rematches: this.stats.rematches,
+      personaCounts: Object.fromEntries(this.personaCounts),
       roomsAfterDrain: snapshot.roomsAfterDrain,
       invariantViolations: snapshot.violations,
       protocolViolations,
@@ -214,18 +247,30 @@ export class SimWorld {
     this.wsUrl = this.config.wsUrl ?? this.server.url;
     this.stopAtMs = Date.now() + this.run.durationMs;
 
-    const brain = new RandomLegalPolicy();
-    for (let i = 0; i < this.run.users; i++) {
+    const personas = personaPlan(this.run.users, this.profile);
+    const playerCount = personas.filter(isPlayerPersona).length;
+    const brains = brainPlan(playerCount, this.profile);
+    let brainIndex = 0;
+    for (let i = 0; i < personas.length; i++) {
+      const persona = personas[i];
       const id = `sim_${String(i).padStart(3, '0')}`;
       const uid = `${id}_${this.run.runId}`;
-      this.agents.push(new CasualPlayer(id, uid, brain));
+      const brainKind = isPlayerPersona(persona) ? brains[brainIndex++] : 'random-legal';
+      const agent = this.makeAgent(persona, id, uid, brainKind);
+      this.agents.push(agent);
+      this.personaCounts.set(agent.persona, (this.personaCounts.get(agent.persona) ?? 0) + 1);
     }
     await Promise.all(this.agents.map((agent) => agent.start(this)));
-    this.record('sim-start', { url: this.wsUrl, users: this.agents.length });
+    this.record('sim-start', {
+      url: this.wsUrl,
+      users: this.agents.length,
+      profile: this.profile.name,
+      personas: Object.fromEntries(this.personaCounts),
+    });
   }
 
   private async stop(): Promise<void> {
-    await Promise.all([...this.agents, ...this.probeAgents].map((agent) => agent.stop(this)));
+    await Promise.all(this.agents.map((agent) => agent.stop(this)));
     this.record('sim-stop');
   }
 
@@ -236,25 +281,37 @@ export class SimWorld {
   }
 
   private async runPairs(): Promise<void> {
-    const casual = this.agents.filter((agent): agent is CasualPlayer => agent instanceof CasualPlayer);
+    const players = this.agents.filter(isGamePlayer);
+    const spectators = this.agents.filter((agent): agent is SpectatorAgent => agent instanceof SpectatorAgent);
+    const abusers = this.agents.filter((agent): agent is AbuseAgent => agent instanceof AbuseAgent);
     const tasks: Array<Promise<void>> = [];
-    for (let i = 0; i + 1 < casual.length; i += 2) {
-      tasks.push(this.runCasualLoop(casual[i], casual[i + 1]));
+    for (let i = 0; i + 1 < players.length; i += 2) {
+      tasks.push(this.runPlayerLoop(players[i], players[i + 1], spectators, abusers));
     }
-    if (casual.length % 2 === 1) {
-      this.record('idle-agent', { reason: 'odd user count' }, casual[casual.length - 1]);
+    if (players.length % 2 === 1) {
+      this.record('idle-agent', { reason: 'odd player count' }, players[players.length - 1]);
     }
     await Promise.all(tasks);
   }
 
-  private async runCasualLoop(a: CasualPlayer, b: CasualPlayer): Promise<void> {
+  private async runPlayerLoop(
+    a: GamePlayer,
+    b: GamePlayer,
+    spectators: SpectatorAgent[],
+    abusers: AbuseAgent[],
+  ): Promise<void> {
     while (!this.shouldStop()) {
-      await this.playCasualGame(a, b);
+      await this.playPrivateRoomGame(a, b, spectators, abusers);
       await sleep(this.rng.int(40, 140));
     }
   }
 
-  private async playCasualGame(a: CasualPlayer, b: CasualPlayer): Promise<void> {
+  private async playPrivateRoomGame(
+    a: GamePlayer,
+    b: GamePlayer,
+    spectators: SpectatorAgent[],
+    abusers: AbuseAgent[],
+  ): Promise<void> {
     const creator = this.rng.chance(0.5) ? a : b;
     const joiner = creator === a ? b : a;
     const creatorBot = creator.requireBot();
@@ -263,6 +320,7 @@ export class SimWorld {
     if (this.command('create-room', creator)) creatorBot.createRoom(8000);
     const created = await creator.waitFor((m) => m.type === 'room-created', 3000);
     const roomId = String(created.roomId);
+    this.stats.privateRooms++;
     if (this.command('join-room', joiner, roomId)) joinerBot.joinRoom(roomId);
 
     const creatorStart = await creator.waitFor((m) => m.type === 'game-start' && m.roomId === roomId, 3000);
@@ -271,7 +329,8 @@ export class SimWorld {
     const black = creatorStart.yourColor === 'black' ? creator : joinerStart.yourColor === 'black' ? joiner : null;
     if (!red || !black) throw new Error(`room ${roomId} did not assign both colors`);
 
-    await this.runSpectatorProbe(roomId);
+    await this.maybeRunSpectator(roomId, spectators);
+    await this.maybeRunAbuse(roomId, abusers);
 
     const maxMoves = this.rng.int(8, 28);
     for (let ply = 0; ply < maxMoves && !this.shouldStop() && !this.room(roomId).ended; ply++) {
@@ -300,7 +359,9 @@ export class SimWorld {
           player.requireBot().chat('gg');
         }
       }
-      if (ply >= 1) await this.runReconnectProbe(roomId, red, black);
+      if (ply >= 1) await this.maybeRunReconnect(roomId, red, black);
+      if (ply >= 2) await this.maybeRunSpectator(roomId, spectators);
+      if (ply >= 2) await this.maybeRunAbuse(roomId, abusers);
       await sleep(this.rng.int(15, 80));
     }
 
@@ -312,6 +373,8 @@ export class SimWorld {
     }
     await red.waitFor((m) => m.type === 'game-ended' && m.roomId === roomId, 4000);
     await black.waitFor((m) => m.type === 'game-ended' && m.roomId === roomId, 4000);
+
+    await this.maybeRunRematch(roomId, red, black, spectators, abusers);
 
     if (this.command('leave-room', red, roomId)) red.requireBot().leaveRoom();
     if (this.command('leave-room', black, roomId)) black.requireBot().leaveRoom();
@@ -331,16 +394,24 @@ export class SimWorld {
       message: msg,
     });
     if (violation) this.fail(violation);
-    if (msg.type === 'error') this.stats.errors++;
+    if (msg.type === 'error') {
+      if (agent instanceof AbuseAgent) this.stats.abuseErrors++;
+      else this.stats.errors++;
+    }
     if (msg.type === 'chat-message') this.stats.chatMessages++;
     if (msg.type === 'reconnected') this.stats.reconnects++;
     if (msg.type === 'spectate-started') this.stats.spectatorSessions++;
     if (msg.type === 'game-start' && typeof msg.roomId === 'string') {
       const room = this.room(msg.roomId);
-      if (!room.started) {
-        room.started = true;
+      const startedKey = gameStartKey(msg);
+      if (!room.startedKeys.has(startedKey)) {
+        room.startedKeys.add(startedKey);
         this.stats.gamesStarted++;
       }
+      room.ended = false;
+      room.endedSeenBy.clear();
+      room.reconnectTested = false;
+      if (msg.rematch === true) room.movesUci = [];
       if (typeof msg.redUid === 'string') room.redUid = msg.redUid;
       if (typeof msg.blackUid === 'string') room.blackUid = msg.blackUid;
       return;
@@ -361,7 +432,9 @@ export class SimWorld {
         return;
       }
       room.endedSeenBy.add(agent.id);
-      if (!room.ended) {
+      const endedKey = gameEndedKey(msg);
+      if (!room.endedKeys.has(endedKey)) {
+        room.endedKeys.add(endedKey);
         room.ended = true;
         this.stats.gamesEnded++;
       }
@@ -392,34 +465,50 @@ export class SimWorld {
     this.stats.moves++;
   }
 
-  private async runSpectatorProbe(roomId: string): Promise<void> {
-    if (this.spectatorProbeDone || this.shouldStop()) return;
-    this.spectatorProbeDone = true;
-    const spectator = new CasualPlayer(
-      `sim_spectator`,
-      `sim_spectator_${this.run.runId}`,
-      new RandomLegalPolicy(),
-    );
-    this.probeAgents.push(spectator);
-    await spectator.start(this);
-    if (this.command('spectate-room', spectator, roomId)) {
-      spectator.requireBot().spectateRoom(roomId);
-    }
-    await spectator.waitFor((m) => m.type === 'spectate-started' && m.roomId === roomId, 3000);
-    if (this.command('stop-spectating', spectator, roomId)) {
-      spectator.requireBot().stopSpectating();
-    }
-    await spectator.waitFor((m) => m.type === 'spectate-stopped' && m.roomId === roomId, 3000);
+  private async maybeRunSpectator(roomId: string, spectators: SpectatorAgent[]): Promise<void> {
+    if (this.shouldStop() || spectators.length === 0 || this.room(roomId).ended) return;
+    if (!this.rng.chance(this.profile.spectatorChance)) return;
+    const spectator = this.availableSupport(spectators);
+    if (!spectator) return;
+    await this.withSupport(spectator, async () => {
+      if (this.command('spectate-room', spectator, roomId)) {
+        spectator.requireBot().spectateRoom(roomId);
+      }
+      await spectator.waitFor((m) => m.type === 'spectate-started' && m.roomId === roomId, 3000);
+      if (this.rng.chance(0.35) && this.markChatAllowed(spectator)) {
+        if (this.command('chat', spectator, roomId, { text: 'watching' })) {
+          spectator.requireBot().chat('watching');
+        }
+      }
+      if (this.command('stop-spectating', spectator, roomId)) {
+        spectator.requireBot().stopSpectating();
+      }
+      await spectator.waitFor((m) => m.type === 'spectate-stopped' && m.roomId === roomId, 3000);
+    });
   }
 
-  private async runReconnectProbe(
+  private async maybeRunReconnect(
     roomId: string,
-    player: CasualPlayer,
-    peer: CasualPlayer,
+    red: GamePlayer,
+    black: GamePlayer,
   ): Promise<void> {
-    if (this.reconnectProbeDone || this.shouldStop() || this.room(roomId).ended) return;
-    this.reconnectProbeDone = true;
+    const room = this.room(roomId);
+    if (this.shouldStop() || room.ended || room.reconnectTested) return;
+    const hasReconnectPersona = red instanceof ReconnectPlayer || black instanceof ReconnectPlayer;
+    if (!hasReconnectPersona && !this.rng.chance(0.08)) return;
+    if (!this.rng.chance(this.profile.reconnectChance)) return;
+
+    const player =
+      red instanceof ReconnectPlayer
+        ? red
+        : black instanceof ReconnectPlayer
+        ? black
+        : this.rng.chance(0.5)
+        ? red
+        : black;
+    const peer = player === red ? black : red;
     const oldBot = player.requireBot();
+    room.reconnectTested = true;
     if (this.command('drop', player, roomId)) oldBot.drop();
     await peer.waitFor((m) => m.type === 'peer-disconnected', 1500);
 
@@ -430,6 +519,89 @@ export class SimWorld {
     }
     await player.waitFor((m) => m.type === 'reconnected' && m.roomId === roomId, 3000);
     await peer.waitFor((m) => m.type === 'peer-reconnected', 3000);
+  }
+
+  private async maybeRunAbuse(roomId: string, abusers: AbuseAgent[]): Promise<void> {
+    if (this.shouldStop() || abusers.length === 0 || this.room(roomId).ended) return;
+    if (!this.rng.chance(this.profile.abuseChance)) return;
+    const abuser = this.availableSupport(abusers);
+    if (!abuser) return;
+    await this.withSupport(abuser, async () => {
+      this.stats.abuseActions++;
+      this.record('abuse-action', { action: 'spectator-invalid-move' }, abuser, roomId);
+      abuser.requireBot().spectateRoom(roomId);
+      await abuser.waitFor((m) => m.type === 'spectate-started' && m.roomId === roomId, 3000);
+      abuser.requireBot().move('a0a1');
+      await abuser.waitFor((m) => m.type === 'error', 3000);
+      if (this.command('stop-spectating', abuser, roomId)) {
+        abuser.requireBot().stopSpectating();
+      }
+      await abuser.waitFor((m) => m.type === 'spectate-stopped' && m.roomId === roomId, 3000);
+    });
+  }
+
+  private async maybeRunRematch(
+    roomId: string,
+    red: GamePlayer,
+    black: GamePlayer,
+    spectators: SpectatorAgent[],
+    abusers: AbuseAgent[],
+  ): Promise<void> {
+    if (this.shouldStop() || !this.rng.chance(this.profile.rematchChance)) return;
+    red.requireBot().offerRematch();
+    this.record('rematch-offer', undefined, red, roomId);
+    await red.waitFor((m) => m.type === 'rematch-pending', 3000);
+    await black.waitFor((m) => m.type === 'rematch-offered', 3000);
+    black.requireBot().offerRematch();
+    this.record('rematch-offer', undefined, black, roomId);
+    const redStart = await red.waitFor((m) => m.type === 'game-start' && m.roomId === roomId && m.rematch === true, 3000);
+    const blackStart = await black.waitFor((m) => m.type === 'game-start' && m.roomId === roomId && m.rematch === true, 3000);
+    const rematchRed = redStart.yourColor === 'red' ? red : blackStart.yourColor === 'red' ? black : null;
+    const rematchBlack = redStart.yourColor === 'black' ? red : blackStart.yourColor === 'black' ? black : null;
+    if (!rematchRed || !rematchBlack) {
+      throw new Error(`room ${roomId} rematch did not assign both colors`);
+    }
+    this.stats.rematches++;
+
+    await this.maybeRunSpectator(roomId, spectators);
+    await this.playTurns(roomId, rematchRed, rematchBlack, this.rng.int(4, 12));
+    await this.maybeRunAbuse(roomId, abusers);
+
+    const resigner = this.rng.chance(0.5) ? rematchRed : rematchBlack;
+    if (this.command('resign', resigner, roomId)) {
+      resigner.requireBot().resign();
+    }
+    await red.waitFor((m) => m.type === 'game-ended' && m.roomId === roomId, 4000);
+    await black.waitFor((m) => m.type === 'game-ended' && m.roomId === roomId, 4000);
+  }
+
+  private async playTurns(
+    roomId: string,
+    red: GamePlayer,
+    black: GamePlayer,
+    maxMoves: number,
+  ): Promise<void> {
+    for (let ply = 0; ply < maxMoves && !this.shouldStop() && !this.room(roomId).ended; ply++) {
+      const color: SimColor = this.room(roomId).movesUci.length % 2 === 0 ? 'red' : 'black';
+      const player = color === 'red' ? red : black;
+      const opponent = color === 'red' ? black : red;
+      const room = this.room(roomId);
+      const uci = await player.brain.chooseMove({
+        uid: player.uid,
+        roomId,
+        color,
+        movesUci: [...room.movesUci],
+        nowMs: Date.now(),
+        random: this.rng,
+      });
+      if (uci === null) break;
+      if (this.command('move', player, roomId, { uci, color, ply })) {
+        player.requireBot().move(uci);
+      }
+      await player.waitFor((m) => m.type === 'move-ack' && m.uci === uci, 3000);
+      await opponent.waitFor((m) => m.type === 'opponent-move' && m.uci === uci, 3000);
+      await sleep(this.rng.int(12, 45));
+    }
   }
 
   private fail(violation: ProtocolViolation | string): void {
@@ -456,13 +628,70 @@ export class SimWorld {
     if (!room) {
       room = {
         roomId,
-        started: false,
         ended: false,
         movesUci: [],
         endedSeenBy: new Set<string>(),
+        startedKeys: new Set<string>(),
+        endedKeys: new Set<string>(),
+        reconnectTested: false,
       };
       this.rooms.set(roomId, room);
     }
     return room;
   }
+
+  private availableSupport<T extends BotBackedAgent>(agents: T[]): T | undefined {
+    const available = agents.filter((agent) => !this.busySupportAgents.has(agent.id));
+    return available.length === 0 ? undefined : this.rng.pick(available);
+  }
+
+  private async withSupport(agent: BotBackedAgent, fn: () => Promise<void>): Promise<void> {
+    if (this.busySupportAgents.has(agent.id)) return;
+    this.busySupportAgents.add(agent.id);
+    try {
+      await fn();
+    } finally {
+      this.busySupportAgents.delete(agent.id);
+    }
+  }
+
+  private makeBrain(kind: BrainKind) {
+    return kind === 'scripted' ? new ScriptedPolicy() : new RandomLegalPolicy();
+  }
+
+  private makeAgent(kind: PersonaKind, id: string, uid: string, brainKind: BrainKind): PlayerAgent {
+    const brain = this.makeBrain(brainKind);
+    switch (kind) {
+      case 'casual':
+        return new CasualPlayer(id, uid, brain);
+      case 'private-room':
+        return new PrivateRoomPlayer(id, uid, brain);
+      case 'reconnect':
+        return new ReconnectPlayer(id, uid, brain);
+      case 'spectator':
+        return new SpectatorAgent(id, uid, brain);
+      case 'abuse':
+        return new AbuseAgent(id, uid, brain);
+    }
+  }
+}
+
+function isGamePlayer(agent: PlayerAgent): agent is GamePlayer {
+  return (
+    agent instanceof CasualPlayer ||
+    agent instanceof PrivateRoomPlayer ||
+    agent instanceof ReconnectPlayer
+  );
+}
+
+function isPlayerPersona(persona: PersonaKind): boolean {
+  return persona === 'casual' || persona === 'private-room' || persona === 'reconnect';
+}
+
+function gameStartKey(msg: Msg): string {
+  return `${String(msg.roomId)}:${String(msg.startedAt ?? 'unknown')}:${msg.rematch === true ? 'rematch' : 'initial'}`;
+}
+
+function gameEndedKey(msg: Msg): string {
+  return `${String(msg.roomId)}:${String(msg.endedAt ?? 'unknown')}:${String(msg.result)}:${String(msg.reason)}`;
 }

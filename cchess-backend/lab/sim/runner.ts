@@ -57,11 +57,16 @@ function printSummary(summary: Awaited<ReturnType<SimWorld['execute']>>): void {
   console.log(`seed: ${summary.seed}`);
   console.log(`users: ${summary.users}`);
   console.log(`duration: ${summary.durationMs}ms`);
+  console.log(`personas: ${JSON.stringify(summary.personaCounts)}`);
   console.log(`games started: ${summary.gamesStarted}`);
   console.log(`games ended: ${summary.gamesEnded}`);
+  console.log(`private rooms: ${summary.privateRooms}`);
+  console.log(`rematches: ${summary.rematches}`);
   console.log(`moves: ${summary.moves}`);
   console.log(`reconnects: ${summary.reconnects}`);
   console.log(`spectator sessions: ${summary.spectatorSessions}`);
+  console.log(`abuse actions: ${summary.abuseActions}`);
+  console.log(`abuse errors: ${summary.abuseErrors}`);
   console.log(`chat messages: ${summary.chatMessages}`);
   console.log(`errors: ${summary.errors}`);
   console.log(`rooms after drain: ${summary.roomsAfterDrain}`);

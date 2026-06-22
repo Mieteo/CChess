@@ -29,6 +29,11 @@ export interface SimSummary {
   errors: number;
   reconnects: number;
   spectatorSessions: number;
+  abuseActions: number;
+  abuseErrors: number;
+  privateRooms: number;
+  rematches: number;
+  personaCounts: Record<string, number>;
   roomsAfterDrain: number;
   invariantViolations: InvariantViolation[];
   protocolViolations: ProtocolViolation[];
