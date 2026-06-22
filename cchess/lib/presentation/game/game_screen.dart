@@ -46,9 +46,13 @@ class GameScreen extends ConsumerStatefulWidget {
 
 class _GameScreenState extends ConsumerState<GameScreen> {
   static const Duration _gameClock = Duration(minutes: 15);
+  // Per-move limit (90s), matching online's onlineDefaultMoveClockMs.
+  static const Duration _moveClock = Duration(seconds: 90);
 
   late Duration _redTime;
   late Duration _blackTime;
+  // Countdown for the current side to move; reset to _moveClock each move.
+  late Duration _moveTime;
   Timer? _ticker;
   DateTime? _gameStartedAt;
   bool _soundOn = true;
@@ -70,6 +74,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
     );
     _redTime = _gameClock;
     _blackTime = _gameClock;
+    _moveTime = _moveClock;
     _gameStartedAt = DateTime.now();
     _startTicker();
 
@@ -112,6 +117,20 @@ class _GameScreenState extends ConsumerState<GameScreen> {
           if (_blackTime.isNegative) {
             _blackTime = Duration.zero;
             _controller.resign(PieceColor.black);
+            _ticker?.cancel();
+          }
+        }
+
+        // Per-move clock (90s). Skip the bot's turn so engine latency never
+        // costs it the game; expiry = the side to move loses, like online.
+        // Re-check status: the total clock above may have just ended the game.
+        final isCpuTurn =
+            state.mode == GameMode.vsBot && state.turn == state.cpuColor;
+        if (!isCpuTurn && !_state.game.status.isOver) {
+          _moveTime -= const Duration(seconds: 1);
+          if (_moveTime.isNegative) {
+            _moveTime = Duration.zero;
+            _controller.resign(state.turn);
             _ticker?.cancel();
           }
         }
@@ -204,6 +223,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
     setState(() {
       _redTime = _gameClock;
       _blackTime = _gameClock;
+      _moveTime = _moveClock;
       _gameStartedAt = DateTime.now();
       _resultPersisted = false;
     });
@@ -406,6 +426,12 @@ class _GameScreenState extends ConsumerState<GameScreen> {
       if (next.game.status.isOver && !_resultPersisted) {
         _persistGameResult();
       }
+      // Reset the per-move clock whenever the move count changes (a move was
+      // played by either side, undone, or the board reset) so each turn starts
+      // fresh at 90s.
+      if (prev?.game.history.length != next.game.history.length) {
+        setState(() => _moveTime = _moveClock);
+      }
     });
 
     final state = ref.watch(gameControllerProvider(_args));
@@ -461,6 +487,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
                             ? PieceColor.red
                             : PieceColor.black),
                     timeLeft: state.boardFlipped ? _redTime : _blackTime,
+                    moveTimeLeft: _moveTime,
                     capturedCount: state.boardFlipped
                         ? captured.byBlack
                         : captured.byRed,
@@ -495,6 +522,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
                             ? PieceColor.black
                             : PieceColor.red),
                     timeLeft: state.boardFlipped ? _blackTime : _redTime,
+                    moveTimeLeft: _moveTime,
                     capturedCount: state.boardFlipped
                         ? captured.byRed
                         : captured.byBlack,

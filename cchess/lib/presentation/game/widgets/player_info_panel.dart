@@ -17,6 +17,10 @@ class PlayerInfoPanel extends StatelessWidget {
   final int capturedCount;
   final bool topAlign;
 
+  /// Per-move countdown for the side to move (null disables the feature). Shown
+  /// as a [MoveClockChip] on the same row, only while [isMyTurn].
+  final Duration? moveTimeLeft;
+
   const PlayerInfoPanel({
     super.key,
     required this.displayName,
@@ -26,6 +30,7 @@ class PlayerInfoPanel extends StatelessWidget {
     required this.timeLeft,
     this.capturedCount = 0,
     this.topAlign = false,
+    this.moveTimeLeft,
   });
 
   String _formatDuration(Duration d) {
@@ -89,6 +94,10 @@ class PlayerInfoPanel extends StatelessWidget {
           ],
         ),
       ),
+      if (moveTimeLeft != null) ...[
+        AppSpacing.hGapSm,
+        MoveClockChip(timeLeft: moveTimeLeft!, visible: isMyTurn),
+      ],
       AppSpacing.hGapSm,
       Container(
         padding: const EdgeInsets.symmetric(

@@ -12,6 +12,7 @@ import '../../theme/app_colors.dart';
 import '../../theme/app_spacing.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/chess/chess_board.dart';
+import '../../widgets/common/common.dart';
 import '../profile/profile_controller.dart';
 import 'online_game_widgets.dart';
 import 'online_match_controller.dart';
@@ -326,9 +327,7 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
                   clockMs: topColor == PieceColor.red
                       ? state.redClockMs
                       : state.blackClockMs,
-                  moveClockMs: state.currentTurn == topColor
-                      ? moveClockMs
-                      : null,
+                  moveClockMs: moveClockMs,
                   isMyTurn: state.currentTurn == topColor,
                 ),
                 AppSpacing.vGapSm,
@@ -358,9 +357,7 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
                   clockMs: bottomColor == PieceColor.red
                       ? state.redClockMs
                       : state.blackClockMs,
-                  moveClockMs: state.currentTurn == bottomColor
-                      ? moveClockMs
-                      : null,
+                  moveClockMs: moveClockMs,
                   isMyTurn: state.currentTurn == bottomColor,
                 ),
                 AppSpacing.vGapSm,
@@ -615,7 +612,7 @@ class _PlayerStrip extends StatelessWidget {
   final String label;
   final PieceColor color;
   final int clockMs;
-  final int? moveClockMs;
+  final int moveClockMs;
   final bool isMyTurn;
 
   String _formatClock(int ms) {
@@ -631,10 +628,6 @@ class _PlayerStrip extends StatelessWidget {
     final accent = color == PieceColor.red
         ? AppColors.vermilionRed
         : AppColors.inkBlack;
-    final moveMs = moveClockMs;
-    final moveClockColor = moveMs != null && moveMs <= 10 * 1000
-        ? Colors.redAccent
-        : (isMyTurn ? AppColors.accentGold : AppColors.onSurfaceVariant);
     return Container(
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.base,
@@ -650,6 +643,9 @@ class _PlayerStrip extends StatelessWidget {
           width: isMyTurn ? 2 : 1,
         ),
       ),
+      // Name · move clock · total clock on ONE row. The move-clock chip always
+      // reserves its slot (Visibility.maintainSize), so the strip height is
+      // identical whether or not it's this side's turn — no board jitter (S-fix).
       child: Row(
         children: [
           Container(
@@ -659,34 +655,16 @@ class _PlayerStrip extends StatelessWidget {
           ),
           const SizedBox(width: 8),
           Expanded(child: Text(label, style: AppTextStyles.bodyMd)),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                _formatClock(clockMs),
-                style: AppTextStyles.monoTimer.copyWith(
-                  color: isMyTurn ? AppColors.accentGold : AppColors.onSurface,
-                ),
-              ),
-              if (moveMs != null) ...[
-                const SizedBox(height: 2),
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.timer_outlined, size: 14, color: moveClockColor),
-                    const SizedBox(width: 3),
-                    Text(
-                      _formatClock(moveMs),
-                      style: AppTextStyles.captionSm.copyWith(
-                        color: moveClockColor,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ],
+          MoveClockChip(
+            timeLeft: Duration(milliseconds: moveClockMs),
+            visible: isMyTurn,
+          ),
+          const SizedBox(width: 8),
+          Text(
+            _formatClock(clockMs),
+            style: AppTextStyles.monoTimer.copyWith(
+              color: isMyTurn ? AppColors.accentGold : AppColors.onSurface,
+            ),
           ),
         ],
       ),
