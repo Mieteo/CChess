@@ -1,58 +1,59 @@
-# Ke hoach Simulation Layer cho CChess
+# Kế Hoạch Simulation Layer Cho CChess
 
-> Tao ngay: 2026-06-22  
-> Muc tieu: xay mot he thong "nguoi dung ao" co kha nang mo phong hanh vi nguoi choi that, chay duoc nhieu user dong thoi, tu dong phat hien loi trong backend realtime, engine, Firebase/persistence, reconnect, spectator, ELO va cac workflow online dai han.
-
----
-
-## 1. Vi sao can Simulation Layer?
-
-CChess dang huong toi mot app online lau dai: co nguoi choi that, engine, ELO, ho so, spectator, reconnect, phong cho, chat, goi y, va server that. Cac unit test/integration test hien tai rat can thiet, nhung chua mo phong duoc ap luc va hanh vi lon xon cua mot he sinh thai online co nhieu nguoi dung cung luc.
-
-Simulation Layer giup:
-
-- Tao N nguoi dung ao tren mot may tinh de test server truoc khi mo cho nguoi dung that.
-- Phat hien bug realtime kho thay bang test tay: race condition, socket chet trong queue, room leak, timer mo coi, double finish, reconnect sai snapshot, spectator bi bien thanh player.
-- Test su tuong tac giua backend WebSocket, engine service, Firebase/persistence va client protocol.
-- Chay lap lai duoc bang `seed`, co log va replay lenh dung de tai hien bug.
-- Lam nen tang sau nay cho bot mode, engine evaluation, load/stress test, staging smoke va long-running soak.
-
-Ket luan: nen xay, nhung xay theo kieu mo rong `cchess-backend/lab`, khong dua vao app Flutter chinh.
+> Tạo ngày: 2026-06-22
+> Trạng thái: đã triển khai thông suốt Phase 1 đến Phase 6.
+> Mục tiêu: xây một hệ thống "người dùng ảo" có khả năng mô phỏng hành vi người chơi thật, chạy được nhiều user đồng thời, tự động phát hiện lỗi trong backend realtime, engine, Firebase/persistence, reconnect, spectator, ELO và các workflow online dài hạn.
 
 ---
 
-## 2. Nguyen tac thiet ke
+## 1. Vì Sao Cần Simulation Layer?
 
-1. **Nam ngoai app Flutter chinh**
-   - App Flutter la san pham cho nguoi dung.
-   - Simulator la cong cu test/he thong.
-   - Khong nen dua simulator vao mobile app vi kho scale, kho chay 50-200 user, va de lan voi runtime san pham.
+CChess đang hướng tới một app online lâu dài: có người chơi thật, engine, ELO, hồ sơ, spectator, reconnect, phòng chờ, chat, gợi ý và server thật. Các unit test/integration test hiện tại rất cần thiết, nhưng chưa mô phỏng được áp lực và hành vi lộn xộn của một hệ sinh thái online có nhiều người dùng cùng lúc.
 
-2. **Dung TypeScript + Node.js**
-   - Backend hien tai da la TypeScript/Node.
-   - `cchess-backend/lab/bot.ts` da la WebSocket client gia lap co the tai su dung.
-   - De chay tren Windows local, GitHub Actions, VPS Linux hoac staging runner.
-   - De kiem tra Firebase bang `firebase-admin`, goi engine HTTP, xuat JSONL report.
+Simulation Layer giúp:
 
-3. **Simulator khong chi la bot gui lenh**
-   - Can co "tri nho" ve trang thai ky vong.
-   - Can co monitor/oracle de biet dieu gi la sai.
-   - Can co log/replay de bien mot loi ngau nhien thanh bug tai hien duoc.
+- Tạo N người dùng ảo trên một máy tính để test server trước khi mở cho người dùng thật.
+- Phát hiện bug realtime khó thấy bằng test tay: race condition, socket chết trong queue, room leak, timer mồ côi, double finish, reconnect sai snapshot, spectator bị biến thành player.
+- Test sự tương tác giữa backend WebSocket, engine service, Firebase/persistence và client protocol.
+- Chạy lặp lại được bằng `seed`, có log và replay command để tái hiện bug.
+- Làm nền tảng sau này cho bot mode, engine evaluation, load/stress test, staging smoke và long-running soak.
 
-4. **Tach hanh vi nguoi dung khoi bo nao chon nuoc**
-   - `PlayerAgent` mo phong nguoi dung.
-   - `MovePolicy`/`Brain` chon nuoc co.
-   - Cung mot nguoi choi ao co the dung random, heuristic, scripted, hoac engine that.
-
-5. **Khong de tat ca simulator dung engine manh**
-   - Engine manh ton CPU/quota va co the lam che mo bug realtime.
-   - Chi mot ty le nho simulator nen goi Pikafish/engine that.
+Kết luận: Simulation Layer nên nằm trong `cchess-backend/lab`, không đưa vào app Flutter chính.
 
 ---
 
-## 3. Vi tri trong repo
+## 2. Nguyên Tắc Thiết Kế
 
-Khuyen nghi tao them thu muc:
+1. **Nằm ngoài app Flutter chính**
+   - App Flutter là sản phẩm cho người dùng.
+   - Simulator là công cụ test/hệ thống.
+   - Không đưa simulator vào mobile app vì khó scale, khó chạy 50-200 user và dễ lẫn với runtime sản phẩm.
+
+2. **Dùng TypeScript + Node.js**
+   - Backend hiện tại đã là TypeScript/Node.
+   - `cchess-backend/lab/bot.ts` là WebSocket client giả lập có thể tái sử dụng.
+   - Dễ chạy trên Windows local, GitHub Actions, VPS Linux hoặc staging runner.
+   - Dễ kiểm tra Firebase bằng `firebase-admin`, gọi engine HTTP và xuất JSONL report.
+
+3. **Simulator không chỉ là bot gửi lệnh**
+   - Cần có "trí nhớ" về trạng thái kỳ vọng.
+   - Cần có monitor/oracle để biết điều gì là sai.
+   - Cần có log/replay để biến một lỗi ngẫu nhiên thành bug tái hiện được.
+
+4. **Tách hành vi người dùng khỏi bộ não chọn nước**
+   - `PlayerAgent` mô phỏng người dùng.
+   - `MovePolicy`/`Brain` chọn nước cờ.
+   - Cùng một người chơi ảo có thể dùng random, heuristic, scripted hoặc engine thật.
+
+5. **Không để tất cả simulator dùng engine mạnh**
+   - Engine mạnh tốn CPU/quota và có thể che mờ bug realtime.
+   - Chỉ một tỷ lệ nhỏ simulator nên gọi Pikafish/engine thật.
+
+---
+
+## 3. Vị Trí Trong Repo
+
+Thư mục chính:
 
 ```text
 cchess-backend/lab/sim/
@@ -69,11 +70,13 @@ cchess-backend/lab/sim/
   reporter.ts
   runner.ts
   profiles.ts
+  firebase_auth.ts
   firebase_probe.ts
-  engine_probe.ts
+  engine_metrics.ts
+  random.ts
 ```
 
-Script trong `cchess-backend/package.json`:
+Các script trong `cchess-backend/package.json`:
 
 ```json
 {
@@ -83,24 +86,297 @@ Script trong `cchess-backend/package.json`:
   "lab:sim:local": "tsx lab/sim/runner.ts --target=local",
   "lab:sim:staging": "tsx lab/sim/runner.ts --target=staging",
   "lab:sim:staging-system": "tsx lab/sim/runner.ts --target=staging --profile=staging-system --verify-persistence",
-  "lab:sim:replay": "tsx lab/sim/runner.ts --replay"
+  "lab:sim:test": "tsx --test lab/sim/monitor.test.ts lab/sim/brains/phase4.test.ts lab/sim/firebase_probe.test.ts"
 }
 ```
 
-Lenh muc tieu:
+Lệnh mục tiêu thường dùng:
 
 ```bash
-npm run lab:sim -- --users=20 --duration=3m --seed=123 --target=local
-npm run lab:sim -- --users=50 --duration=10m --target=staging
+npm run lab:sim -- --target=in-process --profile=mixed-local --users=20 --duration=3m --seed=123
+npm run lab:sim -- --target=local --ws=ws://127.0.0.1:8080 --auth-mode=stub --users=20 --duration=60s
 npm run lab:sim:ci
 npm run lab:sim:soak
 npm run lab:sim:staging-system -- --ws=wss://staging.example --engine-url=https://engine.example --cleanup-after
-npm run lab:sim -- --run-id=sim-20260622-001 --replay
 ```
 
 ---
 
-## 4. Kien truc tong quat
+## 4. Cách Sử Dụng Sau Khi Triển Khai
+
+Phần này là cookbook để dùng lại hằng ngày khi cần test lặp, test liên tục hoặc thêm simulator/test mới.
+
+### 4.1. Chạy Simulator Có Sẵn
+
+Từ thư mục backend:
+
+```powershell
+cd D:\Workspace_Flutter\Copilot\CChess\cchess-backend
+npm run lab:sim:ci
+npm run lab:sim:soak
+```
+
+Chạy custom trên server in-process:
+
+```powershell
+npm run lab:sim -- --target=in-process --profile=mixed-local --users=12 --duration=60s --seed=123
+```
+
+Chạy vào backend local đang mở WebSocket:
+
+```powershell
+npm run lab:sim -- --target=local --ws=ws://127.0.0.1:8080 --auth-mode=stub --users=12 --duration=60s
+```
+
+Chạy vào staging với Firebase/persistence và engine:
+
+```powershell
+npm run lab:sim:staging-system -- --ws=wss://your-staging --engine-url=https://your-engine --cleanup-after
+```
+
+Sau mỗi run, xem report tại:
+
+```text
+cchess-backend/lab/reports/<runId>/
+  summary.json
+  events.jsonl
+  failure.md
+```
+
+Quan trọng nhất:
+
+- `summary.json`: tổng hợp kết quả, metrics, seed, profile, số game, số lỗi.
+- `events.jsonl`: log sự kiện theo dòng, dùng để lần lại flow khi fail.
+- `failure.md`: chỉ xuất hiện khi fail, gom rule, roomId, agents và recent events.
+- Dòng `replay:` trong output là lệnh tái hiện bằng cùng `seed` và cùng cấu hình.
+
+### 4.2. Vòng Lặp Test Hằng Ngày
+
+Trước khi commit thay đổi backend nhỏ:
+
+```powershell
+npm run lab:check
+npm run lab:sim:test
+npm run lab:sim:ci
+```
+
+Khi sửa logic realtime, reconnect, room, queue, spectator hoặc chat:
+
+```powershell
+npm test
+npm run lab:sim:test
+npm run lab:sim:ci
+npm run lab:sim:soak
+```
+
+Khi sửa persistence, ELO, game_records hoặc Firebase auth:
+
+```powershell
+npm run lab:sim:test
+npm run lab:sim:staging-system -- --ws=wss://staging.example --engine-url=https://engine.example --cleanup-after
+```
+
+Khi sửa engine integration/quota:
+
+```powershell
+npm run lab:sim -- --target=staging --profile=engine-quota --ws=wss://staging.example --engine-url=https://engine.example --engine-strict --verify-persistence --cleanup-after
+```
+
+Khi một run fail:
+
+1. Mở `lab/reports/<runId>/failure.md`.
+2. Xem rule fail, `roomId`, `agents` và recent events.
+3. Copy dòng `replay:` từ output hoặc từ `summary.json`.
+4. Chạy lại đúng lệnh replay đó để tái hiện.
+5. Sau khi sửa bug, chạy lại `lab:sim:test`, `lab:sim:ci` và profile đã fail.
+
+### 4.3. Chạy Liên Tục Trên GitHub Actions
+
+`backend-ci` hiện chạy thêm:
+
+```bash
+npm run lab:sim:test
+npm run lab:sim:ci
+```
+
+Workflow `.github/workflows/simulation-layer.yml` hỗ trợ:
+
+- Nightly `realtime-soak`.
+- Manual `smoke-local`.
+- Manual `realtime-soak`.
+- Manual `staging-system`.
+- Manual `engine-quota`.
+- Upload artifact `cchess-backend/lab/reports/**`.
+
+Secrets cần cho staging/manual workflow:
+
+```text
+CCHESS_FIREBASE_SERVICE_ACCOUNT_JSON
+CCHESS_FIREBASE_API_KEY
+CCHESS_ENGINE_FIREBASE_ID_TOKEN
+```
+
+### 4.4. Tạo Profile Simulator Mới
+
+Profile là cách đổi tỷ lệ người dùng ảo và brain.
+
+File chính:
+
+```text
+cchess-backend/lab/sim/profiles.ts
+```
+
+Để thêm profile mới:
+
+1. Thêm tên vào `SimProfileName`.
+2. Tạo object `SimProfile` mới với:
+   - `personaWeights`
+   - `brainWeights`
+   - `reconnectChance`
+   - `spectatorChance`
+   - `abuseChance`
+   - `rematchChance`
+   - `failOnEngineError`
+   - `engineRequired`
+   - `verifyPersistence`
+3. Thêm profile vào `PROFILES`.
+4. Chạy bằng:
+
+```powershell
+npm run lab:sim -- --profile=ten-profile-moi --target=in-process --users=20 --duration=2m --seed=456
+```
+
+Ví dụ nên tạo profile riêng khi cần:
+
+- Test reconnect nặng hơn bình thường.
+- Test spectator/rematch nhiều hơn.
+- Test abuse/rate-limit nhiều hơn.
+- Test engine quota với tỷ lệ `remote-engine` cao.
+- Test staging persistence với `verifyPersistence=true`.
+
+### 4.5. Tạo Brain Mới Cho Cách Đi Cờ
+
+Brain là phần quyết định nước đi. Interface nằm trong:
+
+```text
+cchess-backend/lab/sim/brain.ts
+```
+
+Interface chính:
+
+```ts
+export interface MovePolicy {
+  readonly name: string;
+  chooseMove(ctx: MoveContext): Promise<string | null>;
+}
+```
+
+Các brain hiện có:
+
+```text
+cchess-backend/lab/sim/brains/random_legal.ts
+cchess-backend/lab/sim/brains/scripted.ts
+cchess-backend/lab/sim/brains/heuristic.ts
+cchess-backend/lab/sim/brains/remote_engine.ts
+```
+
+Để thêm brain mới:
+
+1. Tạo file mới trong `cchess-backend/lab/sim/brains/`.
+2. Implement `MovePolicy`.
+3. Thêm kind mới vào `BrainKind` trong `profiles.ts`.
+4. Thêm weight vào profile muốn dùng.
+5. Wire kind mới trong `makeBrain()` của `world.ts`.
+6. Thêm test trong `lab/sim/brains/phase4.test.ts` hoặc file test riêng.
+7. Chạy:
+
+```powershell
+npm run lab:sim:test
+npm run lab:sim -- --target=in-process --profile=mixed-local --users=12 --duration=60s --seed=789
+```
+
+Quy tắc tốt cho brain:
+
+- Luôn trả về nước hợp lệ theo UCI hoặc `null`.
+- Có fallback nếu không chọn được nước.
+- Không để engine/HTTP call làm treo simulator.
+- Nếu dùng engine thật, phải có timeout, concurrency limit và metrics.
+
+### 4.6. Tạo Persona/Hành Vi Người Dùng Mới
+
+Persona hiện có:
+
+```text
+casual
+private-room
+reconnect
+spectator
+abuse
+```
+
+File liên quan:
+
+```text
+cchess-backend/lab/sim/personas.ts
+cchess-backend/lab/sim/profiles.ts
+cchess-backend/lab/sim/world.ts
+```
+
+Lưu ý thiết kế hiện tại: persona class chủ yếu giữ identity/brain/bot. `SimWorld` là nơi điều phối flow chơi phòng, reconnect, spectator, abuse và rematch.
+
+Để thêm persona mới:
+
+1. Thêm kind vào `PersonaKind` trong `profiles.ts`.
+2. Thêm class trong `personas.ts`.
+3. Thêm weight vào profile.
+4. Wire trong `makeAgent()` của `world.ts`.
+5. Nếu persona là người chơi thật, cập nhật `isPlayerPersona()`.
+6. Thêm flow hành vi trong `world.ts`, thường theo dạng `maybeRunX(...)`.
+7. Thêm metrics vào summary nếu hành vi đó cần được đếm riêng.
+8. Thêm test oracle nếu hành vi mới có rule protocol riêng.
+
+Ví dụ persona nên thêm sau này:
+
+- `SlowPlayer`: cố tình delay nước đi để test clock.
+- `RematchHeavyPlayer`: luôn đề nghị rematch.
+- `ChattySpectator`: spectator chat nhiều để test rate-limit.
+- `TimeoutPlayer`: bỏ lượt hoặc disconnect dài để test timeout/grace.
+
+### 4.7. Tạo Test Mới
+
+Có 3 nhóm test chính:
+
+```text
+cchess-backend/lab/sim/monitor.test.ts
+cchess-backend/lab/sim/brains/phase4.test.ts
+cchess-backend/lab/sim/firebase_probe.test.ts
+```
+
+Chọn nơi thêm test:
+
+- Test protocol/oracle: thêm vào `monitor.test.ts`.
+- Test brain/engine behavior: thêm vào `brains/phase4.test.ts` hoặc file test brain mới.
+- Test Firestore persistence/cleanup: thêm vào `firebase_probe.test.ts`.
+- Test race/realtime dài: tạo profile/persona rồi chạy simulator với seed cố định.
+
+Nguyên tắc:
+
+- Bug cụ thể thì viết test deterministic trước.
+- Bug do timing/race thì giữ seed và replay command trong issue/commit.
+- Không thay simulation thành nơi duy nhất kiểm tra mọi thứ; simulation bổ sung cho unit/integration/lab/fuzz/load.
+
+Lệnh kiểm tra chuẩn trước khi commit:
+
+```powershell
+npm run lab:check
+npm run lab:sim:test
+npm run lab:sim:ci
+npm run lab:sim:soak
+```
+
+---
+
+## 5. Kiến Trúc Tổng Quát
 
 ```text
 Simulation Runner
@@ -113,12 +389,10 @@ Simulation Runner
   |
   +-- PlayerAgent[]
   |     +-- CasualPlayer
-  |     +-- MatchmakingPlayer
   |     +-- PrivateRoomPlayer
+  |     +-- ReconnectPlayer
   |     +-- SpectatorAgent
-  |     +-- ReconnectAgent
   |     +-- AbuseAgent
-  |     +-- EngineUserAgent
   |
   +-- MovePolicy / Brain
   |     +-- RandomLegalPolicy
@@ -142,26 +416,24 @@ Simulation Runner
 
 ---
 
-## 5. Cac thanh phan chinh
+## 6. Các Thành Phần Chính
 
-### 5.1. Bot
+### 6.1. Bot
 
-Tai su dung `cchess-backend/lab/bot.ts`.
+Tái sử dụng `cchess-backend/lab/bot.ts`.
 
-Vai tro:
+Vai trò:
 
-- Ket noi WebSocket.
+- Kết nối WebSocket.
 - Auth.
-- Gui command protocol: `find-match`, `create-room`, `join-room`, `move`, `chat-message`, `reconnect-room`, `spectate-room`, `resign`, `leave-room`.
-- Ghi lai message server gui ve.
+- Gửi command protocol: `find-match`, `create-room`, `join-room`, `move`, `chat-message`, `reconnect-room`, `spectate-room`, `resign`, `leave-room`.
+- Ghi lại message server gửi về.
 
-Khong nen nhoi logic phuc tap vao `Bot`. `Bot` chi la client cap thap.
+Không nhồi logic phức tạp vào `Bot`. `Bot` chỉ là client cấp thấp.
 
-### 5.2. PlayerAgent
+### 6.2. PlayerAgent
 
-`PlayerAgent` la tang mo phong nguoi dung.
-
-Vi du interface:
+`PlayerAgent` là tầng mô phỏng người dùng.
 
 ```ts
 export interface PlayerAgent {
@@ -174,18 +446,17 @@ export interface PlayerAgent {
 }
 ```
 
-Persona ban dau:
+Persona hiện có:
 
-- `CasualPlayer`: tim tran, di nuoc hop le, chat thinh thoang, resign sau mot so nuoc.
-- `PrivateRoomPlayer`: tao/join phong rieng.
-- `ReconnectPlayer`: dang choi thi drop, reconnect trong grace, hoac reconnect muon.
-- `SpectatorAgent`: vao xem tran, chat, thoat, xem tiep sau rematch.
-- `AbuseAgent`: gui move sai luot, spam chat, payload loi, cancel/find lien tuc.
-- `EngineUserAgent`: thinh thoang goi hint/analyze/best-move.
+- `CasualPlayer`: chơi game bình thường.
+- `PrivateRoomPlayer`: tạo/join phòng riêng.
+- `ReconnectPlayer`: đang chơi thì drop, reconnect trong grace.
+- `SpectatorAgent`: vào xem trận, chat, thoát, xem tiếp sau rematch.
+- `AbuseAgent`: gửi move sai lượt, spam chat, payload lỗi, cancel/find liên tục.
 
-### 5.3. MovePolicy / Brain
+### 6.3. MovePolicy / Brain
 
-Tach rieng "nguoi dung" va "cach chon nuoc co".
+Tách riêng "người dùng" và "cách chọn nước cờ".
 
 ```ts
 export interface MoveContext {
@@ -203,46 +474,47 @@ export interface MovePolicy {
 }
 ```
 
-Cac brain nen co theo thu tu:
+Các brain chính:
 
 1. `RandomLegalPolicy`
-   - Chon mot nuoc hop le bat ky.
-   - Nhanh, re, dung cho load lon.
+   - Chọn một nước hợp lệ bất kỳ.
+   - Nhanh, rẻ, phù hợp load lớn.
 
 2. `HeuristicPolicy`
-   - Uu tien an quan, tranh mat tuong, uu tien chieu, phat trien quan.
-   - Khon hon random nhung van nhe.
+   - Ưu tiên ăn quân, chiếu, tránh mất quân quan trọng.
+   - Thông minh hơn random nhưng vẫn nhẹ.
 
 3. `ScriptedPolicy`
-   - Di theo cong thuc de test case dac biet.
-   - Vi du: checkmate fixture, vong rematch, van dai, van ngan, het gio.
+   - Đi theo fixture/công thức để test case đặc biệt.
+   - Phù hợp checkmate fixture, rematch, ván ngắn, ván dài, hết giờ.
 
 4. `RemoteEnginePolicy`
-   - Goi `cchess-engine` qua HTTP: `/engine/best-move`, `/engine/hint`, `/engine/analyze`.
-   - Chi dung cho mot phan nho simulator de test engine/quota/latency.
+   - Gọi `cchess-engine` qua HTTP.
+   - Chỉ dùng cho một phần nhỏ simulator để test engine/quota/latency.
 
-Khuyen nghi phan bo mac dinh:
+Phân bổ mặc định của `mixed-local`:
 
 ```text
-70% RandomLegal/Heuristic
-15% Scripted
-10% Reconnect/Spectator behavior
-5% Remote engine/Pikafish
+random-legal: 45
+scripted: 18
+heuristic: 32
+remote-engine: 5 nếu có engine URL, 0 nếu không cấu hình engine
 ```
 
-### 5.4. SimWorld
+### 6.4. SimWorld
 
-`SimWorld` dieu phoi toan bo run:
+`SimWorld` điều phối toàn bộ run:
 
 - Seeded random.
-- Danh sach agents.
-- Danh sach bot/socket.
-- Bo nho ve room/game dang biet.
+- Danh sách agents.
+- Danh sách bot/socket.
+- Bộ nhớ về room/game.
 - Scheduler/timing.
-- Target mode: `in-process`, `local`, `staging`.
+- Target mode: `in-process`, `local`, `staging`, `prod-smoke`.
 - Event bus cho monitor/reporter.
+- Persistence verification và cleanup nếu bật.
 
-Thong tin can luu:
+Thông tin run:
 
 ```ts
 interface SimRun {
@@ -255,293 +527,305 @@ interface SimRun {
 }
 ```
 
-### 5.5. Monitor / Oracle
+### 6.5. Monitor / Oracle
 
-Day la phan quan trong nhat. Tao N bot ma khong co oracle thi chi la "noise generator".
+Đây là phần quan trọng nhất. Tạo N bot mà không có oracle thì chỉ là noise generator.
 
-Monitor can phat hien:
+Monitor phát hiện:
 
-- Bot khong nhan message sai phase.
-- Hai nguoi choi trong mot room phai co mau khac nhau.
-- Spectator khong bao gio duoc thanh player.
-- `game-ended` khong duoc emit hai lan cho cung game.
-- `moveCount` phai khop so moves.
-- Reconnect phai tra dung room/moves/chat/clock snapshot.
-- Sau drain khong con room/socket/queue rac.
-- Khong co socket chet trong queue.
-- Khong co room `playing` khong co nguoi ma ngoai grace.
-- Latency p95/p99 khong vuot nguong.
-- Engine call khong loi qua nguong.
-- Firebase writes khong bi thieu, trung, hoac double-counter.
+- Bot gửi command sai phase.
+- Hai người chơi trong một room phải có màu khác nhau.
+- Spectator không bao giờ được thành player.
+- `game-ended` không được emit hai lần cho cùng game/agent.
+- `moveCount` phải khớp số moves.
+- Reconnect phải trả đúng room/moves/clock snapshot.
+- Sau drain không còn room/socket/queue rác.
+- Không có socket chết trong queue.
+- Không có room `playing` không có người mà ngoài grace.
+- Engine call không lỗi quá ngưỡng của profile.
+- Firebase writes không bị thiếu, trùng hoặc double-counter.
 
-Co the tai su dung `lab/invariants.ts` cho in-process mode.
+In-process mode tái sử dụng `lab/invariants.ts` để kiểm room/socket/timer.
 
-### 5.6. Reporter
+### 6.6. Reporter
 
 Khi PASS:
 
 ```text
-PASS sim-20260622-001
-seed: 123
-users: 20
-duration: 3m
-games started: 31
-games ended: 31
-reconnects: 8
-spectator sessions: 12
-chat messages: 120
-engine calls: 14
-p95 ws latency: 42ms
+PASS sim-20260622T073445
+seed: 61001
+profile: mixed-local
+users: 8
+duration: 20000ms
+games started: 78
+games ended: 78
 rooms after drain: 0
 invariant violations: 0
+protocol violations: 0
+events: ...\lab\reports\sim-...\events.jsonl
+replay: npm run lab:sim -- ...
 ```
 
 Khi FAIL:
 
 ```text
-FAIL sim-20260622-001
+FAIL sim-...
 seed: 123
-rule: game-ended emitted twice
-roomId: ABCD12
+rule: game-ended-duplicate
+roomId: ROOM01
 agents: sim_004, sim_017
-recent events: reports/sim-20260622-001/events.jsonl
-replay:
-npm run lab:sim -- --run-id=sim-20260622-001 --replay
+events: lab/reports/sim-.../events.jsonl
+failure: lab/reports/sim-.../failure.md
 ```
 
-Report files nen luu o:
+Report files:
 
 ```text
 cchess-backend/lab/reports/
-  sim-20260622-001/
+  sim-.../
     summary.json
     events.jsonl
     failure.md
 ```
 
-Thu muc `lab/reports/` nen duoc ignore trong git neu report lon.
+`lab/reports/` là output cục bộ và không nên commit.
 
 ---
 
-## 6. Cac che do chay
+## 7. Các Chế Độ Chạy
 
-### 6.1. In-process mode
+### 7.1. In-process Mode
 
-Dung server in-process nhu `lab/harness.ts`.
+Dùng server in-process như `lab/harness.ts`.
 
-Muc tieu:
+Mục tiêu:
 
 - Nhanh.
-- Lap lai tot.
-- Khong can Firebase.
-- Bat bug realtime, room, socket, timer, queue, reconnect.
+- Lặp lại tốt.
+- Không cần Firebase.
+- Bắt bug realtime, room, socket, timer, queue, reconnect.
 
-Lenh:
+Lệnh:
 
 ```bash
-npm run lab:sim -- --target=in-process --users=20 --duration=3m --seed=123
+npm run lab:sim -- --target=in-process --profile=mixed-local --users=20 --duration=3m --seed=123
 ```
 
-Nen dua vao CI nhe sau khi on dinh.
+Đây là mode phù hợp cho CI nhẹ.
 
-### 6.2. Local mode
+### 7.2. Local Mode
 
-Chay backend local that:
+Chạy backend local thật:
 
 ```bash
 npm run dev
-npm run lab:sim -- --target=local --ws=ws://127.0.0.1:8080 --users=20
+npm run lab:sim -- --target=local --ws=ws://127.0.0.1:8080 --auth-mode=stub --users=20 --duration=60s
 ```
 
-Muc tieu:
+Mục tiêu:
 
-- Kiem tra server local theo black-box.
-- Co the ket hop engine local.
-- Co the dung Firebase test project neu can.
+- Kiểm tra server local theo black-box.
+- Có thể kết hợp engine local.
+- Có thể dùng Firebase test project nếu cần.
 
-### 6.3. Staging mode
+### 7.3. Staging Mode
 
-Chay tren backend staging + Firebase staging/test project.
+Chạy trên backend staging + Firebase staging/test project.
 
-Muc tieu:
+Mục tiêu:
 
-- Test gan production nhung khong pha data production.
-- Kiem tra auth, persistence, ELO, game_records, quota, engine deploy.
+- Test gần production nhưng không phá data production.
+- Kiểm tra auth, persistence, ELO, game_records, quota, engine deploy.
 
-Quy tac:
+Quy tắc:
 
-- Moi user ao co prefix `sim_`.
-- Moi game/record co `runId`.
-- Co lenh cleanup theo `runId`.
-- Khong dung production Firebase cho stress/load.
+- User ảo nên có prefix `sim_`.
+- Mỗi run có `runId`.
+- Có cleanup theo `runId`.
+- Không dùng production Firebase cho stress/load.
 
-Lenh:
+Lệnh:
 
 ```bash
-npm run lab:sim -- --target=staging --users=50 --duration=10m --seed=456
+npm run lab:sim:staging-system -- --ws=wss://staging.example --engine-url=https://engine.example --cleanup-after
 ```
 
-### 6.4. Production smoke nhe
+### 7.4. Production Smoke Nhẹ
 
-Chi chay vai user va flow an toan.
+Chỉ chạy vài user và flow an toàn.
 
-Muc tieu:
+Mục tiêu:
 
-- Xac nhan deploy song.
-- Khong stress.
-- Khong tao nhieu ranked write.
+- Xác nhận deploy sống.
+- Không stress.
+- Không tạo nhiều ranked write.
 
-Production khong phai noi load test chinh.
-
----
-
-## 7. Firebase va du lieu test
-
-Can co Firebase project rieng cho simulation/staging.
-
-Quy tac du lieu:
-
-- UID simulator nen co prefix: `sim_<runId>_<index>`.
-- Game metadata nen co `runId` neu adapter persistence cho phep.
-- Neu khong them duoc `runId` vao schema production, reporter van phai ghi lai `gameId`, `roomId`, `uid`.
-- Co script cleanup user/records theo `runId` trong staging.
-- Khong chay stress tren production Firebase.
-
-Kiem tra can co:
-
-- Moi van ranked ket thuc chi tao record mot lan.
-- ELO cap nhat dung hai chieu.
-- Counters `wins/losses/draws/totalGames` khong double.
-- Rematch tao record rieng tung van.
-- Disconnect/timeout/resign ghi reason dung.
-- Quota engine free user bi gioi han dung.
+Production không phải nơi load test chính.
 
 ---
 
-## 8. Engine trong simulator
+## 8. Firebase Và Dữ Liệu Test
 
-Nen lap engine vao simulator, nhung theo dang plugin `MovePolicy`.
+Cần có Firebase project riêng cho simulation/staging.
 
-Muc tieu ngan han:
+Quy tắc dữ liệu:
 
-- Simulator choi duoc nuoc hop le.
-- Tao van co dai/ngan tu nhien hon.
-- Test game lifecycle tot hon random move cung.
+- UID simulator nên có prefix: `sim_<runId>_<index>`.
+- Nếu schema production không có `runId`, reporter vẫn phải ghi `gameId`, `roomId`, `uid`.
+- Có cleanup user/records theo `runId` trong staging.
+- Không chạy stress trên production Firebase.
 
-Muc tieu dai han:
+Auth mode:
+
+- `--auth-mode=stub`: dùng cho in-process/local stub.
+- `--auth-mode=custom-token`: tạo Firebase users có UID prefix, cần service account và API key.
+- `--auth-mode=anonymous`: mint anonymous users qua Identity Toolkit.
+- `--auth-mode=id-token-list --firebase-id-tokens=a,b,c`: dùng token có sẵn.
+
+Biến môi trường/secrets:
+
+```text
+FIREBASE_SERVICE_ACCOUNT_JSON
+GOOGLE_APPLICATION_CREDENTIALS
+FIREBASE_API_KEY
+CCHESS_ENGINE_TOKEN
+```
+
+Kiểm tra cần có:
+
+- Mỗi ván ranked kết thúc chỉ tạo record một lần.
+- ELO cập nhật đúng hai chiều.
+- Counters `wins/losses/draws/totalGames` không double.
+- Rematch tạo record riêng từng ván.
+- Disconnect/timeout/resign ghi reason đúng.
+- Quota engine free user bị giới hạn đúng.
+
+Cleanup:
+
+```bash
+npm run lab:sim -- --cleanup-run-id=<runId> --cleanup-dry-run
+npm run lab:sim -- --cleanup-run-id=<runId>
+npm run lab:sim -- --cleanup-run-id=<runId> --cleanup-delete-user-docs --cleanup-delete-auth-users
+```
+
+Luôn chạy `--cleanup-dry-run` trước khi xóa thật nếu đang làm việc với staging shared.
+
+---
+
+## 9. Engine Trong Simulator
+
+Engine được lắp vào simulator dưới dạng `MovePolicy`.
+
+Mục tiêu ngắn hạn:
+
+- Simulator chơi được nước hợp lệ.
+- Tạo ván cờ dài/ngắn tự nhiên hơn.
+- Test game lifecycle tốt hơn random move cứng.
+
+Mục tiêu dài hạn:
 
 - Test bot mode.
 - Test engine online/offline.
-- So sanh chat luong engine.
+- So sánh chất lượng engine.
 - Test hint/analyze quota/latency.
-- Ho tro sau nay cho tinh nang huan luyen voi nguoi choi.
+- Hỗ trợ sau này cho tính năng huấn luyện với người chơi.
 
-Thu tu trien khai:
+Thứ tự triển khai đã hoàn tất:
 
 1. `RandomLegalPolicy`
-   - Dung TS engine hien co trong `cchess-backend/src/engine`.
-   - Sinh tat ca nuoc hop le tu `XiangqiGame`.
+   - Dùng TS engine hiện có trong `cchess-backend/src/engine`.
+   - Sinh nước hợp lệ từ `XiangqiGame`.
 
 2. `HeuristicPolicy`
-   - Diem co ban: an quan, chieu, tranh bi an tuong, uu tien quan manh.
-   - Khong can qua manh.
+   - Điểm cơ bản: ăn quân, chiếu, ưu tiên quân mạnh.
+   - Không cần quá mạnh.
 
 3. `ScriptedPolicy`
-   - Fixture cho checkmate, timeout, resign, rematch, reconnect.
+   - Fixture cho resign, rematch, reconnect và các pattern kiểm thử.
 
 4. `RemoteEnginePolicy`
-   - Goi `cchess-engine`.
-   - Gioi han concurrency va ti le user.
-   - Co timeout/fallback sang legal move.
+   - Gọi `cchess-engine`.
+   - Giới hạn concurrency và tỷ lệ user.
+   - Có timeout/fallback sang legal move.
 
-Nguyen tac:
+Nguyên tắc:
 
-- Engine failure khong lam simulation dung ngay neu muc tieu run la test server realtime; reporter ghi loi va fallback.
-- Engine failure phai lam run fail neu profile la `engine-staging` hoac `engine-quota`.
-
----
-
-## 9. Profiles de chay
-
-### 9.1. `smoke-local`
-
-Nhe, nhanh, chay truoc khi commit lon.
-
-```text
-users: 8
-duration: 60s
-engine: off
-firebase: off
-target: in-process
-```
-
-### 9.2. `realtime-soak`
-
-Tap trung room/socket/reconnect.
-
-```text
-users: 30
-duration: 10m
-engine: light
-firebase: fake
-target: in-process/local
-```
-
-### 9.3. `staging-system`
-
-Gan that, co Firebase staging va engine staging.
-
-```text
-users: 50
-duration: 15m
-engine: 5%
-firebase: staging
-target: staging
-```
-
-### 9.4. `engine-quota`
-
-Tap trung engine service.
-
-```text
-users: 10
-duration: 5m
-engine: high
-firebase: staging
-target: staging
-```
-
-### 9.5. `prod-smoke`
-
-Rat nhe.
-
-```text
-users: 2-4
-duration: 60s
-engine: minimal
-firebase: production
-target: production
-ranked-write: opt-in only
-```
+- Engine failure không làm simulation fail nếu mục tiêu run là test server realtime; reporter ghi lỗi và fallback.
+- Engine failure phải làm run fail nếu profile là `engine-staging` hoặc `engine-quota`.
 
 ---
 
-## 10. Lo trinh trien khai
+## 10. Profiles Để Chạy
 
-### Phase 1 - Nen mong CLI local
+### 10.1. CLI Profiles
 
-Muc tieu: chay duoc N user ao tren server in-process.
+Các profile hiện có trong `lab/sim/profiles.ts`:
 
-Viec can lam:
+```text
+mixed-local
+engine-staging
+engine-quota
+staging-system
+```
 
-- Tao `lab/sim/runner.ts`.
-- Tao `SimWorld`.
-- Tao `PlayerAgent` interface.
-- Tao `RandomLegalPolicy`.
-- Tao `CasualPlayer`.
+`mixed-local`:
+
+- Dùng cho local/in-process.
+- Tập trung realtime, room, reconnect, spectator, abuse nhẹ.
+- Không bắt buộc engine.
+- Không verify persistence mặc định.
+
+`engine-staging`:
+
+- Dùng cho staging có engine.
+- Engine failure làm run fail.
+- Không verify persistence mặc định.
+
+`engine-quota`:
+
+- Dùng cho staging có engine.
+- Tỷ lệ `remote-engine` cao.
+- Engine failure làm run fail.
+- Phù hợp kiểm quota/latency/fallback.
+
+`staging-system`:
+
+- Dùng cho staging gần thật.
+- Có engine.
+- Verify persistence mặc định.
+- Phù hợp kiểm Firebase `game_records`, ELO và counters.
+
+### 10.2. GitHub Workflow Profiles
+
+Workflow `.github/workflows/simulation-layer.yml` có input:
+
+```text
+smoke-local
+realtime-soak
+staging-system
+engine-quota
+```
+
+Lưu ý: `smoke-local` và `realtime-soak` là tên profile ở workflow, được map về CLI `mixed-local`. Nếu chạy CLI trực tiếp thì dùng `--profile=mixed-local`.
+
+---
+
+## 11. Lộ Trình Triển Khai
+
+### Phase 1 - Nền Móng CLI Local
+
+Mục tiêu: chạy được N user ảo trên server in-process.
+
+Đã làm:
+
+- Tạo `lab/sim/runner.ts`.
+- Tạo `SimWorld`.
+- Tạo `PlayerAgent` interface.
+- Tạo `RandomLegalPolicy`.
+- Tạo player flow cơ bản.
 - Ghi event JSONL.
 - Summary PASS/FAIL.
-- Drain cuoi run va assert room sach.
+- Drain cuối run và assert room sạch.
 
 Acceptance:
 
@@ -549,37 +833,37 @@ Acceptance:
 npm run lab:sim -- --target=in-process --users=10 --duration=60s --seed=1
 ```
 
-Phai tra:
+Kết quả cần có:
 
-- Khong invariant violation.
-- Co game started/ended.
-- Sau drain con 0 room.
-- Replay cung seed cho hanh vi tuong duong.
+- Không invariant violation.
+- Có game started/ended.
+- Sau drain còn 0 room.
+- Replay cùng seed cho hành vi tương đương.
 
-### Phase 2 - Monitor/oracle nghiem tuc
+### Phase 2 - Monitor/Oracle Nghiêm Túc
 
-Muc tieu: bot khong chi chay, ma biet phat hien sai.
+Mục tiêu: bot không chỉ chạy, mà biết phát hiện sai.
 
-Viec can lam:
+Đã làm:
 
 - Protocol phase assertions.
 - Room/game memory.
-- Detect double `game-ended`.
-- Detect spectator thanh player.
+- Detect duplicate `game-ended`.
+- Detect spectator thành player.
 - Detect move count mismatch.
 - Detect reconnect snapshot sai.
 - Failure bundle.
 
 Acceptance:
 
-- Khi chen loi co chu y vao server/test stub, simulation fail ro rule.
-- Failure co `seed`, `runId`, `roomId`, `agents`, recent events.
+- Khi chèn lỗi có chủ ý vào server/test stub, simulation fail rõ rule.
+- Failure có `seed`, `runId`, `roomId`, `agents`, recent events.
 
-### Phase 3 - Personas mo rong
+### Phase 3 - Personas Mở Rộng
 
-Muc tieu: mo phong nhieu hanh vi nguoi dung hon.
+Mục tiêu: mô phỏng nhiều hành vi người dùng hơn.
 
-Viec can lam:
+Đã làm:
 
 - `ReconnectPlayer`.
 - `SpectatorAgent`.
@@ -590,34 +874,34 @@ Viec can lam:
 
 Acceptance:
 
-- Run 20-30 users trong 3-5 phut on dinh.
-- Co reconnect, spectator, chat, resign, rematch trong summary.
+- Run 20-30 users trong 3-5 phút ổn định.
+- Có reconnect, spectator, chat, resign, rematch trong summary.
 
-### Phase 4 - Engine brain
+### Phase 4 - Engine Brain
 
-Muc tieu: co nhom simulator choi thong minh hon va test engine.
+Mục tiêu: có nhóm simulator chơi thông minh hơn và test engine.
 
-Viec can lam:
+Đã làm:
 
 - `HeuristicPolicy`.
 - `RemoteEnginePolicy`.
 - Engine timeout/fallback.
-- Engine metrics: latency, error rate, cache hit neu co.
+- Engine metrics: latency, error rate, cache hit.
 - Profile `engine-quota`.
 
 Acceptance:
 
-- 5% user co the goi engine ma khong lam simulation cham bat thuong.
-- Engine fail duoc report dung profile.
+- Một tỷ lệ nhỏ user có thể gọi engine mà không làm simulation chậm bất thường.
+- Engine fail được report đúng profile.
 
 ### Phase 5 - Staging/Firebase
 
-Muc tieu: test ecosystem gan that.
+Mục tiêu: test ecosystem gần thật.
 
-Viec can lam:
+Đã làm:
 
 - Staging target config.
-- Firebase test credentials.
+- Firebase test credentials/auth modes.
 - UID prefix `sim_`.
 - Persistence verifier.
 - Cleanup by `runId`.
@@ -625,37 +909,35 @@ Viec can lam:
 
 Acceptance:
 
-- Staging run co the tao/ket thuc game that.
-- Verify ELO/game_records khong double.
-- Cleanup duoc du lieu test.
+- Staging run có thể tạo/kết thúc game thật.
+- Verify ELO/game_records không double.
+- Cleanup được dữ liệu test.
 
-### Phase 6 - CI/nightly
+### Phase 6 - CI/Nightly
 
-Muc tieu: dua simulation vao quy trinh phat trien.
+Mục tiêu: đưa simulation vào quy trình phát triển.
 
-Viec can lam:
+Đã làm:
 
-- CI nhe: `smoke-local`.
+- CI nhẹ: `lab:sim:ci`.
 - Manual workflow: `realtime-soak`.
 - Manual/staging workflow: `staging-system`.
+- Manual engine workflow: `engine-quota`.
 - Artifact upload cho report.
 
 Acceptance:
 
-- PR/commit khong bi cham qua muc.
-- Long run co the chay thu cong hoac nightly.
+- PR/commit không bị chậm quá mức.
+- Long run có thể chạy thủ công hoặc nightly.
 
-Trang thai trien khai:
+Trạng thái triển khai:
 
-- `backend-ci` chay them `npm run lab:sim:test` va `npm run lab:sim:ci` tren push/PR backend.
-- Workflow `.github/workflows/simulation-layer.yml` chay nightly `realtime-soak` va cho phep manual run cac profile `smoke-local`, `realtime-soak`, `staging-system`, `engine-quota`.
-- Tat ca workflow simulation upload `cchess-backend/lab/reports/**` lam artifact de lay `summary.json`, `events.jsonl`, va `failure.md` khi fail.
-- Staging manual workflow dung secrets `CCHESS_FIREBASE_SERVICE_ACCOUNT_JSON`, `CCHESS_FIREBASE_API_KEY`, va neu can engine auth thi `CCHESS_ENGINE_FIREBASE_ID_TOKEN`.
-- Cleanup co 2 cach:
-  - Trong cung run: them `--cleanup-after` va tuy chon `--cleanup-delete-user-docs`, `--cleanup-delete-auth-users`.
-  - Sau run: `npm run lab:sim -- --cleanup-run-id=<runId> --cleanup-dry-run` de xem se xoa gi, bo `--cleanup-dry-run` de xoa that.
+- `backend-ci` chạy thêm `npm run lab:sim:test` và `npm run lab:sim:ci` trên push/PR backend.
+- Workflow `.github/workflows/simulation-layer.yml` chạy nightly `realtime-soak` và cho phép manual run các profile `smoke-local`, `realtime-soak`, `staging-system`, `engine-quota`.
+- Tất cả workflow simulation upload `cchess-backend/lab/reports/**` làm artifact để lấy `summary.json`, `events.jsonl` và `failure.md` khi fail.
+- Staging manual workflow dùng secrets `CCHESS_FIREBASE_SERVICE_ACCOUNT_JSON`, `CCHESS_FIREBASE_API_KEY` và nếu cần engine auth thì `CCHESS_ENGINE_FIREBASE_ID_TOKEN`.
 
-Lenh acceptance hien tai:
+Lệnh acceptance hiện tại:
 
 ```bash
 npm run lab:check
@@ -667,90 +949,61 @@ npm run lab:sim:staging-system -- --ws=wss://staging.example --engine-url=https:
 
 ---
 
-## 11. Rui ro va cach kiem soat
+## 12. Rủi Ro Và Cách Kiểm Soát
 
-| Rui ro | Cach kiem soat |
+| Rủi ro | Cách kiểm soát |
 |---|---|
-| Simulation qua nang, chay cham | Mac dinh dung random/legal, engine chi 5% |
-| Loi engine lam nhieu test false fail | Tach profile realtime va profile engine |
-| Data staging bi rac | Gan `runId`, UID prefix `sim_`, co cleanup |
-| Bug ngau nhien kho tai hien | Bat buoc seed + JSONL event log + replay command |
-| Production bi anh huong | Khong stress production, ranked-write opt-in |
-| Bot qua "may moc", khong giong nguoi | Them persona + delay ngau nhien + scripted behavior |
-| Reporter qua it thong tin | Failure bundle gom roomId, agents, recent events, messages |
+| Simulation quá nặng, chạy chậm | Mặc định dùng random/legal/heuristic, engine chỉ chiếm tỷ lệ nhỏ |
+| Lỗi engine làm nhiều test false fail | Tách profile realtime và profile engine |
+| Data staging bị rác | Gắn `runId`, UID prefix `sim_`, có cleanup |
+| Bug ngẫu nhiên khó tái hiện | Bắt buộc seed + JSONL event log + replay command |
+| Production bị ảnh hưởng | Không stress production, ranked-write opt-in |
+| Bot quá máy móc, không giống người | Thêm persona + delay ngẫu nhiên + scripted behavior |
+| Reporter quá ít thông tin | Failure bundle gồm roomId, agents, recent events, messages |
 
 ---
 
-## 12. Dinh nghia thanh cong
+## 13. Định Nghĩa Thành Công
 
-Simulation Layer duoc xem la co gia tri khi:
+Simulation Layer được xem là có giá trị khi:
 
-- Chay duoc 20-50 nguoi dung ao tren may local.
-- Co the phat hien loi tu dong, khong can doc log bang mat moi biet.
-- Moi loi co seed/replay de tai hien.
-- Co it nhat 3 persona: casual, reconnect, spectator.
-- Co it nhat 2 brain: random/legal va heuristic/scripted.
-- Co summary metrics ro rang.
-- Co the chay staging voi Firebase test project.
-- Sau moi run, he thong biet xac nhan "clean slate" hoac chi ra ro thu con sot.
+- Chạy được 20-50 người dùng ảo trên máy local.
+- Có thể phát hiện lỗi tự động, không cần đọc log bằng mắt mới biết.
+- Mỗi lỗi có seed/replay để tái hiện.
+- Có ít nhất 3 persona: casual, reconnect, spectator.
+- Có ít nhất 2 brain: random/legal và heuristic/scripted.
+- Có summary metrics rõ ràng.
+- Có thể chạy staging với Firebase test project.
+- Sau mỗi run, hệ thống biết xác nhận "clean slate" hoặc chỉ ra rõ thứ còn sót.
 
----
-
-## 13. Viec khong lam ngay
-
-Chua nen lam trong MVP:
-
-- Khong viet simulator app Flutter rieng.
-- Khong chay 100% user bang Pikafish.
-- Khong load test production.
-- Khong thay unit/integration test hien co bang simulation.
-- Khong xay dashboard dep truoc khi CLI/reporter on dinh.
-- Khong dua Android/iOS vao viec tao N user ao; mobile chi dung cho mot so test native/UI that.
+Trạng thái hiện tại: các tiêu chí cốt lõi đã đạt sau Phase 1-6.
 
 ---
 
-## 14. Buoc tiep theo de bat dau
+## 14. Việc Không Làm Ngay
 
-1. Tao `cchess-backend/lab/sim/runner.ts`.
-2. Tao `brain.ts` voi `MovePolicy`.
-3. Viet `RandomLegalPolicy` dua tren `XiangqiGame`.
-4. Viet `CasualPlayer`.
-5. Chay 10 user trong 60 giay tren in-process server.
-6. Them reporter summary.
-7. Them monitor basic: clean slate, no invariant violations, no double end.
+Chưa nên làm trong MVP:
 
-Lenh muc tieu dau tien:
-
-```bash
-cd cchess-backend
-npm run lab:sim -- --target=in-process --users=10 --duration=60s --seed=1
-```
-
-Ket qua mong muon:
-
-```text
-PASS sim-...
-users: 10
-games started: ...
-games ended: ...
-rooms after drain: 0
-invariant violations: 0
-replay: npm run lab:sim -- --seed=1 ...
-```
+- Không viết simulator app Flutter riêng.
+- Không chạy 100% user bằng Pikafish.
+- Không load test production.
+- Không thay unit/integration test hiện có bằng simulation.
+- Không xây dashboard đẹp trước khi CLI/reporter ổn định.
+- Không đưa Android/iOS vào việc tạo N user ảo; mobile chỉ dùng cho một số test native/UI thật.
 
 ---
 
-## 15. Ghi chu lien ket voi he thong hien co
+## 15. Ghi Chú Liên Kết Với Hệ Thống Hiện Có
 
-Thanh phan hien co co the tai su dung:
+Thành phần hiện có được tái sử dụng:
 
-- `cchess-backend/lab/bot.ts`: client WebSocket gia lap.
-- `cchess-backend/lab/harness.ts`: server in-process voi timing ngan.
-- `cchess-backend/lab/invariants.ts`: bat bien room/socket/timer.
-- `cchess-backend/lab/fuzz.ts`: y tuong seeded random + history replay.
-- `cchess-backend/lab/load.ts`: y tuong bring up/drain nhieu game.
+- `cchess-backend/lab/bot.ts`: client WebSocket giả lập.
+- `cchess-backend/lab/harness.ts`: server in-process với timing ngắn.
+- `cchess-backend/lab/invariants.ts`: bất biến room/socket/timer.
+- `cchess-backend/lab/fuzz.ts`: ý tưởng seeded random + history replay.
+- `cchess-backend/lab/load.ts`: ý tưởng bring up/drain nhiều game.
 - `cchess-backend/lab/smoke.ts`: black-box target staging/prod.
 - `cchess-backend/src/engine`: Xiangqi rules, FEN, UCI, legal move generation.
-- `cchess-backend/src/engine-service`: engine HTTP target cho RemoteEnginePolicy.
+- `cchess-backend/src/engine-service`: engine HTTP target cho `RemoteEnginePolicy`.
 
-Simulation Layer nen la tang tong hop cac diem manh nay, khong thay the chung.
+Simulation Layer là tầng tổng hợp các điểm mạnh này, không thay thế chúng.
