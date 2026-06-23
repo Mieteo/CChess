@@ -33,7 +33,7 @@ class GameControllerArgs {
 
 /// Snapshot of game state observed by the UI.
 class GameUiState {
-  final XiangqiGame game;
+  final ChessGameSession game;
   final Position? selected;
   final List<Position> validTargets;
   final Move? lastMove;
@@ -60,7 +60,7 @@ class GameUiState {
   });
 
   GameUiState copyWith({
-    XiangqiGame? game,
+    ChessGameSession? game,
     Position? selected,
     bool clearSelected = false,
     List<Position>? validTargets,
@@ -114,23 +114,23 @@ class GameController extends StateNotifier<GameUiState> {
     PieceColor? cpuColor,
     BotDifficulty? botDifficulty,
   }) : super(
-          GameUiState(
-            game: XiangqiGame.initial(),
-            selected: null,
-            validTargets: const [],
-            lastMove: null,
-            boardFlipped: false,
-            mode: mode,
-            cpuColor: cpuColor,
-            botDifficulty: botDifficulty,
-            cpuThinking: false,
-          ),
-        );
+         GameUiState(
+           game: _newSession(mode),
+           selected: null,
+           validTargets: const [],
+           lastMove: null,
+           boardFlipped: false,
+           mode: mode,
+           cpuColor: cpuColor,
+           botDifficulty: botDifficulty,
+           cpuThinking: false,
+         ),
+       );
 
   /// Reset to the standard starting position.
   void newGame() {
     state = GameUiState(
-      game: XiangqiGame.initial(),
+      game: _newSession(state.mode),
       selected: null,
       validTargets: const [],
       lastMove: null,
@@ -189,10 +189,7 @@ class GameController extends StateNotifier<GameUiState> {
   }
 
   void _clearSelection() {
-    state = state.copyWith(
-      clearSelected: true,
-      validTargets: const [],
-    );
+    state = state.copyWith(clearSelected: true, validTargets: const []);
   }
 
   void _executeMove(Position from, Position to) {
@@ -264,6 +261,7 @@ class GameController extends StateNotifier<GameUiState> {
   /// thinking).
   void showHint(Position from, Position to) {
     final game = state.game;
+    if (game is XiangqiCupGame) return;
     if (game.status.isOver) return;
     final piece = game.board.at(from);
     if (piece == null || piece.color != game.turn) return;
@@ -284,12 +282,18 @@ class GameController extends StateNotifier<GameUiState> {
   }
 }
 
+ChessGameSession _newSession(GameMode mode) {
+  return mode == GameMode.cupLocal
+      ? XiangqiCupGame.initial()
+      : XiangqiGame.initial();
+}
+
 /// Family-style provider so each game route gets its own controller.
 final gameControllerProvider = StateNotifierProvider.autoDispose
     .family<GameController, GameUiState, GameControllerArgs>((ref, args) {
-  return GameController(
-    mode: args.mode,
-    cpuColor: args.cpuColor,
-    botDifficulty: args.botDifficulty,
-  );
-});
+      return GameController(
+        mode: args.mode,
+        cpuColor: args.cpuColor,
+        botDifficulty: args.botDifficulty,
+      );
+    });

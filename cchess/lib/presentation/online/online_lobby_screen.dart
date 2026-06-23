@@ -17,12 +17,14 @@ class OnlineLobbyScreen extends ConsumerStatefulWidget {
     super.key,
     this.deepLinkRoomId,
     this.deepLinkSpectate = true,
+    this.initialCasual = false,
   });
 
   /// A6 share link: when arriving via a shared link the room id is passed here;
   /// the lobby auto-connects then spectates ([deepLinkSpectate] true) or joins.
   final String? deepLinkRoomId;
   final bool deepLinkSpectate;
+  final bool initialCasual;
 
   @override
   ConsumerState<OnlineLobbyScreen> createState() => _OnlineLobbyScreenState();
@@ -128,7 +130,10 @@ class _OnlineLobbyScreenState extends ConsumerState<OnlineLobbyScreen> {
 
   void _createRoom() {
     setState(() => _localError = null);
-    _ctrl.createRoom(clockMs: _selectedClockMin * 60 * 1000);
+    _ctrl.createRoom(
+      clockMs: _selectedClockMin * 60 * 1000,
+      casual: widget.initialCasual,
+    );
   }
 
   void _findMatch() {
@@ -200,7 +205,7 @@ class _OnlineLobbyScreenState extends ConsumerState<OnlineLobbyScreen> {
       backgroundColor: AppColors.background,
       appBar: AppBar(
         backgroundColor: AppColors.woodDark,
-        title: const Text('Xếp Hạng Online'),
+        title: Text(widget.initialCasual ? 'Cờ Casual' : 'Xếp Hạng Online'),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () => context.go(AppConstants.routeCompete),
@@ -261,25 +266,31 @@ class _OnlineLobbyScreenState extends ConsumerState<OnlineLobbyScreen> {
                   ],
                 ),
                 AppSpacing.vGapBase,
-                ElevatedButton.icon(
-                  icon: const Icon(Icons.search),
-                  label: Text('Tìm trận tự động ($_selectedClockMin phút)'),
-                  onPressed: _busy ? null : _findMatch,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.accentGold,
-                    foregroundColor: AppColors.inkBlack,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
+                if (!widget.initialCasual) ...[
+                  ElevatedButton.icon(
+                    icon: const Icon(Icons.search),
+                    label: Text('Tìm trận tự động ($_selectedClockMin phút)'),
+                    onPressed: _busy ? null : _findMatch,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.accentGold,
+                      foregroundColor: AppColors.inkBlack,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                    ),
                   ),
-                ),
-                AppSpacing.vGapBase,
-                const Text(
-                  '— hoặc tạo / vào phòng riêng —',
-                  textAlign: TextAlign.center,
-                ),
+                  AppSpacing.vGapBase,
+                  const Text(
+                    '— hoặc tạo / vào phòng riêng —',
+                    textAlign: TextAlign.center,
+                  ),
+                ],
                 AppSpacing.vGapBase,
                 OutlinedButton.icon(
                   icon: const Icon(Icons.add),
-                  label: Text('Tạo phòng riêng $_selectedClockMin phút'),
+                  label: Text(
+                    widget.initialCasual
+                        ? 'Tạo phòng casual $_selectedClockMin phút'
+                        : 'Tạo phòng riêng $_selectedClockMin phút',
+                  ),
                   onPressed: _busy ? null : _createRoom,
                 ),
                 AppSpacing.vGapBase,
@@ -623,6 +634,15 @@ class _ActiveRoomTile extends StatelessWidget {
                 icon: Icons.schedule,
                 color: AppColors.onSurfaceVariant,
                 label: _elapsedLabel(room.startedAtMs),
+              ),
+              _RoomMeta(
+                icon: room.mode == 'casual'
+                    ? Icons.group_add_outlined
+                    : Icons.military_tech_outlined,
+                color: room.mode == 'casual'
+                    ? AppColors.tealSuccess
+                    : AppColors.accentGold,
+                label: room.mode == 'casual' ? 'Casual' : 'Ranked',
               ),
             ],
           ),

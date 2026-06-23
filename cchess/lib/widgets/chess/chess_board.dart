@@ -17,6 +17,7 @@ class ChessBoard extends StatelessWidget {
   final Move? lastMove;
   final Move? hintMove;
   final Position? checkedKing;
+  final Set<Position> hiddenPositions;
   final bool flipped;
   final void Function(int row, int col)? onTap;
 
@@ -28,6 +29,7 @@ class ChessBoard extends StatelessWidget {
     this.lastMove,
     this.hintMove,
     this.checkedKing,
+    this.hiddenPositions = const {},
     this.flipped = false,
     this.onTap,
   });
@@ -108,6 +110,7 @@ class ChessBoard extends StatelessWidget {
                     selected: selected == pos,
                     inCheck: checkedKing == pos,
                     lastMoveHighlight: lastMove != null && lastMove!.to == pos,
+                    faceDown: hiddenPositions.contains(pos),
                   ),
                   animateMove: lastMove != null && lastMove!.to == pos,
                 ),
@@ -184,8 +187,7 @@ class ChessBoard extends StatelessWidget {
             color: color,
             borderRadius: BorderRadius.circular(8),
             border: Border.all(
-              color:
-                  borderColor ?? AppColors.accentGold.withValues(alpha: 0.4),
+              color: borderColor ?? AppColors.accentGold.withValues(alpha: 0.4),
               width: 1.5,
             ),
           ),

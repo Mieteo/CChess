@@ -59,6 +59,8 @@ class OnlineActiveRoom {
     required this.roomId,
     required this.moveCount,
     required this.spectatorCount,
+    this.mode = 'ranked',
+    this.variant = 'standard',
     this.redUid,
     this.blackUid,
     this.startedAtMs,
@@ -72,6 +74,8 @@ class OnlineActiveRoom {
   final String? blackUid;
   final int moveCount;
   final int spectatorCount;
+  final String mode;
+  final String variant;
   final int? startedAtMs;
   final PieceColor? currentTurn;
   final int? redClockMs;
@@ -84,6 +88,8 @@ class OnlineActiveRoom {
     final clock = msg['clock'] as Map<String, dynamic>?;
     return OnlineActiveRoom(
       roomId: roomId,
+      mode: msg['mode'] as String? ?? 'ranked',
+      variant: msg['variant'] as String? ?? 'standard',
       redUid: msg['redUid'] as String?,
       blackUid: msg['blackUid'] as String?,
       moveCount: (msg['moveCount'] as num?)?.toInt() ?? 0,
@@ -169,6 +175,8 @@ class OnlineMatchState {
     this.rematchOfferedByMe = false,
     this.rematchOfferedByOpponent = false,
     this.opponentLeftRoom = false,
+    this.roomMode = 'ranked',
+    this.variant = 'standard',
   });
 
   final OnlineMatchPhase phase;
@@ -214,6 +222,8 @@ class OnlineMatchState {
   /// Rematch is no longer possible; the result dialog reacts immediately
   /// instead of waiting for a rejected rematch-offer round-trip.
   final bool opponentLeftRoom;
+  final String roomMode;
+  final String variant;
 
   bool get isMyTurn => myColor != null && currentTurn == myColor;
   bool get isPlaying =>
@@ -222,6 +232,7 @@ class OnlineMatchState {
   bool get isSpectating => phase == OnlineMatchPhase.spectating;
   bool get canChat => isPlaying || isSpectating;
   bool get isEnded => phase == OnlineMatchPhase.ended;
+  bool get isCasual => roomMode == 'casual';
 
   OnlineMatchState copyWith({
     OnlineMatchPhase? phase,
@@ -253,6 +264,8 @@ class OnlineMatchState {
     bool? rematchOfferedByMe,
     bool? rematchOfferedByOpponent,
     bool? opponentLeftRoom,
+    String? roomMode,
+    String? variant,
     bool clearError = false,
     bool clearPeerDisconnect = false,
   }) {
@@ -292,6 +305,8 @@ class OnlineMatchState {
       rematchOfferedByOpponent:
           rematchOfferedByOpponent ?? this.rematchOfferedByOpponent,
       opponentLeftRoom: opponentLeftRoom ?? this.opponentLeftRoom,
+      roomMode: roomMode ?? this.roomMode,
+      variant: variant ?? this.variant,
     );
   }
 }
@@ -344,12 +359,12 @@ class OnlineMatchController extends StateNotifier<OnlineMatchState> {
     }
   }
 
-  void createRoom({int? clockMs}) {
+  void createRoom({int? clockMs, bool casual = false, String? variant}) {
     if (state.phase != OnlineMatchPhase.authed) {
       _setError('Chưa sẵn sàng (phase=${state.phase.name})');
       return;
     }
-    _socket.createRoom(clockMs: clockMs);
+    _socket.createRoom(clockMs: clockMs, casual: casual, variant: variant);
   }
 
   void joinRoom(String roomId) {
@@ -536,6 +551,8 @@ class OnlineMatchController extends StateNotifier<OnlineMatchState> {
         state = state.copyWith(
           phase: OnlineMatchPhase.waitingForPeer,
           roomId: msg['roomId'] as String?,
+          roomMode: msg['mode'] as String? ?? state.roomMode,
+          variant: msg['variant'] as String? ?? state.variant,
           lastEventLog: newLog,
         );
         break;
@@ -543,6 +560,8 @@ class OnlineMatchController extends StateNotifier<OnlineMatchState> {
         state = state.copyWith(
           phase: OnlineMatchPhase.waitingForPeer,
           roomId: msg['roomId'] as String?,
+          roomMode: msg['mode'] as String? ?? state.roomMode,
+          variant: msg['variant'] as String? ?? state.variant,
           lastEventLog: newLog,
         );
         break;
@@ -703,6 +722,8 @@ class OnlineMatchController extends StateNotifier<OnlineMatchState> {
       phase: watching ? OnlineMatchPhase.spectating : OnlineMatchPhase.playing,
       roomId: roomId,
       game: XiangqiGame.initial(),
+      roomMode: msg['mode'] as String? ?? state.roomMode,
+      variant: msg['variant'] as String? ?? state.variant,
       // copyWith ignores nulls, so a watcher keeps myColor/opponentUid null.
       myColor: watching ? null : myColor,
       opponentUid: watching ? null : opponentUid,
@@ -784,6 +805,8 @@ class OnlineMatchController extends StateNotifier<OnlineMatchState> {
       phase: OnlineMatchPhase.playing,
       roomId: msg['roomId'] as String?,
       game: game,
+      roomMode: msg['mode'] as String? ?? state.roomMode,
+      variant: msg['variant'] as String? ?? state.variant,
       myColor: myColor,
       opponentUid: opponentUid,
       redUid: redUid,
@@ -839,6 +862,8 @@ class OnlineMatchController extends StateNotifier<OnlineMatchState> {
       serverUrl: state.serverUrl,
       roomId: msg['roomId'] as String?,
       myUid: state.myUid,
+      roomMode: msg['mode'] as String? ?? state.roomMode,
+      variant: msg['variant'] as String? ?? state.variant,
       redUid: msg['redUid'] as String?,
       blackUid: msg['blackUid'] as String?,
       spectatorCount: (msg['spectatorCount'] as num?)?.toInt() ?? 1,
@@ -1004,6 +1029,8 @@ class OnlineMatchController extends StateNotifier<OnlineMatchState> {
       result: msg['result'] as String?,
       endReason: msg['reason'] as String?,
       eloUpdate: msg['elo'] as Map<String, dynamic>?,
+      roomMode: msg['mode'] as String? ?? state.roomMode,
+      variant: msg['variant'] as String? ?? state.variant,
       redClockMs: clockUpdate.redClockMs ?? state.redClockMs,
       blackClockMs: clockUpdate.blackClockMs ?? state.blackClockMs,
       currentTurn: clockUpdate.currentTurn ?? state.currentTurn,

@@ -159,6 +159,55 @@ async function startGame(
   return { red, black, roomId };
 }
 
+test('S13: casual private rooms skip persistence and do not emit ELO', async () => {
+  let persistCalls = 0;
+  const { server, url } = await startTestServer({
+    persist: async () => {
+      persistCalls++;
+      return {
+        gameId: 'should-not-be-used',
+        elo: {
+          redOld: 1000,
+          blackOld: 1000,
+          redNew: 1016,
+          blackNew: 984,
+          redDelta: 16,
+          blackDelta: -16,
+        },
+      };
+    },
+  });
+  try {
+    const red = await connectAuthed(url, 'casual-red');
+    const black = await connectAuthed(url, 'casual-black');
+    red.send({ type: 'create-room', mode: 'casual' });
+    const created = await red.waitType('room-created');
+    assert.equal(created.mode, 'casual');
+    const roomId = created.roomId as string;
+
+    black.send({ type: 'join-room', roomId });
+    const joined = await black.waitType('room-joined');
+    assert.equal(joined.mode, 'casual');
+    const redStart = await red.waitType('game-start');
+    const blackStart = await black.waitType('game-start');
+    assert.equal(redStart.mode, 'casual');
+    assert.equal(blackStart.mode, 'casual');
+
+    red.send({ type: 'resign' });
+    const redEnd = await red.waitType('game-ended');
+    const blackEnd = await black.waitType('game-ended');
+    assert.equal(redEnd.mode, 'casual');
+    assert.equal(blackEnd.mode, 'casual');
+    assert.equal(redEnd.elo, null);
+    assert.equal(blackEnd.elo, null);
+    assert.equal(persistCalls, 0);
+
+    await Promise.all([red.close(), black.close()]);
+  } finally {
+    await server.close();
+  }
+});
+
 /// First legal move for `color` from the initial position, as a UCI string.
 function firstLegalUciFor(color: PieceColor): string {
   const game = XiangqiGame.initial();

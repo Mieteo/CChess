@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import '../constants/piece_constants.dart';
 import 'board.dart';
 import 'chess_game_session.dart';
@@ -6,91 +8,73 @@ import 'move_rules.dart';
 import 'piece.dart';
 import 'position.dart';
 
-/// Top-level Xiangqi (Chinese chess) game state.
+/// Co Up / Xiangqi blind variant.
 ///
-/// Holds the board, side to move, full move history, and lifecycle status.
-/// All move-related methods operate on the local mutable copy — callers
-/// should treat the game as a state-machine they drive forward with
-/// [makeMove] / [undoMove].
-class XiangqiGame implements ChessGameSession {
+/// Non-general pieces start face-down. A face-down piece moves once according to
+/// its visible cover piece, then reveals its shuffled true identity on the
+/// destination square. Generals stay fixed and face-up.
+class XiangqiCupGame implements ChessGameSession {
   Board _board;
   PieceColor _turn;
   GameStatus _status;
   EndReason? _endReason;
   final List<Move> _history;
-  int _halfmoveClock; // For 50-move-like rule (Xiangqi uses 60 by tradition).
+  int _halfmoveClock;
   int _fullmoveNumber;
+  final Map<Position, Piece> _hiddenAssignments;
+  final List<_CupSnapshot> _undoStack;
 
-  XiangqiGame._(
+  XiangqiCupGame._(
     this._board,
     this._turn,
     this._status,
     this._history,
     this._halfmoveClock,
     this._fullmoveNumber,
+    this._hiddenAssignments,
+    this._undoStack,
   ) : _endReason = null;
 
-  /// Standard starting position, Red to move.
-  factory XiangqiGame.initial() => XiangqiGame._(
-    Board.initial(),
-    PieceColor.red,
-    GameStatus.playing,
-    <Move>[],
-    0,
-    1,
-  );
-
-  /// Load a position from FEN. The FEN side-to-move field decides whose turn
-  /// it is; if absent we default to Red.
-  factory XiangqiGame.fromFen(String fen) {
-    final parts = fen.split(' ');
-    final board = Board.fromFen(parts[0]);
-    PieceColor turn = PieceColor.red;
-    if (parts.length > 1) {
-      turn = parts[1] == 'b' ? PieceColor.black : PieceColor.red;
-    }
-    int halfmove = 0;
-    int fullmove = 1;
-    if (parts.length > 4) halfmove = int.tryParse(parts[4]) ?? 0;
-    if (parts.length > 5) fullmove = int.tryParse(parts[5]) ?? 1;
-    return XiangqiGame._(
+  factory XiangqiCupGame.initial({int? seed}) {
+    final board = Board.initial();
+    final hidden = _randomizeHiddenPieces(board, seed: seed);
+    return XiangqiCupGame._(
       board,
-      turn,
+      PieceColor.red,
       GameStatus.playing,
       <Move>[],
-      halfmove,
-      fullmove,
+      0,
+      1,
+      hidden,
+      <_CupSnapshot>[],
     );
   }
 
-  // ──────────────── public read-only state ────────────────
-
   @override
   Board get board => _board;
-
   @override
   PieceColor get turn => _turn;
-
   @override
   GameStatus get status => _status;
-
   @override
   EndReason? get endReason => _endReason;
-
   @override
   List<Move> get history => List.unmodifiable(_history);
-
   @override
   int get halfmoveClock => _halfmoveClock;
-
   @override
   int get fullmoveNumber => _fullmoveNumber;
-
   @override
   Move? get lastMove => _history.isEmpty ? null : _history.last;
 
-  /// Render the current position as a FEN string (board + side-to-move + dashes
-  /// for castling/en-passant which Xiangqi doesn't use + halfmove + fullmove).
+  Set<Position> get hiddenPositions =>
+      Set.unmodifiable(_hiddenAssignments.keys);
+  int get hiddenCount => _hiddenAssignments.length;
+  bool isHidden(Position pos) => _hiddenAssignments.containsKey(pos);
+
+  /// Test/debug hook for verifying deterministic shuffles. UI should not use it.
+  Piece? debugHiddenPieceAt(Position pos) => _hiddenAssignments[pos];
+
   @override
   String toFen() {
     final placement = _board.toFenPlacement();
@@ -98,11 +82,6 @@ class XiangqiGame implements ChessGameSession {
     return '$placement $side - - $_halfmoveClock $_fullmoveNumber';
   }
 
-  // ──────────────── move generation ────────────────
-
-  /// All fully-legal moves for the piece at [from]. Filters pseudo-legal
-  /// moves by ensuring the resulting position does not leave the moving
-  /// side's general attacked (which includes the flying-general rule).
   @override
   List<Position> getValidMoves(Position from) {
     final piece = _board.at(from);
@@ -117,7 +96,6 @@ class XiangqiGame implements ChessGameSession {
     return legal;
   }
 
-  /// True if the (from, to) pair is currently a legal move.
   @override
   bool isValidMove(Position from, Position to) {
     if (_status.isOver) return false;
@@ -128,45 +106,48 @@ class XiangqiGame implements ChessGameSession {
     return _isLegalMove(from, to, piece);
   }
 
-  bool _isLegalMove(Position from, Position to, Piece piece) {
-    // Try the move on a copy, then check.
+  bool _isLegalMove(Position from, Position to, Piece coverPiece) {
+    final target = _board.at(to);
+    if (target != null && target.color == coverPiece.color) return false;
+
+    final movedAfterReveal = _hiddenAssignments[from] ?? coverPiece;
     final copy = _board.copy();
-    final captured = copy.at(to);
-    copy.setAt(to, piece);
+    copy.setAt(to, movedAfterReveal);
     copy.setAt(from, null);
-    if (MoveRules.isInCheck(copy, piece.color)) return false;
+    if (MoveRules.isInCheck(copy, coverPiece.color)) return false;
     if (MoveRules.areGeneralsFacing(copy)) return false;
-    // captured used only for clarity; no further checks needed.
-    return captured == null || captured.color != piece.color;
+    return true;
   }
 
-  /// Apply the given move, advancing the game state. Throws if illegal.
   @override
   Move makeMove(Position from, Position to) {
     if (_status.isOver) {
       throw StateError('Game is over (${_status.name})');
     }
-    final piece = _board.at(from);
-    if (piece == null) {
+    final coverPiece = _board.at(from);
+    if (coverPiece == null) {
       throw ArgumentError('No piece at $from');
     }
-    if (piece.color != _turn) {
+    if (coverPiece.color != _turn) {
       throw ArgumentError(
-        'It is ${_turn.name}\'s turn but piece is ${piece.color.name}',
+        'It is ${_turn.name}\'s turn but piece is ${coverPiece.color.name}',
       );
     }
     if (!isValidMove(from, to)) {
-      throw ArgumentError('Illegal move: $from → $to');
+      throw ArgumentError('Illegal move: $from -> $to');
     }
 
-    final captured = _board.at(to);
-    final move = Move(from: from, to: to, moved: piece, captured: captured);
+    _undoStack.add(_snapshot());
 
-    _board.setAt(to, piece);
+    final moved = _hiddenAssignments.remove(from) ?? coverPiece;
+    final captured = _hiddenAssignments.remove(to) ?? _board.at(to);
+    final move = Move(from: from, to: to, moved: moved, captured: captured);
+
+    _board.setAt(to, moved);
     _board.setAt(from, null);
     _history.add(move);
 
-    if (captured != null || piece.type == PieceType.soldier) {
+    if (captured != null || moved.type == PieceType.soldier) {
       _halfmoveClock = 0;
     } else {
       _halfmoveClock++;
@@ -178,24 +159,24 @@ class XiangqiGame implements ChessGameSession {
     return move;
   }
 
-  /// Revert the last move. Returns it, or null if there was no move to undo.
   @override
   Move? undoMove() {
-    if (_history.isEmpty) return null;
-    final last = _history.removeLast();
-
-    _board.setAt(last.from, last.moved);
-    _board.setAt(last.to, last.captured);
-
-    if (_turn == PieceColor.red) _fullmoveNumber--;
-    _turn = _turn.opposite;
-    // halfmove clock is not perfectly restored — we accept the imprecision
-    // here, since callers that care should snapshot before makeMove.
-    if (_halfmoveClock > 0) _halfmoveClock--;
-
-    _status = GameStatus.playing;
-    _endReason = null;
-    return last;
+    if (_history.isEmpty || _undoStack.isEmpty) return null;
+    final undone = _history.last;
+    final snap = _undoStack.removeLast();
+    _board = snap.board;
+    _turn = snap.turn;
+    _status = snap.status;
+    _endReason = snap.endReason;
+    _history
+      ..clear()
+      ..addAll(snap.history);
+    _halfmoveClock = snap.halfmoveClock;
+    _fullmoveNumber = snap.fullmoveNumber;
+    _hiddenAssignments
+      ..clear()
+      ..addAll(snap.hiddenAssignments);
+    return undone;
   }
 
   void _refreshStatus() {
@@ -204,7 +185,6 @@ class XiangqiGame implements ChessGameSession {
     final hasAnyMove = _sideHasAnyLegalMove(color);
 
     if (!hasAnyMove) {
-      // Stalemate is a LOSS for the side to move in Xiangqi.
       _status = color == PieceColor.red
           ? GameStatus.blackWin
           : GameStatus.redWin;
@@ -226,8 +206,6 @@ class XiangqiGame implements ChessGameSession {
     return false;
   }
 
-  // ──────────────── queries ────────────────
-
   @override
   bool isInCheck(PieceColor color) => MoveRules.isInCheck(_board, color);
 
@@ -242,7 +220,6 @@ class XiangqiGame implements ChessGameSession {
   @override
   bool areGeneralsFacing() => MoveRules.areGeneralsFacing(_board);
 
-  /// Mark the game as resigned by [resigningColor]. Opposite color wins.
   @override
   void resign(PieceColor resigningColor) {
     if (_status.isOver) return;
@@ -252,11 +229,59 @@ class XiangqiGame implements ChessGameSession {
     _endReason = EndReason.resignation;
   }
 
-  /// Force the game to a draw by mutual agreement.
   @override
   void agreeDraw() {
     if (_status.isOver) return;
     _status = GameStatus.draw;
     _endReason = EndReason.drawAgreed;
   }
+
+  _CupSnapshot _snapshot() => _CupSnapshot(
+    board: _board.copy(),
+    turn: _turn,
+    status: _status,
+    endReason: _endReason,
+    history: List<Move>.from(_history),
+    halfmoveClock: _halfmoveClock,
+    fullmoveNumber: _fullmoveNumber,
+    hiddenAssignments: Map<Position, Piece>.from(_hiddenAssignments),
+  );
+
+  static Map<Position, Piece> _randomizeHiddenPieces(Board board, {int? seed}) {
+    final random = Random(seed);
+    final hidden = <Position, Piece>{};
+    for (final color in PieceColor.values) {
+      final entries = board.occupied().where((entry) {
+        final (_, piece) = entry;
+        return piece.color == color && piece.type != PieceType.general;
+      }).toList()..sort((a, b) => a.$1.compareTo(b.$1));
+      final pieces = entries.map((entry) => entry.$2).toList()..shuffle(random);
+      for (var i = 0; i < entries.length; i++) {
+        hidden[entries[i].$1] = pieces[i];
+      }
+    }
+    return hidden;
+  }
+}
+
+class _CupSnapshot {
+  final Board board;
+  final PieceColor turn;
+  final GameStatus status;
+  final EndReason? endReason;
+  final List<Move> history;
+  final int halfmoveClock;
+  final int fullmoveNumber;
+  final Map<Position, Piece> hiddenAssignments;
+
+  const _CupSnapshot({
+    required this.board,
+    required this.turn,
+    required this.status,
+    required this.endReason,
+    required this.history,
+    required this.halfmoveClock,
+    required this.fullmoveNumber,
+    required this.hiddenAssignments,
+  });
 }

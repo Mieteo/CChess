@@ -32,7 +32,7 @@ class CompeteScreen extends StatelessWidget {
         AppSpacing.vGapLg,
         _CompeteOption(
           title: 'Xếp Hạng Online',
-          subtitle: 'Phòng riêng theo room ID — chưa có matchmaking',
+          subtitle: 'Ghép trận có ELO',
           icon: Icons.public,
           color: AppColors.accentGold,
           badge: 'Beta',
@@ -45,8 +45,7 @@ class CompeteScreen extends StatelessWidget {
           icon: Icons.people_alt_outlined,
           color: AppColors.accentGold,
           badge: 'MVP',
-          onTap: () =>
-              context.go('${AppConstants.routeGame}?mode=local'),
+          onTap: () => context.go('${AppConstants.routeGame}?mode=local'),
         ),
         AppSpacing.vGapMd,
         _CompeteOption(
@@ -62,7 +61,8 @@ class CompeteScreen extends StatelessWidget {
           subtitle: 'Quân úp — luật bí ẩn',
           icon: Icons.help_outline,
           color: AppColors.vermilionRed,
-          onTap: () {},
+          badge: 'Mới',
+          onTap: () => context.go('${AppConstants.routeGame}?mode=cup'),
         ),
         AppSpacing.vGapMd,
         _CompeteOption(
@@ -78,7 +78,9 @@ class CompeteScreen extends StatelessWidget {
           subtitle: 'Chia sẻ link, không tính ELO',
           icon: Icons.share_outlined,
           color: AppColors.tealSuccess,
-          onTap: () {},
+          badge: 'Casual',
+          onTap: () =>
+              context.push('${AppConstants.routeOnlineLobby}?casual=1'),
         ),
       ],
     );
@@ -162,10 +164,7 @@ class _CompeteOption extends StatelessWidget {
               ],
             ),
           ),
-          const Icon(
-            Icons.chevron_right,
-            color: AppColors.parchmentTan,
-          ),
+          const Icon(Icons.chevron_right, color: AppColors.parchmentTan),
         ],
       ),
     );

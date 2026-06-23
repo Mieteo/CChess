@@ -40,7 +40,7 @@ class FakeGameSocketService implements GameSocketService {
   bool get isInRoom => false;
 
   @override
-  void createRoom({int? clockMs}) {
+  void createRoom({int? clockMs, bool casual = false, String? variant}) {
     lastCreateRoomClockMs = clockMs;
     sentTypes.add('create-room');
   }

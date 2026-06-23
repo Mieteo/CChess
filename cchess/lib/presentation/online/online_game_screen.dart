@@ -225,7 +225,7 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
       if (next.phase == OnlineMatchPhase.ended &&
           prev?.phase != OnlineMatchPhase.ended) {
         _showResultDialog();
-        if (next.myColor != null) {
+        if (next.myColor != null && !next.isCasual) {
           // G5: ELO + win/loss counters đã update trên cloud, pull về local để
           // Profile screen hiển thị ngay sau dialog dismiss (guard unmount).
           refreshProfileAfterRankedGame(
@@ -283,8 +283,8 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
           backgroundColor: AppColors.woodDark,
           title: Text(
             isSpectating
-                ? 'Xem ván ${state.roomId ?? ""}'
-                : 'Online ${state.roomId ?? ""}',
+                ? '${state.isCasual ? "Xem casual" : "Xem ván"} ${state.roomId ?? ""}'
+                : '${state.isCasual ? "Casual" : "Online"} ${state.roomId ?? ""}',
           ),
           leading: IconButton(
             icon: const Icon(Icons.arrow_back),

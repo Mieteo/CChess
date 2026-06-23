@@ -15,6 +15,7 @@ class ChessPieceWidget extends StatelessWidget {
   final bool selected;
   final bool inCheck;
   final bool lastMoveHighlight;
+  final bool faceDown;
 
   const ChessPieceWidget({
     super.key,
@@ -23,13 +24,16 @@ class ChessPieceWidget extends StatelessWidget {
     this.selected = false,
     this.inCheck = false,
     this.lastMoveHighlight = false,
+    this.faceDown = false,
   });
 
-  Color get _ringColor =>
-      piece.color == PieceColor.red ? AppColors.vermilionRed : AppColors.deepNavyBlack;
+  Color get _ringColor => piece.color == PieceColor.red
+      ? AppColors.vermilionRed
+      : AppColors.deepNavyBlack;
 
-  Color get _hanColor =>
-      piece.color == PieceColor.red ? AppColors.vermilionRed : AppColors.inkBlack;
+  Color get _hanColor => piece.color == PieceColor.red
+      ? AppColors.vermilionRed
+      : AppColors.inkBlack;
 
   @override
   Widget build(BuildContext context) {
@@ -71,36 +75,77 @@ class ChessPieceWidget extends StatelessWidget {
         height: diameter,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          gradient: const RadialGradient(
-            center: Alignment(-0.3, -0.3),
-            radius: 0.95,
-            colors: [Color(0xFFF1D7A6), AppColors.woodLight, Color(0xFFA07850)],
-            stops: [0.0, 0.55, 1.0],
-          ),
+          gradient: faceDown
+              ? const RadialGradient(
+                  center: Alignment(-0.25, -0.3),
+                  radius: 0.95,
+                  colors: [
+                    Color(0xFF7A4F2E),
+                    AppColors.woodDark,
+                    Color(0xFF2A1A10),
+                  ],
+                  stops: [0.0, 0.58, 1.0],
+                )
+              : const RadialGradient(
+                  center: Alignment(-0.3, -0.3),
+                  radius: 0.95,
+                  colors: [
+                    Color(0xFFF1D7A6),
+                    AppColors.woodLight,
+                    Color(0xFFA07850),
+                  ],
+                  stops: [0.0, 0.55, 1.0],
+                ),
           border: Border.all(color: _ringColor, width: 2),
           boxShadow: glowBoxes,
         ),
         alignment: Alignment.center,
-        child: Container(
-          width: innerSize,
-          height: innerSize,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            border: Border.all(
-              color: _ringColor.withValues(alpha: 0.55),
-              width: 1,
-            ),
-          ),
-          alignment: Alignment.center,
-          child: Text(
-            piece.type.hanChar(piece.color),
-            style: GoogleFonts.notoSerifSc(
-              fontWeight: FontWeight.w900,
-              fontSize: diameter * 0.55,
-              color: _hanColor,
-              height: 1.0,
-            ),
-          ),
+        child: AnimatedSwitcher(
+          duration: const Duration(milliseconds: 260),
+          switchInCurve: Curves.easeOutCubic,
+          switchOutCurve: Curves.easeInCubic,
+          child: faceDown
+              ? Container(
+                  key: const ValueKey('face-down'),
+                  width: innerSize,
+                  height: innerSize,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: AppColors.charcoalDark.withValues(alpha: 0.32),
+                    border: Border.all(
+                      color: AppColors.accentGold.withValues(alpha: 0.45),
+                      width: 1,
+                    ),
+                  ),
+                  alignment: Alignment.center,
+                  child: Icon(
+                    Icons.visibility_off_outlined,
+                    color: AppColors.accentGold.withValues(alpha: 0.82),
+                    size: diameter * 0.36,
+                  ),
+                )
+              : Container(
+                  key: const ValueKey('face-up'),
+                  width: innerSize,
+                  height: innerSize,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: _ringColor.withValues(alpha: 0.55),
+                      width: 1,
+                    ),
+                  ),
+                  alignment: Alignment.center,
+                  child: Text(
+                    piece.type.hanChar(piece.color),
+                    style: GoogleFonts.notoSerifSc(
+                      fontWeight: FontWeight.w900,
+                      fontSize: diameter * 0.55,
+                      color: _hanColor,
+                      height: 1.0,
+                    ),
+                  ),
+                ),
         ),
       ),
     );

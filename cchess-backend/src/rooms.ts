@@ -8,6 +8,8 @@ export type EndReason =
   | 'checkmate'
   | 'stalemate';
 export type GameResult = 'red-win' | 'black-win' | 'draw';
+export type RoomMode = 'ranked' | 'casual';
+export type GameVariant = 'standard' | 'cup';
 
 export interface ChatMessage {
   id: string;
@@ -24,6 +26,8 @@ export interface Room {
   status: 'waiting' | 'playing' | 'finished';
   createdAt: number;
   moveCount: number;
+  mode: RoomMode;
+  variant: GameVariant;
 
   /// Step A5: initial clock per side (ms). Set when room is created from
   /// lobby; falls back to engine default if absent.
@@ -176,7 +180,14 @@ export function spectateRoom(socket: WebSocket, roomId: string): SpectateResult 
   return { ok: true, room };
 }
 
-export function createRoom(socket: WebSocket, options?: { initialClockMs?: number }): Room {
+export function createRoom(
+  socket: WebSocket,
+  options?: {
+    initialClockMs?: number;
+    mode?: RoomMode;
+    variant?: GameVariant;
+  },
+): Room {
   const room: Room = {
     id: generateRoomId(),
     members: new Set([socket]),
@@ -184,6 +195,8 @@ export function createRoom(socket: WebSocket, options?: { initialClockMs?: numbe
     status: 'waiting',
     createdAt: Date.now(),
     moveCount: 0,
+    mode: options?.mode ?? 'ranked',
+    variant: options?.variant ?? 'standard',
     initialClockMs: options?.initialClockMs,
     chatMessages: [],
     lastChatAtByUid: {},
@@ -336,6 +349,8 @@ export interface RoomDebug {
   hasWaitingTimer: boolean;
   hasClock: boolean;
   startedAt?: number;
+  mode: RoomMode;
+  variant: GameVariant;
 }
 
 export function debugRooms(): RoomDebug[] {
@@ -362,6 +377,8 @@ export function debugRooms(): RoomDebug[] {
     hasWaitingTimer: room.waitingTimer !== undefined,
     hasClock: room.clockMsByColor !== undefined,
     startedAt: room.startedAt,
+    mode: room.mode,
+    variant: room.variant,
   }));
 }
 

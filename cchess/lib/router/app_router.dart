@@ -65,9 +65,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           final q = state.uri.queryParameters;
           final spectateId = q['spectate'];
           final joinId = q['join'];
+          final casual = q['casual'] == '1' || q['mode'] == 'casual';
           return OnlineLobbyScreen(
             deepLinkRoomId: spectateId ?? joinId,
             deepLinkSpectate: joinId == null,
+            initialCasual: casual,
           );
         },
       ),

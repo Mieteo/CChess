@@ -199,6 +199,8 @@ function pushChatMessage(room: Room, uid: string, text: string) {
 function activeRoomSummary(room: Room) {
   return {
     roomId: room.id,
+    mode: room.mode,
+    variant: room.variant,
     redUid: room.redUid,
     blackUid: room.blackUid,
     moveCount: room.movesUci?.length ?? room.moveCount,
@@ -352,6 +354,8 @@ export function createCChessServer(options: CChessServerOptions = {}): CChessSer
       roomId: room.id,
       redUid: room.redUid,
       blackUid: room.blackUid,
+      mode: room.mode,
+      variant: room.variant,
       clock: clockSnapshot(room),
       startedAt: room.startedAt,
     };
@@ -379,6 +383,8 @@ export function createCChessServer(options: CChessServerOptions = {}): CChessSer
       roomId: room.id,
       redUid: room.redUid,
       blackUid: room.blackUid,
+      mode: room.mode,
+      variant: room.variant,
       clock: clockSnapshot(room),
       startedAt: room.startedAt,
       rematch: true,
@@ -403,7 +409,11 @@ export function createCChessServer(options: CChessServerOptions = {}): CChessSer
     b: { socket: WebSocket; uid: string; clockMs?: number },
   ): void {
     const clockMs = a.clockMs ?? b.clockMs;
-    const room = createRoom(a.socket, { initialClockMs: clockMs });
+    const room = createRoom(a.socket, {
+      initialClockMs: clockMs,
+      mode: 'ranked',
+      variant: 'standard',
+    });
     // Attach B as 2nd member. attachReconnectingSocket also registers B in
     // socketToRoom; the redSocket/blackSocket fields it sets are overwritten
     // by startMatch a moment later (based on members iteration order).
@@ -444,10 +454,12 @@ export function createCChessServer(options: CChessServerOptions = {}): CChessSer
     // Run persistence + ELO update, then broadcast. Even if persistence fails,
     // we still broadcast (game IS ended) — just without ELO numbers.
     void (async () => {
-      const persisted = await persist(room).catch((e) => {
-        console.error('[persist] error:', e);
-        return null;
-      });
+      const persisted = room.mode === 'casual'
+        ? null
+        : await persist(room).catch((e) => {
+            console.error('[persist] error:', e);
+            return null;
+          });
       const elo = persisted?.elo
         ? {
             red: {
@@ -476,6 +488,8 @@ export function createCChessServer(options: CChessServerOptions = {}): CChessSer
         redUid: room.redUid,
         blackUid: room.blackUid,
         elo,
+        mode: room.mode,
+        variant: room.variant,
       };
       broadcastAll(room, payload);
       console.log(
@@ -705,7 +719,15 @@ export function createCChessServer(options: CChessServerOptions = {}): CChessSer
           typeof rawClock === 'number' && rawClock >= cfg.minClockMs && rawClock <= cfg.maxClockMs
             ? rawClock
             : undefined;
-        const room = createRoom(socket, { initialClockMs: clockMs });
+        const roomMode = msg.mode === 'casual' || msg.casual === true
+          ? 'casual'
+          : 'ranked';
+        const variant = msg.variant === 'cup' ? 'cup' : 'standard';
+        const room = createRoom(socket, {
+          initialClockMs: clockMs,
+          mode: roomMode,
+          variant,
+        });
         // Waiting-room TTL: cancel the room if nobody joins in time.
         room.waitingTimer = setTimeout(() => {
           room.waitingTimer = undefined;
@@ -721,11 +743,13 @@ export function createCChessServer(options: CChessServerOptions = {}): CChessSer
         send(socket, {
           type: 'room-created',
           roomId: room.id,
+          mode: room.mode,
+          variant: room.variant,
           initialClockMs: room.initialClockMs,
           waitingTtlMs: cfg.waitingRoomTtlMs,
         });
         console.log(
-          `[room] ${room.id} created by ${uid} (clock=${clockMs ?? 'default'}ms)`,
+          `[room] ${room.id} created by ${uid} (mode=${room.mode} variant=${room.variant} clock=${clockMs ?? 'default'}ms)`,
         );
         return;
       }
@@ -789,6 +813,8 @@ export function createCChessServer(options: CChessServerOptions = {}): CChessSer
           yourColor,
           redUid: room.redUid,
           blackUid: room.blackUid,
+          mode: room.mode,
+          variant: room.variant,
           moves: room.movesUci ?? [],
           chat: room.chatMessages ?? [],
           currentTurn: room.currentTurn,
@@ -828,6 +854,8 @@ export function createCChessServer(options: CChessServerOptions = {}): CChessSer
           roomId: room.id,
           redUid: room.redUid,
           blackUid: room.blackUid,
+          mode: room.mode,
+          variant: room.variant,
           moves: room.movesUci ?? [],
           chat: room.chatMessages ?? [],
           currentTurn: room.currentTurn,
@@ -884,6 +912,8 @@ export function createCChessServer(options: CChessServerOptions = {}): CChessSer
         send(socket, {
           type: 'room-joined',
           roomId: room.id,
+          mode: room.mode,
+          variant: room.variant,
           members,
           status: room.status,
         });

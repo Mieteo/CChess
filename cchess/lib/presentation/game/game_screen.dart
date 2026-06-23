@@ -62,9 +62,11 @@ class _GameScreenState extends ConsumerState<GameScreen> {
   @override
   void initState() {
     super.initState();
-    final mode = widget.mode == 'bot'
-        ? GameMode.vsBot
-        : GameMode.localTwoPlayer;
+    final mode = switch (widget.mode) {
+      'bot' => GameMode.vsBot,
+      'cup' => GameMode.cupLocal,
+      _ => GameMode.localTwoPlayer,
+    };
     _args = GameControllerArgs(
       mode: mode,
       cpuColor: mode == GameMode.vsBot ? widget.cpuColor : null,
@@ -171,6 +173,12 @@ class _GameScreenState extends ConsumerState<GameScreen> {
   /// minimax fallback) and surface it on the board.
   Future<void> _onHint() async {
     final state = _state;
+    if (state.mode == GameMode.cupLocal) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Gợi ý AI chưa hỗ trợ Cờ Úp.')),
+      );
+      return;
+    }
     if (!state.acceptsInput || state.hintThinking) return;
     final turnAtRequest = state.turn;
     _controller.setHintThinking(true);
@@ -258,9 +266,6 @@ class _GameScreenState extends ConsumerState<GameScreen> {
     final opponentLabel = state.mode == GameMode.vsBot
         ? _botOpponentLabel(state.botDifficulty ?? BotDifficulty.medium)
         : 'Người Chơi 2';
-    final mode = state.mode == GameMode.vsBot
-        ? GameMode.vsBot
-        : GameMode.localTwoPlayer;
     final duration = _gameStartedAt == null
         ? Duration.zero
         : DateTime.now().difference(_gameStartedAt!);
@@ -268,7 +273,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
       GameRecord(
         id: '',
         opponentLabel: opponentLabel,
-        mode: mode,
+        mode: state.mode,
         humanColor: humanColor,
         startingFen: kInitialFen,
         moves: game.history.map((m) => m.toUci()).toList(),
@@ -281,7 +286,9 @@ class _GameScreenState extends ConsumerState<GameScreen> {
     );
 
     // 2. Apply to profile stats (no ELO change for local / bot games yet).
-    if (humanColor != null || state.mode == GameMode.localTwoPlayer) {
+    if (humanColor != null ||
+        state.mode == GameMode.localTwoPlayer ||
+        state.mode == GameMode.cupLocal) {
       // For local 2-player we still bump totalGames but no win/loss credit.
       if (humanColor != null) {
         await ref
@@ -400,7 +407,8 @@ class _GameScreenState extends ConsumerState<GameScreen> {
 
   void _onDraw() async {
     final state = _state;
-    if (state.mode == GameMode.localTwoPlayer) {
+    if (state.mode == GameMode.localTwoPlayer ||
+        state.mode == GameMode.cupLocal) {
       final confirmed = await CChessDialog.confirm(
         context,
         title: 'Đồng ý hòa?',
@@ -442,6 +450,9 @@ class _GameScreenState extends ConsumerState<GameScreen> {
         : null;
 
     final captured = _countCaptures(game.history);
+    final hiddenPositions = game is XiangqiCupGame
+        ? game.hiddenPositions
+        : const <Position>{};
 
     final humanColor = state.mode == GameMode.vsBot
         ? (state.cpuColor == PieceColor.red ? PieceColor.black : PieceColor.red)
@@ -456,7 +467,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
       backgroundColor: AppColors.background,
       appBar: AppBar(
         backgroundColor: AppColors.woodDark,
-        title: Text(state.mode == GameMode.vsBot ? 'Đấu với Bot AI' : 'Đấu cờ'),
+        title: Text(_titleForMode(state.mode)),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: _onLeave,
@@ -504,6 +515,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
                         lastMove: state.lastMove,
                         hintMove: state.hintMove,
                         checkedKing: checkedKing,
+                        hiddenPositions: hiddenPositions,
                         flipped: state.boardFlipped,
                         onTap: _onUserTap,
                       ),
@@ -530,7 +542,8 @@ class _GameScreenState extends ConsumerState<GameScreen> {
                   AppSpacing.vGapSm,
                   GameActionBar(
                     canUndo: game.history.isNotEmpty && !state.cpuThinking,
-                    canHint: state.acceptsInput,
+                    canHint:
+                        state.acceptsInput && state.mode != GameMode.cupLocal,
                     hintThinking: state.hintThinking,
                     soundOn: _soundOn,
                     onLeave: _onLeave,
@@ -626,6 +639,20 @@ class _GameScreenState extends ConsumerState<GameScreen> {
       return 'Pikafish Đại Sư+';
     }
     return 'Bot ${difficulty.nameVi}';
+  }
+
+  String _titleForMode(GameMode mode) {
+    switch (mode) {
+      case GameMode.vsBot:
+        return 'Đấu với Bot AI';
+      case GameMode.cupLocal:
+        return 'Cờ Úp';
+      case GameMode.onlineCasual:
+        return 'Đấu casual';
+      case GameMode.localTwoPlayer:
+      case GameMode.vsOnline:
+        return 'Đấu cờ';
+    }
   }
 }
 

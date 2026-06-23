@@ -37,9 +37,7 @@ class HomeScreen extends StatelessWidget {
                 subtitle: '2 người cùng máy',
                 icon: Icons.people_alt_outlined,
                 accent: AppColors.accentGold,
-                onTap: () => context.go(
-                  '${AppConstants.routeGame}?mode=local',
-                ),
+                onTap: () => context.go('${AppConstants.routeGame}?mode=local'),
               ),
             ),
             AppSpacing.hGapMd,
@@ -64,7 +62,7 @@ class HomeScreen extends StatelessWidget {
                 icon: Icons.help_outline,
                 accent: AppColors.vermilionRed,
                 badge: 'MỚI',
-                onTap: () => _showSoon(context, 'Cờ Úp sẽ có ở Sprint 7.'),
+                onTap: () => context.go('${AppConstants.routeGame}?mode=cup'),
               ),
             ),
             AppSpacing.hGapMd,
@@ -74,7 +72,8 @@ class HomeScreen extends StatelessWidget {
                 subtitle: 'Đấu cùng bạn bè',
                 icon: Icons.group_add_outlined,
                 accent: AppColors.tealSuccess,
-                onTap: () => _showSoon(context, 'Mời bạn sẽ có ở Sprint 8.'),
+                onTap: () =>
+                    context.push('${AppConstants.routeOnlineLobby}?casual=1'),
               ),
             ),
           ],
@@ -83,18 +82,11 @@ class HomeScreen extends StatelessWidget {
         SectionHeader(
           title: 'Phần Thưởng Hôm Nay',
           actionLabel: 'Nhiệm vụ',
-          onActionPressed: () =>
-              context.go(AppConstants.routeDailyQuests),
+          onActionPressed: () => context.go(AppConstants.routeDailyQuests),
         ),
         AppSpacing.vGapMd,
         const _DailyRewardCard(),
       ],
-    );
-  }
-
-  void _showSoon(BuildContext context, String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(msg)),
     );
   }
 }
@@ -159,7 +151,11 @@ class _WelcomeBanner extends StatelessWidget {
           AppSpacing.vGapXs,
           Row(
             children: [
-              const Icon(Icons.timer_outlined, size: 16, color: AppColors.parchmentTan),
+              const Icon(
+                Icons.timer_outlined,
+                size: 16,
+                color: AppColors.parchmentTan,
+              ),
               AppSpacing.hGapXs,
               Text(
                 'Kết thúc sau: 05:42:10',
@@ -284,10 +280,7 @@ class _DailyRewardCard extends StatelessWidget {
             children: [
               const Icon(Icons.card_giftcard, color: AppColors.accentGold),
               AppSpacing.hGapSm,
-              Text(
-                'Điểm danh hàng ngày',
-                style: AppTextStyles.headingMd,
-              ),
+              Text('Điểm danh hàng ngày', style: AppTextStyles.headingMd),
               const Spacer(),
               Text(
                 'Streak: 3 ngày',
