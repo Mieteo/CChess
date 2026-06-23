@@ -9,15 +9,19 @@ import '../presentation/bot_game/bot_select_screen.dart';
 import '../presentation/coach/ai_coach_screen.dart';
 import '../presentation/cloud/backend_test_screen.dart';
 import '../presentation/cloud/cloud_test_screen.dart';
+import '../presentation/community/clubs_screen.dart';
 import '../presentation/online/online_game_screen.dart';
 import '../presentation/online/online_lobby_screen.dart';
 import '../presentation/community/community_screen.dart';
 import '../presentation/game/game_screen.dart';
+import '../presentation/community/tournaments_screen.dart';
+import '../presentation/friends/friends_screen.dart';
 import '../presentation/history/game_history_screen.dart';
 import '../presentation/home/home_screen.dart';
 import '../presentation/learning/beginner_lesson_detail_screen.dart';
 import '../presentation/learning/beginner_lesson_list_screen.dart';
 import '../presentation/learning/learning_screen.dart';
+import '../presentation/leaderboard/leaderboard_screen.dart';
 import '../presentation/onboarding/onboarding_screen.dart';
 import '../presentation/openings/opening_detail_screen.dart';
 import '../presentation/openings/opening_list_screen.dart';
@@ -194,6 +198,28 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             path: AppConstants.routeCommunity,
             pageBuilder: (context, state) =>
                 _fade(state, const CommunityScreen()),
+            routes: [
+              GoRoute(
+                path: 'friends',
+                pageBuilder: (context, state) =>
+                    _fade(state, const FriendsScreen()),
+              ),
+              GoRoute(
+                path: 'leaderboard',
+                pageBuilder: (context, state) =>
+                    _fade(state, const LeaderboardScreen()),
+              ),
+              GoRoute(
+                path: 'clubs',
+                pageBuilder: (context, state) =>
+                    _fade(state, const ClubsScreen()),
+              ),
+              GoRoute(
+                path: 'tournaments',
+                pageBuilder: (context, state) =>
+                    _fade(state, const TournamentsScreen()),
+              ),
+            ],
           ),
           GoRoute(
             path: AppConstants.routeProfile,

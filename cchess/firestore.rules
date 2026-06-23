@@ -31,6 +31,45 @@ service cloud.firestore {
       return resource.data[field] == request.resource.data[field];
     }
 
+    function isFriendDocParticipant(uid, friendUid) {
+      return signedIn()
+             && uid != friendUid
+             && (request.auth.uid == uid || request.auth.uid == friendUid);
+    }
+
+    function validFriendPayload(friendUid) {
+      return request.resource.data.keys().hasOnly([
+               'uid',
+               'displayName',
+               'region',
+               'avatarUrl',
+               'eloChess',
+               'eloCup',
+               'totalGames',
+               'wins',
+               'losses',
+               'draws',
+               'lastActiveAt',
+               'status',
+               'direction',
+               'since',
+               'updatedAt'
+             ])
+             && request.resource.data.uid == friendUid
+             && request.resource.data.displayName is string
+             && request.resource.data.region is string
+             && request.resource.data.eloChess is number
+             && request.resource.data.eloCup is number
+             && request.resource.data.totalGames is number
+             && request.resource.data.wins is number
+             && request.resource.data.losses is number
+             && request.resource.data.draws is number
+             && request.resource.data.status in ['pending', 'accepted']
+             && request.resource.data.direction in ['incoming', 'outgoing', 'accepted']
+             && request.resource.data.since is timestamp
+             && request.resource.data.updatedAt is timestamp;
+    }
+
     // Kiểm tra các trường nhạy cảm có đúng giá trị mặc định khi tạo mới user không
     function hasDefaultSensitiveFields() {
       return request.resource.data.eloChess == 1000
@@ -132,7 +171,21 @@ service cloud.firestore {
       }
     }
 
+    // --- FRIENDSHIPS COLLECTION ---
+    match /friendships/{uid}/friends/{friendUid} {
+      allow read: if isOwner(uid);
+      allow create, update: if isFriendDocParticipant(uid, friendUid)
+                            && validFriendPayload(friendUid);
+      allow delete: if isFriendDocParticipant(uid, friendUid);
+    }
+
     // --- GLOBAL COLLECTIONS (Public Read, Server-Only Write) ---
+
+    // Public profiles: read-optimized mirror of safe user fields.
+    match /public_profiles/{uid} {
+      allow read: if true;
+      allow write: if false;
+    }
 
     // Puzzles: Ai cũng đọc được, chỉ server mới được ghi
     match /puzzles/{puzzleId} {
@@ -150,6 +203,21 @@ service cloud.firestore {
     match /leaderboards/{boardType}/{period}/{entryUid} {
       allow read: if true;
       allow write: if false; // Chỉ server hoặc admin có thể ghi
+    }
+
+    match /clubs/{clubId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    match /tournaments/{tournamentId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    match /community_feed/{itemId} {
+      allow read: if true;
+      allow write: if false;
     }
   }
 }

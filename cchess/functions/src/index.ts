@@ -1,8 +1,9 @@
 import { onCall, CallableRequest, HttpsError } from 'firebase-functions/v2/https';
+import { onDocumentWritten } from 'firebase-functions/v2/firestore';
 import { setGlobalOptions } from 'firebase-functions/v2';
 import { auth } from 'firebase-functions/v1';
 import { initializeApp } from 'firebase-admin/app';
-import { getFirestore, FieldValue } from 'firebase-admin/firestore';
+import { getFirestore, FieldValue, DocumentData } from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions';
 
 initializeApp();
@@ -42,6 +43,163 @@ export const createFirestoreUser = auth.user().onCreate(async (user) => {
     throw error;
   }
 });
+
+function asString(value: unknown, fallback: string): string {
+  return typeof value === 'string' && value.trim().length > 0 ?
+    value.trim() :
+    fallback;
+}
+
+function asNullableString(value: unknown): string | null {
+  return typeof value === 'string' && value.trim().length > 0 ?
+    value.trim() :
+    null;
+}
+
+function asNumber(value: unknown, fallback: number): number {
+  return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
+}
+
+function regionPeriod(region: string): string {
+  return `region_${encodeURIComponent(region)}`;
+}
+
+function communityProfilePayload(uid: string, data: DocumentData) {
+  const displayName = asString(data.displayName, 'Kỳ thủ');
+  const region = asString(data.region, 'Khác');
+  const eloChess = asNumber(data.eloChess, 1000);
+  const eloCup = asNumber(data.eloCup, 1000);
+  return {
+    uid,
+    displayName,
+    displayNameLower: displayName.toLocaleLowerCase('vi-VN'),
+    region,
+    avatarUrl: asNullableString(data.avatarUrl),
+    eloChess,
+    eloCup,
+    totalGames: asNumber(data.totalGames, 0),
+    wins: asNumber(data.wins, 0),
+    losses: asNumber(data.losses, 0),
+    draws: asNumber(data.draws, 0),
+    lastActiveAt: data.lastActiveAt ?? null,
+    updatedAt: FieldValue.serverTimestamp(),
+  };
+}
+
+function leaderboardPayload(
+  publicProfile: ReturnType<typeof communityProfilePayload>,
+  elo: number,
+) {
+  return {
+    ...publicProfile,
+    elo,
+    updatedAt: FieldValue.serverTimestamp(),
+  };
+}
+
+export const syncCommunityProfile = onDocumentWritten(
+  'users/{uid}',
+  async (event) => {
+    const uid = event.params.uid;
+    const before = event.data?.before;
+    const after = event.data?.after;
+    const batch = db.batch();
+
+    const publicRef = db.collection('public_profiles').doc(uid);
+    const chessNationalRef = db
+      .collection('leaderboards')
+      .doc('chess')
+      .collection('national')
+      .doc(uid);
+    const cupNationalRef = db
+      .collection('leaderboards')
+      .doc('cup')
+      .collection('national')
+      .doc(uid);
+
+    if (!after?.exists) {
+      const beforeData = before?.data();
+      batch.delete(publicRef);
+      batch.delete(chessNationalRef);
+      batch.delete(cupNationalRef);
+      if (beforeData) {
+        const oldRegion = asString(beforeData.region, 'Khác');
+        batch.delete(
+          db
+            .collection('leaderboards')
+            .doc('chess')
+            .collection(regionPeriod(oldRegion))
+            .doc(uid),
+        );
+        batch.delete(
+          db
+            .collection('leaderboards')
+            .doc('cup')
+            .collection(regionPeriod(oldRegion))
+            .doc(uid),
+        );
+      }
+      await batch.commit();
+      logger.info(`Đã xoá public community mirror cho ${uid}`);
+      return;
+    }
+
+    const data = after.data();
+    if (!data) return;
+
+    const publicProfile = communityProfilePayload(uid, data);
+    const regionKey = regionPeriod(publicProfile.region);
+    batch.set(publicRef, publicProfile, { merge: true });
+    batch.set(
+      chessNationalRef,
+      leaderboardPayload(publicProfile, publicProfile.eloChess),
+      { merge: true },
+    );
+    batch.set(
+      cupNationalRef,
+      leaderboardPayload(publicProfile, publicProfile.eloCup),
+      { merge: true },
+    );
+    batch.set(
+      db
+        .collection('leaderboards')
+        .doc('chess')
+        .collection(regionKey)
+        .doc(uid),
+      leaderboardPayload(publicProfile, publicProfile.eloChess),
+      { merge: true },
+    );
+    batch.set(
+      db.collection('leaderboards').doc('cup').collection(regionKey).doc(uid),
+      leaderboardPayload(publicProfile, publicProfile.eloCup),
+      { merge: true },
+    );
+
+    const beforeData = before?.data();
+    if (beforeData) {
+      const oldRegionKey = regionPeriod(asString(beforeData.region, 'Khác'));
+      if (oldRegionKey !== regionKey) {
+        batch.delete(
+          db
+            .collection('leaderboards')
+            .doc('chess')
+            .collection(oldRegionKey)
+            .doc(uid),
+        );
+        batch.delete(
+          db
+            .collection('leaderboards')
+            .doc('cup')
+            .collection(oldRegionKey)
+            .doc(uid),
+        );
+      }
+    }
+
+    await batch.commit();
+    logger.info(`Đã đồng bộ public community mirror cho ${uid}`);
+  },
+);
 
 interface RecordRankedGameData {
   opponentUid: string;

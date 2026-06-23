@@ -14,6 +14,10 @@ class AppConstants {
   static const String routeLearning = '/learning';
   static const String routeCompete = '/compete';
   static const String routeCommunity = '/community';
+  static const String routeCommunityFriends = '/community/friends';
+  static const String routeCommunityLeaderboard = '/community/leaderboard';
+  static const String routeCommunityClubs = '/community/clubs';
+  static const String routeCommunityTournaments = '/community/tournaments';
   static const String routeProfile = '/profile';
 
   static const String routeGame = '/game';
