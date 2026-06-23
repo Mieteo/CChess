@@ -26,6 +26,34 @@ class PuzzleRepository {
   /// list; later sprints will merge in remote / downloaded content.
   List<ChessPuzzle> allPuzzles() => List.unmodifiable(seedPuzzles);
 
+  List<String> availableTags() {
+    final tags = <String>{};
+    for (final puzzle in seedPuzzles) {
+      tags.addAll(puzzle.tags);
+    }
+    final sorted = tags.toList()..sort();
+    return List.unmodifiable(sorted);
+  }
+
+  List<ChessPuzzle> filteredPuzzles({String? tag, int? difficulty}) {
+    final selectedTag = tag?.trim();
+    final filtered = seedPuzzles.where((puzzle) {
+      final matchesTag =
+          selectedTag == null ||
+          selectedTag.isEmpty ||
+          puzzle.tags.contains(selectedTag);
+      final matchesDifficulty =
+          difficulty == null || puzzle.difficulty == difficulty;
+      return matchesTag && matchesDifficulty;
+    }).toList();
+    return List.unmodifiable(filtered);
+  }
+
+  ChessPuzzle? dailyPuzzle() {
+    if (seedPuzzles.isEmpty) return null;
+    return puzzleById('p003') ?? seedPuzzles.first;
+  }
+
   ChessPuzzle? puzzleById(String id) {
     for (final p in seedPuzzles) {
       if (p.id == id) return p;

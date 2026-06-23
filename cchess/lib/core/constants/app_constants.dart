@@ -20,6 +20,7 @@ class AppConstants {
   static const String routeMatchmaking = '/matchmaking';
   static const String routeBotSelect = '/bot-select';
   static const String routePuzzle = '/puzzle';
+  static const String routeBeginnerLessons = '/beginner-lessons';
   static const String routeSettings = '/settings';
   static const String routeShop = '/shop';
   static const String routeAchievements = '/achievements';

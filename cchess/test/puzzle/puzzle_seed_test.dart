@@ -1,5 +1,6 @@
 import 'package:cchess/core/chess_engine/chess_engine.dart';
 import 'package:cchess/data/datasources/local/puzzle_seed.dart';
+import 'package:cchess/data/repositories/puzzle_repository.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -8,6 +9,41 @@ void main() {
       for (final p in seedPuzzles) {
         expect(p.solution, isNotEmpty, reason: 'puzzle ${p.id}');
       }
+    });
+
+    test('catalog has stable unique ids and enough starter content', () {
+      final ids = seedPuzzles.map((p) => p.id).toSet();
+
+      expect(seedPuzzles, hasLength(greaterThanOrEqualTo(20)));
+      expect(ids, hasLength(seedPuzzles.length));
+      expect(seedPuzzles.first.id, 'p001');
+    });
+
+    test('catalog covers beginner practice tags', () {
+      final tags = seedPuzzles.expand((p) => p.tags).toSet();
+
+      expect(tags, containsAll(['Xe', 'Pháo', 'Mã', 'Tốt', 'Tàn cục']));
+    });
+
+    test('repository filters by tag and difficulty', () {
+      final repo = PuzzleRepository();
+
+      final cannonPuzzles = repo.filteredPuzzles(tag: 'Pháo');
+      final easyPuzzles = repo.filteredPuzzles(difficulty: 1);
+      final cannonDifficulty2 = repo.filteredPuzzles(
+        tag: 'Pháo',
+        difficulty: 2,
+      );
+
+      expect(cannonPuzzles, isNotEmpty);
+      expect(cannonPuzzles.every((p) => p.tags.contains('Pháo')), isTrue);
+      expect(easyPuzzles.every((p) => p.difficulty == 1), isTrue);
+      expect(
+        cannonDifficulty2.every(
+          (p) => p.tags.contains('Pháo') && p.difficulty == 2,
+        ),
+        isTrue,
+      );
     });
 
     test('every puzzle\'s FEN parses without throwing', () {
@@ -32,8 +68,11 @@ void main() {
         final g = XiangqiGame.fromFen(p.fen);
         for (int i = 0; i < p.solution.length; i++) {
           final coords = Move.parseUciCoords(p.solution[i]);
-          expect(coords, isNotNull,
-              reason: 'puzzle ${p.id} solution[$i] = "${p.solution[i]}"');
+          expect(
+            coords,
+            isNotNull,
+            reason: 'puzzle ${p.id} solution[$i] = "${p.solution[i]}"',
+          );
           final (from, to) = coords!;
           expect(
             g.isValidMove(from, to),

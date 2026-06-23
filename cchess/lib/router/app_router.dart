@@ -15,6 +15,8 @@ import '../presentation/community/community_screen.dart';
 import '../presentation/game/game_screen.dart';
 import '../presentation/history/game_history_screen.dart';
 import '../presentation/home/home_screen.dart';
+import '../presentation/learning/beginner_lesson_detail_screen.dart';
+import '../presentation/learning/beginner_lesson_list_screen.dart';
 import '../presentation/learning/learning_screen.dart';
 import '../presentation/onboarding/onboarding_screen.dart';
 import '../presentation/openings/opening_detail_screen.dart';
@@ -124,6 +126,17 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppConstants.routePuzzle,
         builder: (context, state) => const PuzzleListScreen(),
+      ),
+      GoRoute(
+        path: AppConstants.routeBeginnerLessons,
+        builder: (context, state) => const BeginnerLessonListScreen(),
+      ),
+      GoRoute(
+        path: '${AppConstants.routeBeginnerLessons}/:id',
+        builder: (context, state) {
+          final id = state.pathParameters['id'] ?? '';
+          return BeginnerLessonDetailScreen(lessonId: id);
+        },
       ),
       GoRoute(
         path: '${AppConstants.routePuzzle}/:id',

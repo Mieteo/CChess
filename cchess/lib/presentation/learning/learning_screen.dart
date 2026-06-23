@@ -7,8 +7,7 @@ import '../../theme/app_spacing.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/common/common.dart';
 
-/// Học Tập (Học Cờ) hub screen — placeholder layout matching the
-/// stitch_document_to_ui_designer mockup.
+/// Học Tập (Học Cờ) hub screen.
 class LearningScreen extends StatelessWidget {
   const LearningScreen({super.key});
 
@@ -24,7 +23,9 @@ class LearningScreen extends StatelessWidget {
       children: [
         _Header(),
         AppSpacing.vGapLg,
-        _DailyChallengeBanner(onTry: () {}),
+        _DailyChallengeBanner(
+          onTry: () => context.go('${AppConstants.routePuzzle}/p003'),
+        ),
         AppSpacing.vGapLg,
         const _SectionGrid(),
         AppSpacing.vGapLg,
@@ -76,7 +77,10 @@ class _Header extends StatelessWidget {
             border: Border.all(color: AppColors.outlineVariant),
             shape: BoxShape.circle,
           ),
-          child: const Icon(Icons.lightbulb_outline, color: AppColors.accentGold),
+          child: const Icon(
+            Icons.lightbulb_outline,
+            color: AppColors.accentGold,
+          ),
         ),
       ],
     );
@@ -100,7 +104,9 @@ class _DailyChallengeBanner extends StatelessWidget {
         children: [
           Container(
             padding: const EdgeInsets.symmetric(
-                horizontal: AppSpacing.sm, vertical: 2),
+              horizontal: AppSpacing.sm,
+              vertical: 2,
+            ),
             decoration: BoxDecoration(
               color: AppColors.vermilionRed.withValues(alpha: 0.2),
               borderRadius: AppRadius.chip,
@@ -111,8 +117,11 @@ class _DailyChallengeBanner extends StatelessWidget {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.local_fire_department,
-                    size: 14, color: AppColors.error),
+                const Icon(
+                  Icons.local_fire_department,
+                  size: 14,
+                  color: AppColors.error,
+                ),
                 AppSpacing.hGapXs,
                 Text(
                   'NÓNG HỔI',
@@ -163,7 +172,9 @@ class _SectionGrid extends StatelessWidget {
         title: 'Khóa Học\nVỡ Lòng',
         icon: Icons.menu_book_outlined,
         color: AppColors.tealSuccess,
-        onTap: () {},
+        badge: 'MỚI',
+        badgeColor: AppColors.tealSuccess,
+        onTap: () => context.go(AppConstants.routeBeginnerLessons),
       ),
       _LearningTile(
         title: 'Bài Tập\nTàn Cục',
@@ -280,7 +291,9 @@ class _LearningTile extends StatelessWidget {
                 child: Text(
                   badge!,
                   style: AppTextStyles.captionSm.copyWith(
-                    color: badgeColor == AppColors.vermilionRed
+                    color:
+                        badgeColor == AppColors.vermilionRed ||
+                            badgeColor == AppColors.tealSuccess
                         ? Colors.white
                         : AppColors.surfaceContainerLowest,
                     fontWeight: FontWeight.w700,
@@ -301,9 +314,9 @@ class _RecentActivityList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final items = <(String, bool, String)>[
-      ('Bài 12: Pháo Đầu Mã Đội', true, 'Hôm qua'),
-      ('Tàn Cục: Đơn Xe Trảo Pháo', true, '2 ngày trước'),
-      ('Bài 13: Bình Phong Mã', false, '3 ngày trước'),
+      ('Bài vỡ lòng: Xe mở đường thẳng', true, 'Hôm nay'),
+      ('Tàn cục: Chiếu hết trong 1 nước', true, 'Hôm qua'),
+      ('Bài vỡ lòng: Pháo cần ngòi', false, 'Đang học'),
     ];
     return Column(
       children: [
