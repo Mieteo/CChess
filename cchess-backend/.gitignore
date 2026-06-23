@@ -4,5 +4,7 @@ dist/
 .env
 .env.local
 serviceAccount*.json
-engine/
+# Pikafish binary/NNUE download dir (cchess-backend/engine/). Anchored with a
+# leading slash so it does NOT also ignore TypeScript source under src/engine/.
+/engine/
 lab/reports/

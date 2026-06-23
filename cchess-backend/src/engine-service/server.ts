@@ -5,7 +5,8 @@ import { analyzeGame } from './analysis';
 import { AnalysisCache } from './analysis_cache';
 import { EnginePool, type SearchEngine } from './engine_pool';
 import { bestMoveCacheKey, normalizeFen } from './fen';
-import { DailyQuotaStore } from './quota';
+import { createFirestoreVipChecker, FirestoreQuotaStore } from './firestore_quota';
+import { DailyQuotaStore, type QuotaLimits, type QuotaStore } from './quota';
 import { UciEngine } from './uci_engine';
 import {
   EngineServiceError,
@@ -23,23 +24,31 @@ export interface EngineHttpServerOptions {
   isVip?: (uid: string) => Promise<boolean>;
   pool?: Pick<EnginePool, 'bestMove' | 'dispose' | 'stats'>;
   cache?: AnalysisCache<EngineBestMove>;
-  quota?: DailyQuotaStore;
+  quota?: QuotaStore;
   requireAuth?: boolean;
   maxRequestBytes?: number;
 }
 
 export function createEngineHttpServer(options: EngineHttpServerOptions = {}) {
   const authenticate = options.authenticate ?? verifyIdToken;
-  const isVip = options.isVip ?? (async () => false);
   const pool = options.pool ?? createDefaultPool();
   const cache = options.cache ?? new AnalysisCache<EngineBestMove>(envInt('ENGINE_CACHE_ENTRIES', 2000));
-  const quota = options.quota ?? new DailyQuotaStore({
+  const requireAuth = options.requireAuth ?? process.env.ENGINE_AUTH_DISABLED !== '1';
+  const maxRequestBytes = options.maxRequestBytes ?? 128 * 1024;
+
+  // Production (auth on) defaults to the Firestore-backed quota + VIP gate so
+  // the daily cap survives Render restarts/redeploys and real VIPs bypass it.
+  // Dev/tests (auth disabled) or ENGINE_QUOTA_BACKEND=memory use in-memory.
+  const persistQuota = requireAuth && process.env.ENGINE_QUOTA_BACKEND !== 'memory';
+  const limits: QuotaLimits = {
     bestMovePerDay: envInt('FREE_BEST_MOVE_DAILY_LIMIT', 30),
     hintPerDay: envInt('FREE_HINT_DAILY_LIMIT', 3),
     analyzePerDay: envInt('FREE_ANALYZE_DAILY_LIMIT', 3),
-  });
-  const requireAuth = options.requireAuth ?? process.env.ENGINE_AUTH_DISABLED !== '1';
-  const maxRequestBytes = options.maxRequestBytes ?? 128 * 1024;
+  };
+  const quota = options.quota
+    ?? (persistQuota ? new FirestoreQuotaStore(limits) : new DailyQuotaStore(limits));
+  const isVip = options.isVip
+    ?? (persistQuota ? createFirestoreVipChecker() : async () => false);
 
   const httpServer = createServer(async (req, res) => {
     setCorsHeaders(res);
@@ -73,7 +82,7 @@ export function createEngineHttpServer(options: EngineHttpServerOptions = {}) {
         throw new EngineServiceError(404, 'not-found', 'Not found');
       }
       const user = await authenticateRequest(req, authenticate, requireAuth);
-      quota.check(user.uid, feature, await isVip(user.uid));
+      await quota.check(user.uid, feature, await isVip(user.uid));
       const body = await readJsonBody(req, maxRequestBytes);
 
       if (url.pathname === '/engine/best-move' || url.pathname === '/engine/hint') {

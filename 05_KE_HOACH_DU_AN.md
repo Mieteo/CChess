@@ -1,6 +1,6 @@
 # 📊 KẾ HOẠCH & TIẾN ĐỘ DỰ ÁN — CChess
 
-> Tài liệu sống — cập nhật ngày **2026-06-20**: chốt đợt T16–T24. Backend `npm test` **69/69** (12 file), Flutter `flutter test` **226/226** (21 file); `backend-ci` đã chạy `lint` + `lab:check` + `npm test` + lab/load/fuzz, `flutter-ci` chạy analyze/test, thêm gate thủ công `post-deploy-smoke` và `engine-smoke`. Engine service `https://cchess-engine.onrender.com` đã smoke thật **8/8 PASS** gồm quota `429 quota-exceeded`. Việc còn lại chuyển sang hardening sản phẩm: quota/VIP bền vững, license NNUE, test tay cuối D4/M5/H4 và AI Coach B3.
+> Tài liệu sống — cập nhật ngày **2026-06-20**: chốt đợt T16–T24. Backend `npm test` **86/86** (14 file), Flutter `flutter test` **233/233** (22 file); `backend-ci` đã chạy `lint` + `lab:check` + `npm test` + lab/load/fuzz, `flutter-ci` chạy analyze/test, thêm gate thủ công `post-deploy-smoke` và `engine-smoke`. Engine service `https://cchess-engine.onrender.com` đã smoke thật **8/8 PASS** gồm quota `429 quota-exceeded`. Việc còn lại chuyển sang hardening sản phẩm: quota/VIP bền vững, license NNUE, test tay cuối D4/M5/H4 và AI Coach B3.
 > Mục đích: tổng kết **đã làm**, **chưa làm**, **đang chờ phụ thuộc** theo từng Sprint.
 > Tham chiếu chéo: [`01_FEATURE_SPECIFICATION.md`](01_FEATURE_SPECIFICATION.md), [`02_PROMPT_UI_UX.md`](02_PROMPT_UI_UX.md), [`03_PROMPT_FEATURES_ROADMAP.md`](03_PROMPT_FEATURES_ROADMAP.md), [`07_HUONG_DAN_THIET_LAP_FIREBASE.md`](07_HUONG_DAN_THIET_LAP_FIREBASE.md), [`08_HUONG_DAN_BACKEND_WEBSOCKET.md`](08_HUONG_DAN_BACKEND_WEBSOCKET.md), [`09_BACKEND_SERVER_HOAT_DONG.md`](09_BACKEND_SERVER_HOAT_DONG.md), [`10_KE_HOACH_TEST.md`](10_KE_HOACH_TEST.md) — **kế hoạch test các mục online chưa xác nhận**.
 
@@ -299,7 +299,7 @@
 | A7 | Đấu Bot AI | ✅ | 5 |
 | B1 | Khóa học vỡ lòng | 🟡 | UI placeholder, content chưa có |
 | B2 | Khóa học video | ⬜ | sau S15 |
-| B3 | AI Coach | ⬜ | 15 |
+| B3 | AI Coach | 🟢 | 15 — **engine + lớp diễn giải `CoachAnalyzer` + màn `AiCoachScreen` done 2026-06-23** (phân tích theo giai đoạn + gợi ý luyện tập, remote→fallback); còn tinh chỉnh chất lượng theo Pikafish thật |
 | B4 | Kho bài tập 10.000+ | 🟡 | Engine xong (S6), content thiếu |
 | B5 | Kỳ phổ + Replay AI | 🟢 | 9 — đã sync `game_records` cloud |
 | B6 | Khai cuộc Đại sư | 🟢 | 11 (chờ CMS) |
@@ -324,7 +324,7 @@
 
 - **Tổng file Dart `lib/`:** ~95 file (thêm `core/chess_engine/` lớp engine lai: move_engine / engine_router / local_minimax_engine / remote_pikafish_engine + transports / engine_providers).
 - **Backend TypeScript:** realtime server + lab + engine-service (server, UCI wrapper, pool, analysis, cache, quota, FEN) đã có CI riêng.
-- **Test tự động:** Backend `npm test` **69/69** (12 file) + `backend-ci` chạy `lab`, `lab:load`, `lab:fuzz`; Flutter `flutter test` **226/226** (21 file) + `flutter analyze`. Phân loại nguồn test: xem bảng cuối [`10_KE_HOACH_TEST.md`](10_KE_HOACH_TEST.md).
+- **Test tự động:** Backend `npm test` **86/86** (14 file) + `backend-ci` chạy `lab`, `lab:load`, `lab:fuzz`; Flutter `flutter test` **233/233** (22 file) + `flutter analyze`. (2026-06-23: +`firestore_quota` 6, +`fen_uci_compat` 5 backend; +`coach_analyzer` 6 Flutter — Sprint 15 hardening.) Phân loại nguồn test: xem bảng cuối [`10_KE_HOACH_TEST.md`](10_KE_HOACH_TEST.md).
 - **Test tay:** R **ĐÓNG 12/12**; S **ĐÓNG 15/15**; C8 + H1–H3 PASS. Còn lại chủ yếu là vòng thật/visual: D4 OS lifecycle, M5 Firebase thật, H4 chất lượng gợi ý, C2/D/G4 nhìn-mắt.
 - **Sprint hoàn thành (1 chiều):** 10/18 (1–7 + 8a + 8b + 8c).
 - **Sprint code xong, sync một phần:** 3/18 (S9, S10, S11).

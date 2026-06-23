@@ -6,19 +6,35 @@ export interface QuotaLimits {
   analyzePerDay: number;
 }
 
+/// Counts engine usage and enforces the free daily limit.
+///
+/// Abstraction so the HTTP server is agnostic about *where* usage is counted:
+///   - `DailyQuotaStore` keeps counters in process memory (dev + outage fallback).
+///   - `FirestoreQuotaStore` persists them so they survive Render restart/redeploy
+///     (see firestore_quota.ts).
+/// `check` resolves when the call is allowed (and records it), or throws
+/// `EngineServiceError(429, 'quota-exceeded')` when the free daily limit for
+/// `feature` is reached. VIP users are never limited.
+export interface QuotaStore {
+  check(uid: string, feature: EngineFeature, vip: boolean): Promise<void>;
+}
+
 interface UsageBucket {
   day: string;
   counts: Record<EngineFeature, number>;
 }
 
-export class DailyQuotaStore {
+/// In-memory daily quota — fast and dependency-free, but counters reset whenever
+/// the process restarts. Used in dev/tests and as the fallback that keeps a cap
+/// in place if the Firestore-backed store hits an infra error.
+export class DailyQuotaStore implements QuotaStore {
   private readonly buckets = new Map<string, UsageBucket>();
 
   constructor(private readonly limits: QuotaLimits) {}
 
-  check(uid: string, feature: EngineFeature, vip: boolean): void {
+  async check(uid: string, feature: EngineFeature, vip: boolean): Promise<void> {
     if (vip) return;
-    const limit = this.limitFor(feature);
+    const limit = limitFor(this.limits, feature);
     const key = `${uid}:${feature}`;
     const today = dayKey(new Date());
     const bucket = this.buckets.get(key);
@@ -35,19 +51,19 @@ export class DailyQuotaStore {
     }
     current.counts[feature] = used + 1;
   }
+}
 
-  private limitFor(feature: EngineFeature): number {
-    switch (feature) {
-      case 'best-move':
-        return this.limits.bestMovePerDay;
-      case 'hint':
-        return this.limits.hintPerDay;
-      case 'analyze':
-        return this.limits.analyzePerDay;
-    }
+export function limitFor(limits: QuotaLimits, feature: EngineFeature): number {
+  switch (feature) {
+    case 'best-move':
+      return limits.bestMovePerDay;
+    case 'hint':
+      return limits.hintPerDay;
+    case 'analyze':
+      return limits.analyzePerDay;
   }
 }
 
-function dayKey(date: Date): string {
+export function dayKey(date: Date): string {
   return date.toISOString().slice(0, 10);
 }

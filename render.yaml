@@ -69,3 +69,8 @@ services:
         value: 3
       - key: FREE_ANALYZE_DAILY_LIMIT
         value: 3
+      # Persist the daily free quota in Firestore (users/{uid}/engine_usage/{day})
+      # so it survives restarts/redeploys; VIP bypass is read from users/{uid}.
+      # Set to "memory" to fall back to per-process in-memory counting.
+      - key: ENGINE_QUOTA_BACKEND
+        value: firestore

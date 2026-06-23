@@ -200,6 +200,17 @@ class _GameRow extends StatelessWidget {
               ],
             ),
           ),
+          IconButton(
+            visualDensity: VisualDensity.compact,
+            tooltip: 'Gia sư AI',
+            icon: const Icon(
+              Icons.psychology_outlined,
+              color: AppColors.accentGold,
+              size: 22,
+            ),
+            onPressed: () =>
+                context.push('${AppConstants.routeAiCoach}/${record.id}'),
+          ),
           if (record.eloDelta != 0) ...[
             AppSpacing.hGapSm,
             Container(

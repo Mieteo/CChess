@@ -26,6 +26,7 @@ class AppConstants {
   static const String routeHistory = '/history';
   static const String routeDailyQuests = '/daily-quests';
   static const String routeReplay = '/replay';
+  static const String routeAiCoach = '/ai-coach';
   static const String routeOpenings = '/openings';
   static const String routeCloudTest = '/cloud-test';
   static const String routeBackendTest = '/backend-test';

@@ -183,7 +183,7 @@ class _SectionGrid extends StatelessWidget {
         color: const Color(0xFFD8B4FE),
         badge: 'VIP',
         badgeColor: AppColors.accentGold,
-        onTap: () {},
+        onTap: () => context.push(AppConstants.routeAiCoach),
       ),
       _LearningTile(
         title: 'Khai Cuộc\nĐại Sư',

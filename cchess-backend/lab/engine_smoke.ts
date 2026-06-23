@@ -17,7 +17,22 @@
 // Quota smoke mints a fresh anonymous Firebase user, calls /engine/hint until
 // the configured free limit is exhausted, then expects quota-exceeded.
 
-import { INITIAL_FEN, PieceColor, uciOfMove, XiangqiGame } from '../src/engine';
+import { INITIAL_FEN, parseUci, PieceColor, uciOfMove, XiangqiGame } from '../src/engine';
+
+// Fixed positions for the FEN/UCI cross-check (risk ⚠️A): each must have at
+// least one legal move, so the engine's bestmove proves Pikafish and our board
+// agree on coordinates — a disagreement would map its reply to an illegal move.
+const FIXED_POSITIONS: { name: string; fen: string }[] = [
+  { name: 'initial', fen: INITIAL_FEN },
+  {
+    name: 'after central cannon h2e2 (black to move)',
+    fen: 'rnbakabnr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C2C4/9/RNBAKABNR b - - 1 1',
+  },
+  {
+    name: 'rook-and-king endgame (red to move)',
+    fen: '4k4/9/9/9/9/9/9/9/4R4/4K4 w - - 0 1',
+  },
+];
 
 const ENGINE_URL = normalizeBaseUrl(
   nonEmptyEnv('CCHESS_ENGINE_URL') ?? 'https://cchess-engine.onrender.com',
@@ -139,6 +154,23 @@ async function main(): Promise<void> {
       const first = assertRecord(body.perMove[0], 'first analyzed move');
       assert(first.uci === uci, `analyze should echo ${uci}, got ${String(first.uci)}`);
       assert(isRecord(body.summary), 'analyze.summary should be an object');
+    });
+
+    await run("Pikafish's best move is legal on our board for fixed positions", async () => {
+      for (const { name, fen } of FIXED_POSITIONS) {
+        const res = await postJson(
+          '/engine/best-move',
+          { fen, movetimeMs: MOVETIME_MS },
+          resolvedAuth,
+          [200],
+        );
+        const body = assertBestMove(res.body, `best-move ${name}`);
+        assert(
+          typeof body.uci === 'string',
+          `expected a move for ${name}, got ${String(body.uci)}`,
+        );
+        assertLegalUciFor(fen, body.uci, name);
+      }
     });
 
     if (CHECK_QUOTA) {
@@ -311,6 +343,18 @@ function assertBestMove(body: unknown, label: string): Record<string, unknown> {
   );
   assert(Array.isArray(data.pv), `${label}.pv should be an array`);
   return data;
+}
+
+function assertLegalUciFor(fen: string, uci: string, label: string): void {
+  assert(UCI_REGEX.test(uci), `${label}: engine returned non-UCI move ${uci}`);
+  const parsed = parseUci(uci);
+  assert(parsed !== null, `${label}: could not parse engine move ${uci}`);
+  const game = XiangqiGame.fromFen(fen);
+  assert(
+    game.isValidMove(parsed.from, parsed.to),
+    `${label}: engine move ${uci} is NOT legal on our board for fen "${fen}" ` +
+      '(Pikafish/our coordinate convention may disagree)',
+  );
 }
 
 function firstLegalRedUci(): string {

@@ -6,6 +6,7 @@ import '../core/chess_engine/chess_engine.dart';
 import '../core/constants/app_constants.dart';
 import '../presentation/achievements/achievements_screen.dart';
 import '../presentation/bot_game/bot_select_screen.dart';
+import '../presentation/coach/ai_coach_screen.dart';
 import '../presentation/cloud/backend_test_screen.dart';
 import '../presentation/cloud/cloud_test_screen.dart';
 import '../presentation/online/online_game_screen.dart';
@@ -94,6 +95,16 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           final id = state.pathParameters['id'] ?? '';
           return GameReplayScreen(recordId: id);
         },
+      ),
+      GoRoute(
+        // No id → coach the most recent finished game (Học Cờ "AI Tư Vấn").
+        path: AppConstants.routeAiCoach,
+        builder: (context, state) => const AiCoachScreen(),
+      ),
+      GoRoute(
+        path: '${AppConstants.routeAiCoach}/:id',
+        builder: (context, state) =>
+            AiCoachScreen(recordId: state.pathParameters['id']),
       ),
       GoRoute(
         path: AppConstants.routeOpenings,
