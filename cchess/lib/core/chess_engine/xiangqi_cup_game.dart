@@ -35,6 +35,29 @@ class XiangqiCupGame implements ChessGameSession {
     this._undoStack,
   ) : _endReason = null;
 
+  /// Test/debug hook for focused rule fixtures. Production play should use
+  /// [XiangqiCupGame.initial] so hidden assignments are shuffled normally.
+  factory XiangqiCupGame.debug({
+    required Board board,
+    PieceColor turn = PieceColor.red,
+    GameStatus status = GameStatus.playing,
+    List<Move> history = const <Move>[],
+    int halfmoveClock = 0,
+    int fullmoveNumber = 1,
+    Map<Position, Piece> hiddenAssignments = const <Position, Piece>{},
+  }) {
+    return XiangqiCupGame._(
+      board,
+      turn,
+      status,
+      List<Move>.from(history),
+      halfmoveClock,
+      fullmoveNumber,
+      Map<Position, Piece>.from(hiddenAssignments),
+      <_CupSnapshot>[],
+    );
+  }
+
   factory XiangqiCupGame.initial({int? seed}) {
     final board = Board.initial();
     final hidden = _randomizeHiddenPieces(board, seed: seed);
