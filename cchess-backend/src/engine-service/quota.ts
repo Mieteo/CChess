@@ -6,6 +6,25 @@ export interface QuotaLimits {
   analyzePerDay: number;
 }
 
+/// How much of one feature's free daily allowance is left. `limit`/`remaining`
+/// are -1 for VIP users to signal "unlimited" without inventing a magic cap.
+export interface FeatureUsage {
+  used: number;
+  limit: number;
+  remaining: number;
+}
+
+/// A read-only snapshot of a user's free-tier engine usage for today, served by
+/// `GET /engine/quota` so the app can show "N hints left" and a VIP upsell
+/// *before* a request is rejected with 429.
+export interface QuotaStatus {
+  day: string;
+  vip: boolean;
+  features: Record<EngineFeature, FeatureUsage>;
+}
+
+const ALL_FEATURES: readonly EngineFeature[] = ['best-move', 'hint', 'analyze'];
+
 /// Counts engine usage and enforces the free daily limit.
 ///
 /// Abstraction so the HTTP server is agnostic about *where* usage is counted:
@@ -17,6 +36,28 @@ export interface QuotaLimits {
 /// `feature` is reached. VIP users are never limited.
 export interface QuotaStore {
   check(uid: string, feature: EngineFeature, vip: boolean): Promise<void>;
+  /// Reads today's usage without consuming any allowance (for GET /engine/quota).
+  status(uid: string, vip: boolean): Promise<QuotaStatus>;
+}
+
+/// Build a FeatureUsage from a raw count. VIP → unlimited (-1 sentinels).
+export function featureUsage(used: number, limit: number, vip: boolean): FeatureUsage {
+  if (vip) return { used, limit: -1, remaining: -1 };
+  return { used, limit, remaining: Math.max(0, limit - used) };
+}
+
+/// Assemble a QuotaStatus from a per-feature count lookup. Shared by both stores.
+export function buildQuotaStatus(
+  day: string,
+  vip: boolean,
+  limits: QuotaLimits,
+  usedFor: (feature: EngineFeature) => number,
+): QuotaStatus {
+  const features = {} as Record<EngineFeature, FeatureUsage>;
+  for (const feature of ALL_FEATURES) {
+    features[feature] = featureUsage(usedFor(feature), limitFor(limits, feature), vip);
+  }
+  return { day, vip, features };
 }
 
 interface UsageBucket {
@@ -50,6 +91,14 @@ export class DailyQuotaStore implements QuotaStore {
       throw new EngineServiceError(429, 'quota-exceeded', 'Daily engine quota exceeded');
     }
     current.counts[feature] = used + 1;
+  }
+
+  async status(uid: string, vip: boolean): Promise<QuotaStatus> {
+    const today = dayKey(new Date());
+    return buildQuotaStatus(today, vip, this.limits, (feature) => {
+      const bucket = this.buckets.get(`${uid}:${feature}`);
+      return bucket && bucket.day === today ? bucket.counts[feature] : 0;
+    });
   }
 }
 

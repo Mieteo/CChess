@@ -8,6 +8,11 @@ enum EngineUseCase { bot, hint, analysis }
 
 enum EngineSource { localMinimax, remotePikafish }
 
+/// Why a result came from the local engine instead of remote Pikafish.
+/// Lets the UI distinguish "server busy/offline" from "you're out of free
+/// AI quota" (which warrants a VIP upsell rather than a retry).
+enum EngineFallbackKind { network, quotaExceeded }
+
 EngineLevel? engineLevelFromString(String? value) {
   if (value == null) return null;
   for (final level in EngineLevel.values) {
@@ -60,6 +65,9 @@ class EngineMove {
   final bool usedFallback;
   final String? fallbackReason;
 
+  /// Set when [usedFallback] is true, classifying why remote was skipped.
+  final EngineFallbackKind? fallbackKind;
+
   const EngineMove({
     required this.move,
     required this.uci,
@@ -68,6 +76,7 @@ class EngineMove {
     this.depth,
     this.usedFallback = false,
     this.fallbackReason,
+    this.fallbackKind,
   });
 
   EngineMove copyWith({
@@ -78,6 +87,7 @@ class EngineMove {
     EngineSource? source,
     bool? usedFallback,
     String? fallbackReason,
+    EngineFallbackKind? fallbackKind,
   }) {
     return EngineMove(
       move: move ?? this.move,
@@ -87,6 +97,7 @@ class EngineMove {
       source: source ?? this.source,
       usedFallback: usedFallback ?? this.usedFallback,
       fallbackReason: fallbackReason ?? this.fallbackReason,
+      fallbackKind: fallbackKind ?? this.fallbackKind,
     );
   }
 }

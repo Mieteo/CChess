@@ -80,6 +80,71 @@ test('engine HTTP server enforces free hint quota', async () => {
   }
 });
 
+test('GET /engine/quota reports remaining free allowance', async () => {
+  const { createEngineHttpServer } = await import('./server');
+  const service = createEngineHttpServer({
+    pool: new FakePool(),
+    authenticate: async (token) => ({ uid: token }),
+    isVip: async () => false,
+    requireAuth: true,
+    quota: new DailyQuotaStore({
+      bestMovePerDay: 30,
+      hintPerDay: 3,
+      analyzePerDay: 3,
+    }),
+  });
+
+  try {
+    const baseUrl = await listen(service.httpServer);
+    // Spend one hint, then read the snapshot back.
+    assert.equal((await postHint(baseUrl, 'q-status')).status, 200);
+
+    const res = await fetch(`${baseUrl}/engine/quota`, {
+      headers: { authorization: 'Bearer q-status' },
+    });
+    assert.equal(res.status, 200);
+    const body = (await res.json()) as {
+      vip: boolean;
+      features: Record<string, { used: number; limit: number; remaining: number }>;
+    };
+    assert.equal(body.vip, false);
+    assert.equal(body.features.hint.used, 1);
+    assert.equal(body.features.hint.limit, 3);
+    assert.equal(body.features.hint.remaining, 2);
+    assert.equal(body.features['best-move'].remaining, 30);
+  } finally {
+    await service.close();
+  }
+});
+
+test('GET /engine/quota reports unlimited for VIP', async () => {
+  const { createEngineHttpServer } = await import('./server');
+  const service = createEngineHttpServer({
+    pool: new FakePool(),
+    authenticate: async (token) => ({ uid: token }),
+    isVip: async () => true,
+    requireAuth: true,
+    quota: new DailyQuotaStore({ bestMovePerDay: 30, hintPerDay: 3, analyzePerDay: 3 }),
+  });
+
+  try {
+    const baseUrl = await listen(service.httpServer);
+    const res = await fetch(`${baseUrl}/engine/quota`, {
+      headers: { authorization: 'Bearer vip-user' },
+    });
+    assert.equal(res.status, 200);
+    const body = (await res.json()) as {
+      vip: boolean;
+      features: Record<string, { limit: number; remaining: number }>;
+    };
+    assert.equal(body.vip, true);
+    assert.equal(body.features.hint.limit, -1);
+    assert.equal(body.features.hint.remaining, -1);
+  } finally {
+    await service.close();
+  }
+});
+
 function listen(server: Server): Promise<string> {
   return new Promise((resolve) => {
     server.listen(0, '127.0.0.1', () => {

@@ -12,6 +12,7 @@ export 'ai/minimax.dart';
 export 'board.dart';
 export 'chess_game_session.dart';
 export 'engine_providers.dart';
+export 'engine_quota.dart';
 export 'engine_router.dart';
 export 'local_minimax_engine.dart';
 export 'move.dart';

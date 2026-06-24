@@ -2,6 +2,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../constants/app_constants.dart';
+import 'engine_quota.dart';
 import 'engine_router.dart';
 import 'local_minimax_engine.dart';
 import 'move_engine.dart';
@@ -30,4 +31,12 @@ final engineRouterProvider = Provider<EngineRouter>((ref) {
     remote: ref.watch(remotePikafishEngineProvider),
     canUseRemote: () => true,
   );
+});
+
+/// Today's free-tier engine allowance (hints/analyses left, VIP flag). Used to
+/// show remaining quota and a VIP upsell. Auto-disposed so it re-fetches when
+/// re-watched (e.g. after a hint is spent). Errors surface as AsyncError;
+/// callers should treat that as "quota unknown" and not block the feature.
+final engineQuotaProvider = FutureProvider.autoDispose<EngineQuotaStatus>((ref) {
+  return ref.watch(remotePikafishEngineProvider).fetchQuota();
 });

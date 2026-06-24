@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'ai/game_analyzer.dart';
+import 'engine_quota.dart';
 import 'local_minimax_engine.dart';
 import 'move_engine.dart';
 
@@ -27,6 +28,7 @@ class EngineRouter implements MoveEngine {
     EngineUseCase useCase = EngineUseCase.bot,
   }) async {
     String? fallbackReason;
+    EngineFallbackKind? fallbackKind;
     if (await _shouldTryRemote(level, useCase)) {
       try {
         final result = await remote!.bestMove(
@@ -35,8 +37,12 @@ class EngineRouter implements MoveEngine {
           useCase: useCase,
         );
         if (result != null) return result;
+      } on EngineQuotaExceededException catch (error) {
+        fallbackReason = error.toString();
+        fallbackKind = EngineFallbackKind.quotaExceeded;
       } catch (error) {
         fallbackReason = error.toString();
+        fallbackKind = EngineFallbackKind.network;
       }
     }
 
@@ -45,6 +51,7 @@ class EngineRouter implements MoveEngine {
     return fallback.copyWith(
       usedFallback: true,
       fallbackReason: fallbackReason,
+      fallbackKind: fallbackKind,
     );
   }
 

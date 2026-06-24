@@ -70,6 +70,15 @@ export function createEngineHttpServer(options: EngineHttpServerOptions = {}) {
         return;
       }
 
+      // Read-only quota snapshot so the app can show remaining free hints/
+      // analyses (and a VIP upsell) before a request is rejected with 429.
+      if (req.method === 'GET' && url.pathname === '/engine/quota') {
+        const user = await authenticateRequest(req, authenticate, requireAuth);
+        const status = await quota.status(user.uid, await isVip(user.uid));
+        sendJson(res, 200, status);
+        return;
+      }
+
       if (req.method !== 'POST') {
         throw new EngineServiceError(404, 'not-found', 'Not found');
       }

@@ -209,12 +209,20 @@ class _GameScreenState extends ConsumerState<GameScreen> {
     }
     _controller.showHint(result.move.from, result.move.to);
     if (result.usedFallback) {
+      final quotaHit = result.fallbackKind == EngineFallbackKind.quotaExceeded;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Gợi ý offline (minimax) — máy chủ chưa sẵn sàng.'),
-          duration: Duration(seconds: 2),
+        SnackBar(
+          content: Text(
+            quotaHit
+                ? 'Đã hết lượt gợi ý AI miễn phí hôm nay — đang dùng gợi ý cơ '
+                    'bản. Nâng cấp VIP để gợi ý Đại Sư không giới hạn.'
+                : 'Gợi ý offline (minimax) — máy chủ chưa sẵn sàng.',
+          ),
+          duration: const Duration(seconds: 3),
         ),
       );
+      // Refresh the cached quota snapshot so any quota UI reflects the spend.
+      ref.invalidate(engineQuotaProvider);
     }
   }
 

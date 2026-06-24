@@ -21,5 +21,11 @@ abstract class PikafishTransport {
     required Duration timeout,
   });
 
+  Future<Map<String, dynamic>> getJson(
+    Uri uri, {
+    required Map<String, String> headers,
+    required Duration timeout,
+  });
+
   void close() {}
 }

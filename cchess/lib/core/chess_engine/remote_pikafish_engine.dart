@@ -1,5 +1,6 @@
 import '../constants/piece_constants.dart';
 import 'ai/game_analyzer.dart';
+import 'engine_quota.dart';
 import 'move.dart';
 import 'move_engine.dart';
 import 'remote_pikafish_transport.dart';
@@ -58,23 +59,68 @@ class RemotePikafishEngine implements MoveEngine {
     );
   }
 
+  /// Reads the caller's remaining free-tier allowance for today. Throws
+  /// [PikafishTransportException] on transport failure (no offline fallback —
+  /// callers treat an error as "quota unknown").
+  Future<EngineQuotaStatus> fetchQuota() async {
+    final json = await _getJson('/engine/quota');
+    return EngineQuotaStatus.fromJson(json);
+  }
+
   void close() => _transport.close();
 
-  Future<Map<String, dynamic>> _postJson(
-    String path,
-    Map<String, dynamic> body,
-  ) async {
+  Future<Map<String, String>> _authHeaders() async {
     final token = await _tokenProvider();
     final headers = <String, String>{};
     if (token != null && token.isNotEmpty) {
       headers['authorization'] = 'Bearer $token';
     }
-    return _transport.postJson(
-      baseUri.resolve(path),
-      headers: headers,
-      body: body,
-      timeout: timeout,
-    );
+    return headers;
+  }
+
+  Future<Map<String, dynamic>> _postJson(
+    String path,
+    Map<String, dynamic> body,
+  ) async {
+    final headers = await _authHeaders();
+    try {
+      return await _transport.postJson(
+        baseUri.resolve(path),
+        headers: headers,
+        body: body,
+        timeout: timeout,
+      );
+    } on PikafishTransportException catch (e) {
+      throw _mapTransportError(e, path);
+    }
+  }
+
+  Future<Map<String, dynamic>> _getJson(String path) async {
+    final headers = await _authHeaders();
+    try {
+      return await _transport.getJson(
+        baseUri.resolve(path),
+        headers: headers,
+        timeout: timeout,
+      );
+    } on PikafishTransportException catch (e) {
+      throw _mapTransportError(e, path);
+    }
+  }
+
+  /// Promote a 429 quota rejection to a typed domain exception so the router /
+  /// UI can offer a VIP upsell; everything else propagates unchanged.
+  Object _mapTransportError(PikafishTransportException e, String path) {
+    if (e.statusCode == 429 || e.code == 'quota-exceeded') {
+      return EngineQuotaExceededException(_featureForPath(path));
+    }
+    return e;
+  }
+
+  static String _featureForPath(String path) {
+    if (path.contains('hint')) return 'hint';
+    if (path.contains('analyze')) return 'analyze';
+    return 'best-move';
   }
 
   EngineMove? _moveFromUci({

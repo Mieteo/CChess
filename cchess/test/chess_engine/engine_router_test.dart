@@ -45,17 +45,39 @@ void main() {
 
       expect(result?.source, EngineSource.localMinimax);
       expect(result?.usedFallback, isTrue);
+      expect(result?.fallbackKind, EngineFallbackKind.network);
       expect(local.bestMoveCalls, 1);
       expect(remote.bestMoveCalls, 1);
+    });
+
+    test('tags fallback as quotaExceeded when remote is out of free quota',
+        () async {
+      final local = _FakeEngine(EngineSource.localMinimax);
+      final remote = _FakeEngine(
+        EngineSource.remotePikafish,
+        throwError: const EngineQuotaExceededException('hint'),
+      );
+      final router = EngineRouter(local: local, remote: remote);
+
+      final result = await router.bestMove(
+        kInitialFen,
+        level: EngineLevel.grandmaster,
+        useCase: EngineUseCase.hint,
+      );
+
+      expect(result?.source, EngineSource.localMinimax);
+      expect(result?.usedFallback, isTrue);
+      expect(result?.fallbackKind, EngineFallbackKind.quotaExceeded);
     });
   });
 }
 
 class _FakeEngine implements MoveEngine {
-  _FakeEngine(this.source, {this.fail = false});
+  _FakeEngine(this.source, {this.fail = false, this.throwError});
 
   final EngineSource source;
   final bool fail;
+  final Object? throwError;
   int bestMoveCalls = 0;
 
   @override
@@ -65,6 +87,7 @@ class _FakeEngine implements MoveEngine {
     EngineUseCase useCase = EngineUseCase.bot,
   }) async {
     bestMoveCalls++;
+    if (throwError != null) throw throwError!;
     if (fail) throw StateError('remote down');
     final game = XiangqiGame.fromFen(fen);
     const from = Position(7, 1);

@@ -17,10 +17,12 @@
 import { getFirestore, type Firestore } from 'firebase-admin/firestore';
 
 import {
+  buildQuotaStatus,
   DailyQuotaStore,
   dayKey,
   limitFor,
   type QuotaLimits,
+  type QuotaStatus,
   type QuotaStore,
 } from './quota';
 import { EngineServiceError, type EngineFeature } from './types';
@@ -67,6 +69,28 @@ export class FirestoreQuotaStore implements QuotaStore {
       // while still preventing unbounded free usage.
       console.error(`[quota] firestore error for ${uid}/${feature}, using memory fallback:`, error);
       await this.fallback.check(uid, feature, vip);
+    }
+  }
+
+  async status(uid: string, vip: boolean): Promise<QuotaStatus> {
+    const day = dayKey(this.now());
+    try {
+      const ref = this.getDb()
+        .collection('users')
+        .doc(uid)
+        .collection('engine_usage')
+        .doc(day);
+      const snap = await ref.get();
+      const data = (snap.exists ? snap.data() : undefined) ?? {};
+      return buildQuotaStatus(day, vip, this.limits, (feature) => {
+        const raw = data[feature];
+        return typeof raw === 'number' ? raw : 0;
+      });
+    } catch (error) {
+      // A read failure must not break the screen — degrade to the in-memory
+      // counter (which on a cold instance just reports a full allowance).
+      console.error(`[quota] firestore status read failed for ${uid}, using fallback:`, error);
+      return this.fallback.status(uid, vip);
     }
   }
 
