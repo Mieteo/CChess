@@ -111,7 +111,7 @@ class XiangqiCupGame implements ChessGameSession {
     if (piece == null) return const [];
     if (piece.color != _turn) return const [];
 
-    final candidates = MoveRules.pseudoLegalMoves(_board, from);
+    final candidates = _cupPseudoLegal(from);
     final legal = <Position>[];
     for (final to in candidates) {
       if (_isLegalMove(from, to, piece)) legal.add(to);
@@ -124,7 +124,7 @@ class XiangqiCupGame implements ChessGameSession {
     if (_status.isOver) return false;
     final piece = _board.at(from);
     if (piece == null || piece.color != _turn) return false;
-    final candidates = MoveRules.pseudoLegalMoves(_board, from);
+    final candidates = _cupPseudoLegal(from);
     if (!candidates.contains(to)) return false;
     return _isLegalMove(from, to, piece);
   }
@@ -137,8 +137,12 @@ class XiangqiCupGame implements ChessGameSession {
     final copy = _board.copy();
     copy.setAt(to, movedAfterReveal);
     copy.setAt(from, null);
-    if (MoveRules.isInCheck(copy, coverPiece.color)) return false;
-    if (MoveRules.areGeneralsFacing(copy)) return false;
+    // After the move `from` is empty and `to` holds the now-revealed piece, so
+    // neither is face-down when we test the resulting position for check.
+    final hiddenAfter = _hiddenAssignments.keys.toSet()
+      ..remove(from)
+      ..remove(to);
+    if (_cupInCheck(copy, hiddenAfter, coverPiece.color)) return false;
     return true;
   }
 
@@ -204,7 +208,7 @@ class XiangqiCupGame implements ChessGameSession {
 
   void _refreshStatus() {
     final color = _turn;
-    final inCheck = MoveRules.isInCheck(_board, color);
+    final inCheck = _inCheckNow(color);
     final hasAnyMove = _sideHasAnyLegalMove(color);
 
     if (!hasAnyMove) {
@@ -221,7 +225,7 @@ class XiangqiCupGame implements ChessGameSession {
   bool _sideHasAnyLegalMove(PieceColor color) {
     for (final (pos, piece) in _board.occupied()) {
       if (piece.color != color) continue;
-      final candidates = MoveRules.pseudoLegalMoves(_board, pos);
+      final candidates = _cupPseudoLegal(pos);
       for (final to in candidates) {
         if (_isLegalMove(pos, to, piece)) return true;
       }
@@ -230,18 +234,88 @@ class XiangqiCupGame implements ChessGameSession {
   }
 
   @override
-  bool isInCheck(PieceColor color) => MoveRules.isInCheck(_board, color);
+  bool isInCheck(PieceColor color) => _inCheckNow(color);
 
   @override
   bool isCheckmate(PieceColor color) =>
-      MoveRules.isInCheck(_board, color) && !_sideHasAnyLegalMove(color);
+      _inCheckNow(color) && !_sideHasAnyLegalMove(color);
 
   @override
   bool isStalemate(PieceColor color) =>
-      !MoveRules.isInCheck(_board, color) && !_sideHasAnyLegalMove(color);
+      !_inCheckNow(color) && !_sideHasAnyLegalMove(color);
 
   @override
   bool areGeneralsFacing() => MoveRules.areGeneralsFacing(_board);
+
+  bool _inCheckNow(PieceColor color) =>
+      _cupInCheck(_board, _hiddenAssignments.keys.toSet(), color);
+
+  /// Cờ úp move generation. A FACE-DOWN piece moves by its cover (the role of
+  /// the square it sits on — so a cover Sĩ/Tượng stays confined like normal).
+  /// Once REVEALED, Sĩ and Tượng shed the palace / river limits and roam the
+  /// whole board, keeping only their 1-/2-step diagonal pattern (Tượng still
+  /// blocked by a "cản mắt"). Every other piece uses the standard rules.
+  List<Position> _cupPseudoLegal(Position from) =>
+      _cupPseudoLegalOn(_board, _hiddenAssignments.keys.toSet(), from);
+
+  static List<Position> _cupPseudoLegalOn(
+    Board board,
+    Set<Position> hidden,
+    Position from,
+  ) {
+    final piece = board.at(from);
+    if (piece == null) return const [];
+    if (!hidden.contains(from)) {
+      if (piece.type == PieceType.advisor) {
+        return _freeDiagonalMoves(board, from, piece, 1);
+      }
+      if (piece.type == PieceType.elephant) {
+        return _freeDiagonalMoves(board, from, piece, 2);
+      }
+    }
+    return MoveRules.pseudoLegalMoves(board, from);
+  }
+
+  /// Diagonal slider for revealed Sĩ ([step] 1) and Tượng ([step] 2) in Cờ úp:
+  /// no palace / river bounds, but the 2-step Tượng is still blocked when the
+  /// midpoint ("mắt Tượng") is occupied.
+  static List<Position> _freeDiagonalMoves(
+    Board b,
+    Position from,
+    Piece p,
+    int step,
+  ) {
+    final out = <Position>[];
+    final deltas = [
+      (-step, -step),
+      (-step, step),
+      (step, -step),
+      (step, step),
+    ];
+    for (final (dr, dc) in deltas) {
+      final to = from.offset(dr, dc);
+      if (!to.isValid) continue;
+      if (step == 2 && b.at(from.offset(dr ~/ 2, dc ~/ 2)) != null) {
+        continue; // cản mắt Tượng
+      }
+      final occupant = b.at(to);
+      if (occupant == null || occupant.color != p.color) out.add(to);
+    }
+    return out;
+  }
+
+  /// Check detection that honours the Cờ úp reach of revealed Sĩ/Tượng (and the
+  /// flying-general face-off). Face-down pieces still threaten by their cover.
+  static bool _cupInCheck(Board board, Set<Position> hidden, PieceColor color) {
+    final kingPos = board.generalPosition(color);
+    if (kingPos == null) return false;
+    if (MoveRules.areGeneralsFacing(board)) return true;
+    for (final (pos, piece) in board.occupied()) {
+      if (piece.color == color) continue;
+      if (_cupPseudoLegalOn(board, hidden, pos).contains(kingPos)) return true;
+    }
+    return false;
+  }
 
   @override
   void resign(PieceColor resigningColor) {

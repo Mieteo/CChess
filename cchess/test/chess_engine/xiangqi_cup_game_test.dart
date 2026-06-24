@@ -238,68 +238,80 @@ void main() {
     });
   });
 
-  group('XiangqiCupGame advisor/elephant confinement', () {
-    test('a revealed advisor stays inside its palace (cannot cross river)', () {
-      // Red advisor revealed OUTSIDE its palace (row 4, across the river).
+  group('XiangqiCupGame revealed Sĩ/Tượng roam freely', () {
+    test('a revealed advisor leaves the palace and may cross the river', () {
+      // Red advisor revealed OUTSIDE its palace, in the black half.
       final board = _boardWith({
-        const Position(0, 4): Piece.blackGeneral,
-        const Position(4, 3): Piece.redAdvisor,
+        const Position(0, 3): Piece.blackGeneral,
+        const Position(4, 4): Piece.redAdvisor,
         const Position(9, 4): Piece.redGeneral,
       });
       final game = XiangqiCupGame.debug(board: board); // no hidden → revealed
 
-      final moves = game.getValidMoves(const Position(4, 3));
-      // Stranded outside the palace: every diagonal lands off-palace → none.
-      for (final to in moves) {
-        expect(
-          to.isInPalace(true),
-          isTrue,
-          reason: 'revealed advisor left its palace: $to',
-        );
-      }
-      expect(moves, isEmpty);
+      final moves = game.getValidMoves(const Position(4, 4));
+      // Diagonal-1 in every direction, no palace / river bound.
+      expect(
+        moves,
+        containsAll(const [
+          Position(3, 3), // deeper into enemy territory
+          Position(3, 5),
+          Position(5, 3),
+          Position(5, 5),
+        ]),
+      );
     });
 
-    test('a revealed advisor inside the palace moves only within it', () {
-      // Black general off the red general's file so moving the advisor does
-      // not expose a flying-general (which would mask the palace constraint).
+    test('a revealed advisor still steps only one diagonal square', () {
       final board = _boardWith({
         const Position(0, 3): Piece.blackGeneral,
-        const Position(8, 4): Piece.redAdvisor, // palace centre
+        const Position(5, 4): Piece.redAdvisor,
         const Position(9, 4): Piece.redGeneral,
       });
       final game = XiangqiCupGame.debug(board: board);
 
-      final moves = game.getValidMoves(const Position(8, 4));
-      expect(moves, isNotEmpty);
-      for (final to in moves) {
-        expect(to.isInPalace(true), isTrue, reason: 'advisor escaped palace: $to');
+      for (final to in game.getValidMoves(const Position(5, 4))) {
+        expect((to.row - 5).abs(), 1, reason: 'advisor moved >1 row: $to');
+        expect((to.col - 4).abs(), 1, reason: 'advisor moved >1 col: $to');
       }
     });
 
-    test('a revealed elephant cannot cross the river', () {
-      // Red elephant revealed on its own side near the river.
+    test('a revealed elephant may cross the river (eye still blocks)', () {
+      // Red elephant revealed near the river; one diagonal eye is blocked.
       final board = _boardWith({
-        const Position(0, 4): Piece.blackGeneral,
-        const Position(5, 2): Piece.redElephant,
+        const Position(0, 3): Piece.blackGeneral,
+        const Position(5, 4): Piece.redElephant,
+        const Position(4, 3): Piece.redSoldier, // blocks the (5,4)->(3,2) eye
         const Position(9, 4): Piece.redGeneral,
       });
       final game = XiangqiCupGame.debug(board: board);
 
-      final moves = game.getValidMoves(const Position(5, 2));
-      for (final to in moves) {
-        expect(
-          to.row >= 5,
-          isTrue,
-          reason: 'revealed red elephant crossed the river: $to',
-        );
-      }
+      final moves = game.getValidMoves(const Position(5, 4));
+      expect(moves, contains(const Position(3, 6))); // crossed the river
+      expect(
+        moves,
+        isNot(contains(const Position(3, 2))),
+        reason: 'blocked elephant eye should forbid (3,2)',
+      );
     });
 
-    test('hidden piece on the advisor point moves like an advisor', () {
+    test('a revealed advisor can deliver check across the board', () {
+      // Black general at (2,3); a red advisor diagonally adjacent threatens it.
+      // Generals sit on different files so the check is the advisor's, not a
+      // flying-general face-off.
+      final board = _boardWith({
+        const Position(2, 3): Piece.blackGeneral,
+        const Position(3, 4): Piece.redAdvisor,
+        const Position(9, 4): Piece.redGeneral,
+      });
+      final game = XiangqiCupGame.debug(board: board, turn: PieceColor.black);
+
+      expect(game.isInCheck(PieceColor.black), isTrue);
+    });
+
+    test('hidden piece on the advisor point still moves like a confined Sĩ', () {
       // Cover = advisor but the true hidden piece is a chariot. While face
-      // down it must move like its cover (one diagonal step in the palace),
-      // NOT like the powerful piece underneath.
+      // down it must move like its cover (one diagonal step inside the palace),
+      // NOT like the powerful piece underneath and NOT roam freely.
       final board = _boardWith({
         const Position(0, 4): Piece.blackGeneral,
         const Position(9, 3): Piece.redAdvisor, // cover
@@ -313,7 +325,7 @@ void main() {
       expect(game.getValidMoves(const Position(9, 3)), [const Position(8, 4)]);
     });
 
-    test('hidden piece on the elephant point moves like an elephant', () {
+    test('hidden piece on the elephant point still cannot cross the river', () {
       final board = _boardWith({
         const Position(0, 4): Piece.blackGeneral,
         const Position(9, 2): Piece.redElephant, // cover
@@ -327,7 +339,7 @@ void main() {
       final moves = game.getValidMoves(const Position(9, 2));
       expect(moves, contains(const Position(7, 4))); // elephant diagonal
       for (final to in moves) {
-        expect(to.row >= 5, isTrue, reason: 'elephant cover crossed river: $to');
+        expect(to.row >= 5, isTrue, reason: 'hidden elephant crossed river: $to');
       }
     });
   });
