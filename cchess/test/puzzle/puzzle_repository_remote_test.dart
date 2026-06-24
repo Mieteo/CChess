@@ -188,5 +188,45 @@ void main() {
       expect(p.solved, isTrue);
       expect(p.bestScore, 70);
     });
+
+    test('recordAttempt accumulates hints and skips mirror when asked',
+        () async {
+      final repo = PuzzleRepository();
+      await repo.recordAttempt('p001', hintsUsed: 2, mirror: false);
+      final p = await repo.recordAttempt('p001', solved: true, score: 90,
+          hintsUsed: 1, mirror: false);
+      expect(p.attempts, 2);
+      expect(p.hintsUsed, 3);
+      expect(p.bestScore, 90);
+    });
+  });
+
+  group('stats', () {
+    test('getProgressForIds defaults unknown ids', () async {
+      final repo = PuzzleRepository();
+      final map = await repo.getProgressForIds(['p001', 'zzz']);
+      expect(map.keys, containsAll(['p001', 'zzz']));
+      expect(map['zzz']!.attempts, 0);
+      expect(map['zzz']!.solved, isFalse);
+    });
+
+    test('computeStats aggregates progress with difficulty buckets', () async {
+      final repo = PuzzleRepository();
+      // p001 is a difficulty-1 seed puzzle.
+      await repo.recordAttempt('p001', solved: true, score: 80, mirror: false);
+      // p020 is a difficulty-3 seed puzzle, attempted but unsolved.
+      await repo.recordAttempt('p020', mirror: false);
+
+      final stats = await repo.computeStats();
+      expect(stats.attempted, 2);
+      expect(stats.solved, 1);
+      expect(stats.catalogSize, greaterThanOrEqualTo(2));
+      expect(stats.averageScore, 80);
+      expect(stats.solveRate, closeTo(0.5, 1e-9));
+
+      final d1 = stats.byDifficulty.firstWhere((b) => b.difficulty == 1);
+      expect(d1.solved, 1);
+      expect(d1.attempted, 1);
+    });
   });
 }

@@ -6,6 +6,7 @@ import '../datasources/local/puzzle_seed.dart';
 import '../datasources/remote/puzzle_api_transport.dart';
 import '../datasources/remote/remote_puzzle_source.dart';
 import '../models/chess_puzzle.dart';
+import '../models/puzzle_stats.dart';
 
 /// Repository combining the backend puzzle catalog with the built-in seed and
 /// locally persisted per-user progress.
@@ -210,7 +211,7 @@ class PuzzleRepository {
     return PuzzleProgress(puzzleId: puzzleId);
   }
 
-  /// Bulk fetch — useful for the list screen.
+  /// Bulk fetch over the seed catalog — kept for legacy callers (achievements).
   Future<Map<String, PuzzleProgress>> getAllProgress() async {
     final box = await _openProgressBox();
     final map = <String, PuzzleProgress>{};
@@ -220,6 +221,77 @@ class PuzzleRepository {
           raw is Map ? PuzzleProgress.fromJson(raw) : PuzzleProgress(puzzleId: p.id);
     }
     return map;
+  }
+
+  /// Progress for an explicit set of puzzle ids — used by the remote-backed
+  /// list screen, which doesn't know its puzzles ahead of time. Missing ids map
+  /// to a default "not attempted yet" entry.
+  Future<Map<String, PuzzleProgress>> getProgressForIds(
+    Iterable<String> ids,
+  ) async {
+    final box = await _openProgressBox();
+    final map = <String, PuzzleProgress>{};
+    for (final id in ids) {
+      final raw = box.get(id);
+      map[id] = raw is Map
+          ? PuzzleProgress.fromJson(raw)
+          : PuzzleProgress(puzzleId: id);
+    }
+    return map;
+  }
+
+  /// Aggregate the entire progress box (joined against the local catalog for
+  /// difficulty buckets) into a single [PuzzleStats] for the stats screen.
+  Future<PuzzleStats> computeStats() async {
+    final box = await _openProgressBox();
+    final catalog = {for (final p in await _localCatalog()) p.id: p};
+
+    var attempted = 0;
+    var solved = 0;
+    var totalAttempts = 0;
+    var totalHints = 0;
+    var bestScoreSum = 0;
+    var scoredCount = 0;
+    // difficulty -> [solved, attempted]
+    final diff = <int, List<int>>{};
+
+    for (final raw in box.values) {
+      if (raw is! Map) continue;
+      final p = PuzzleProgress.fromJson(raw);
+      if (p.attempts <= 0 && !p.solved) continue;
+      attempted++;
+      totalAttempts += p.attempts;
+      totalHints += p.hintsUsed;
+      if (p.solved) solved++;
+      if (p.bestScore > 0) {
+        bestScoreSum += p.bestScore;
+        scoredCount++;
+      }
+      final d = catalog[p.puzzleId]?.difficulty ?? 0;
+      final slot = diff.putIfAbsent(d, () => [0, 0]);
+      slot[1] += 1;
+      if (p.solved) slot[0] += 1;
+    }
+
+    final buckets = diff.entries
+        .map((e) => DifficultyStat(
+              difficulty: e.key,
+              solved: e.value[0],
+              attempted: e.value[1],
+            ))
+        .toList()
+      ..sort((a, b) => a.difficulty.compareTo(b.difficulty));
+
+    return PuzzleStats(
+      attempted: attempted,
+      solved: solved,
+      catalogSize: catalog.length,
+      totalAttempts: totalAttempts,
+      totalHints: totalHints,
+      bestScoreSum: bestScoreSum,
+      scoredCount: scoredCount,
+      byDifficulty: buckets,
+    );
   }
 
   Future<void> saveProgress(PuzzleProgress progress) async {
@@ -234,26 +306,31 @@ class PuzzleRepository {
   Future<PuzzleProgress> recordAttempt(
     String puzzleId, {
     bool solved = false,
-    bool hintUsed = false,
+    int hintsUsed = 0,
     int score = 0,
+    bool mirror = true,
   }) async {
     final current = await getProgress(puzzleId);
     final updated = current.copyWith(
       attempts: current.attempts + 1,
-      hintsUsed: current.hintsUsed + (hintUsed ? 1 : 0),
+      hintsUsed: current.hintsUsed + (hintsUsed > 0 ? hintsUsed : 0),
       solved: current.solved || solved,
       bestScore: score > current.bestScore ? score : current.bestScore,
       solvedAt: solved && !current.solved ? DateTime.now() : current.solvedAt,
     );
     await saveProgress(updated);
 
-    // Mirror to the backend without blocking the caller (offline-safe).
-    _mirrorProgress(
-      puzzleId,
-      solved: updated.solved,
-      hintsUsed: hintUsed ? 1 : 0,
-      score: score,
-    );
+    // Mirror to the backend without blocking the caller (offline-safe). Callers
+    // that follow up with an awaited [syncProgress] pass `mirror: false` to
+    // avoid a duplicate POST.
+    if (mirror) {
+      _mirrorProgress(
+        puzzleId,
+        solved: updated.solved,
+        hintsUsed: hintsUsed > 0 ? hintsUsed : 0,
+        score: score,
+      );
+    }
 
     return updated;
   }

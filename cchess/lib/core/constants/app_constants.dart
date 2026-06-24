@@ -24,6 +24,9 @@ class AppConstants {
   static const String routeMatchmaking = '/matchmaking';
   static const String routeBotSelect = '/bot-select';
   static const String routePuzzle = '/puzzle';
+  // Endgame (tàn cục) progress dashboard. Distinct path so it doesn't collide
+  // with the `/puzzle/:id` detail route.
+  static const String routeEndgameStats = '/puzzle-stats';
   static const String routeBeginnerLessons = '/beginner-lessons';
   static const String routeSettings = '/settings';
   static const String routeShop = '/shop';

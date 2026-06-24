@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/chess_engine/chess_engine.dart';
+import '../../core/constants/app_constants.dart';
+import '../../data/models/chess_puzzle.dart';
 import '../../data/repositories/puzzle_repository.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_spacing.dart';
@@ -18,22 +20,98 @@ class PuzzleScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final repo = ref.watch(puzzleRepositoryProvider);
-    final puzzle = repo.puzzleById(puzzleId);
-    if (puzzle == null) {
-      return Scaffold(
-        appBar: AppBar(title: const Text('Bài tập không tồn tại')),
-        body: Center(
-          child: Text(
-            'Không tìm thấy bài tập "$puzzleId"',
-            style: AppTextStyles.bodyMd,
-          ),
+    final puzzleAsync = ref.watch(puzzleByIdProvider(puzzleId));
+    return puzzleAsync.when(
+      loading: () => _ScaffoldShell(
+        title: 'Đang tải…',
+        body: const Center(child: CircularProgressIndicator()),
+      ),
+      error: (_, _) => _ScaffoldShell(
+        title: 'Lỗi tải bài',
+        body: _PuzzleMessage(
+          icon: Icons.cloud_off,
+          message: 'Không tải được bài tập. Kiểm tra kết nối và thử lại.',
+          onRetry: () => ref.invalidate(puzzleByIdProvider(puzzleId)),
         ),
-      );
-    }
+      ),
+      data: (puzzle) {
+        if (puzzle == null) {
+          return _ScaffoldShell(
+            title: 'Bài tập không tồn tại',
+            body: _PuzzleMessage(
+              icon: Icons.search_off,
+              message: 'Không tìm thấy bài tập "$puzzleId".',
+            ),
+          );
+        }
+        return _PuzzleView(puzzle: puzzle);
+      },
+    );
+  }
+}
 
-    final state = ref.watch(puzzleControllerProvider(puzzleId));
-    final controller = ref.read(puzzleControllerProvider(puzzleId).notifier);
+class _ScaffoldShell extends StatelessWidget {
+  final String title;
+  final Widget body;
+  const _ScaffoldShell({required this.title, required this.body});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      appBar: AppBar(
+        backgroundColor: AppColors.woodDark,
+        title: Text(title),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => context.go(AppConstants.routePuzzle),
+        ),
+      ),
+      body: SafeArea(child: body),
+    );
+  }
+}
+
+class _PuzzleMessage extends StatelessWidget {
+  final IconData icon;
+  final String message;
+  final VoidCallback? onRetry;
+  const _PuzzleMessage({required this.icon, required this.message, this.onRetry});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.lg),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, color: AppColors.onSurfaceVariant, size: 40),
+            AppSpacing.vGapMd,
+            Text(message, style: AppTextStyles.bodyMd, textAlign: TextAlign.center),
+            if (onRetry != null) ...[
+              AppSpacing.vGapMd,
+              CChessButton(
+                label: 'Thử lại',
+                icon: Icons.refresh,
+                onPressed: onRetry,
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PuzzleView extends ConsumerWidget {
+  final ChessPuzzle puzzle;
+  const _PuzzleView({required this.puzzle});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final state = ref.watch(puzzleControllerProvider(puzzle));
+    final controller = ref.read(puzzleControllerProvider(puzzle).notifier);
 
     final checkedKing = state.game.isInCheck(state.game.turn)
         ? state.game.board.generalPosition(state.game.turn)
@@ -55,7 +133,7 @@ class PuzzleScreen extends ConsumerWidget {
         title: Text(puzzle.titleVi),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
-          onPressed: () => context.go('/puzzle'),
+          onPressed: () => context.go(AppConstants.routePuzzle),
         ),
         actions: [
           IconButton(
@@ -88,12 +166,31 @@ class PuzzleScreen extends ConsumerWidget {
               AppSpacing.vGapSm,
               _PuzzleFeedbackPanel(state: state),
               AppSpacing.vGapSm,
-              _PuzzleActions(state: state, controller: controller),
+              _PuzzleActions(
+                state: state,
+                controller: controller,
+                onNext: () => _goToNext(context, ref),
+              ),
             ],
           ),
         ),
       ),
     );
+  }
+
+  /// Navigate to the next puzzle in the catalog order (remote → local fallback),
+  /// or back to the list when this is the last one.
+  Future<void> _goToNext(BuildContext context, WidgetRef ref) async {
+    final repo = ref.read(puzzleRepositoryProvider);
+    final page = await repo.fetchPuzzles(limit: 50);
+    if (!context.mounted) return;
+    final list = page.puzzles;
+    final idx = list.indexWhere((p) => p.id == puzzle.id);
+    if (idx == -1 || idx + 1 >= list.length) {
+      context.go(AppConstants.routePuzzle);
+      return;
+    }
+    context.go('${AppConstants.routePuzzle}/${list[idx + 1].id}');
   }
 }
 
@@ -145,24 +242,27 @@ class _PuzzleInfoPanel extends StatelessWidget {
                         color: AppColors.accentGold,
                       ),
                     AppSpacing.hGapSm,
-                    for (final tag in puzzle.tags) ...[
+                    if (state.progress.bestScore > 0)
                       Container(
                         padding: const EdgeInsets.symmetric(
                           horizontal: 6,
                           vertical: 1,
                         ),
-                        margin: const EdgeInsets.only(right: 4),
                         decoration: BoxDecoration(
-                          color: AppColors.surfaceContainerHighest,
+                          color: AppColors.tealSuccess.withValues(alpha: 0.18),
                           borderRadius: BorderRadius.circular(4),
-                          border: Border.all(color: AppColors.outlineVariant),
+                          border:
+                              Border.all(color: AppColors.tealSuccess),
                         ),
                         child: Text(
-                          tag,
-                          style: AppTextStyles.captionSm.copyWith(fontSize: 10),
+                          'KỶ LỤC ${state.progress.bestScore}',
+                          style: AppTextStyles.captionSm.copyWith(
+                            fontSize: 10,
+                            color: AppColors.tealSuccess,
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
                       ),
-                    ],
                   ],
                 ),
               ],
@@ -219,12 +319,17 @@ class _PuzzleFeedbackPanel extends StatelessWidget {
       PuzzleFeedback.solved => (
           Icons.emoji_events,
           AppColors.accentGold,
-          'Hoàn thành! +50 EXP',
+          'Hoàn thành! Điểm: ${state.lastScore ?? state.progress.bestScore}/100',
         ),
       PuzzleFeedback.failedShownSolution => (
           Icons.lightbulb_outline,
           AppColors.accentGold,
           'Đáp án đã được tô sáng. Hãy thử lại.',
+        ),
+      PuzzleFeedback.hint => (
+          Icons.lightbulb,
+          AppColors.accentGold,
+          state.hintText ?? 'Gợi ý đã bật.',
         ),
     };
 
@@ -258,8 +363,13 @@ class _PuzzleFeedbackPanel extends StatelessWidget {
 class _PuzzleActions extends StatelessWidget {
   final PuzzleUiState state;
   final PuzzleController controller;
+  final VoidCallback onNext;
 
-  const _PuzzleActions({required this.state, required this.controller});
+  const _PuzzleActions({
+    required this.state,
+    required this.controller,
+    required this.onNext,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -272,8 +382,9 @@ class _PuzzleActions extends StatelessWidget {
             variant: CChessButtonVariant.outline,
             icon: Icons.lightbulb_outline,
             fullWidth: true,
-            onPressed:
-                state.hintsRemaining > 0 && !solved ? controller.requestHint : null,
+            onPressed: state.hintsRemaining > 0 && !solved
+                ? controller.requestHint
+                : null,
           ),
         ),
         AppSpacing.hGapMd,
@@ -282,23 +393,10 @@ class _PuzzleActions extends StatelessWidget {
             label: solved ? 'Bài tiếp →' : 'Làm lại',
             icon: solved ? Icons.skip_next : Icons.refresh,
             fullWidth: true,
-            onPressed: solved
-                ? () => _goToNext(context)
-                : controller.restart,
+            onPressed: solved ? onNext : controller.restart,
           ),
         ),
       ],
     );
-  }
-
-  void _goToNext(BuildContext context) {
-    final repo = PuzzleRepository();
-    final all = repo.allPuzzles();
-    final idx = all.indexWhere((p) => p.id == state.puzzle.id);
-    if (idx == -1 || idx + 1 >= all.length) {
-      context.go('/puzzle');
-      return;
-    }
-    context.go('/puzzle/${all[idx + 1].id}');
   }
 }

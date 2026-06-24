@@ -1,14 +1,17 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/constants/app_constants.dart';
+import '../../data/datasources/remote/remote_puzzle_source.dart';
 import '../../data/models/chess_puzzle.dart';
-import '../../data/repositories/puzzle_repository.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_spacing.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/common/common.dart';
+import 'puzzle_list_controller.dart';
 
 class PuzzleListScreen extends ConsumerStatefulWidget {
   const PuzzleListScreen({super.key});
@@ -18,26 +21,34 @@ class PuzzleListScreen extends ConsumerStatefulWidget {
 }
 
 class _PuzzleListScreenState extends ConsumerState<PuzzleListScreen> {
-  late Future<Map<String, PuzzleProgress>> _progressFuture;
-  String? _selectedTag;
-  int? _selectedDifficulty;
+  final ScrollController _scroll = ScrollController();
 
   @override
   void initState() {
     super.initState();
-    _progressFuture = ref.read(puzzleRepositoryProvider).getAllProgress();
+    _scroll.addListener(_onScroll);
+  }
+
+  @override
+  void dispose() {
+    _scroll.removeListener(_onScroll);
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  void _onScroll() {
+    if (!_scroll.hasClients) return;
+    final pos = _scroll.position;
+    if (pos.pixels >= pos.maxScrollExtent - 320) {
+      ref.read(puzzleListControllerProvider.notifier).loadMore();
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final repo = ref.watch(puzzleRepositoryProvider);
-    final allPuzzles = repo.allPuzzles();
-    final puzzles = repo.filteredPuzzles(
-      tag: _selectedTag,
-      difficulty: _selectedDifficulty,
-    );
-    final tags = repo.availableTags();
-    final dailyPuzzle = repo.dailyPuzzle();
+    final state = ref.watch(puzzleListControllerProvider);
+    final controller = ref.read(puzzleListControllerProvider.notifier);
+    final daily = ref.watch(dailyPuzzleProvider);
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -48,116 +59,212 @@ class _PuzzleListScreenState extends ConsumerState<PuzzleListScreen> {
           icon: const Icon(Icons.arrow_back),
           onPressed: () => context.go(AppConstants.routeLearning),
         ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.bar_chart),
+            tooltip: 'Thống kê',
+            onPressed: () => context.go(AppConstants.routeEndgameStats),
+          ),
+        ],
       ),
       body: SafeArea(
-        child: FutureBuilder<Map<String, PuzzleProgress>>(
-          future: _progressFuture,
-          builder: (context, snap) {
-            final progress = snap.data ?? const <String, PuzzleProgress>{};
-            final solved = progress.values.where((p) => p.solved).length;
-            return ListView(
-              padding: const EdgeInsets.all(AppSpacing.base),
-              children: [
-                _ProgressSummary(
-                  solved: solved,
-                  total: allPuzzles.length,
-                  dailyPuzzleTitle: dailyPuzzle?.titleVi,
-                  onDailyTap: dailyPuzzle == null
-                      ? null
-                      : () => context.go('/puzzle/${dailyPuzzle.id}'),
-                ),
-                AppSpacing.vGapLg,
-                _PuzzleFilters(
-                  tags: tags,
-                  selectedTag: _selectedTag,
-                  selectedDifficulty: _selectedDifficulty,
-                  onTagChanged: (tag) {
-                    setState(() => _selectedTag = tag);
-                  },
-                  onDifficultyChanged: (difficulty) {
-                    setState(() => _selectedDifficulty = difficulty);
-                  },
-                ),
-                AppSpacing.vGapLg,
-                SectionHeader(title: 'Kho tàn cục (${puzzles.length})'),
-                AppSpacing.vGapMd,
-                if (puzzles.isEmpty)
-                  const _EmptyPuzzleState()
-                else
-                  for (final p in puzzles) ...[
-                    _PuzzleListItem(
-                      puzzle: p,
-                      progress:
-                          progress[p.id] ?? PuzzleProgress(puzzleId: p.id),
-                    ),
-                    AppSpacing.vGapSm,
-                  ],
-              ],
-            );
-          },
+        child: RefreshIndicator(
+          onRefresh: controller.refresh,
+          color: AppColors.accentGold,
+          child: ListView(
+            controller: _scroll,
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.all(AppSpacing.base),
+            children: [
+              _DailyChallengeBanner(
+                daily: daily,
+                onTap: (id) => context.go('${AppConstants.routePuzzle}/$id'),
+              ),
+              AppSpacing.vGapLg,
+              _ProgressSummary(
+                solved: state.solvedCount,
+                shown: state.puzzles.length,
+                onStatsTap: () => context.go(AppConstants.routeEndgameStats),
+              ),
+              AppSpacing.vGapLg,
+              _PuzzleFilters(
+                selectedCategory: state.category,
+                selectedDifficulty: state.difficulty,
+                selectedSort: state.sort,
+                onCategoryChanged: controller.setCategory,
+                onDifficultyChanged: controller.setDifficulty,
+                onSortChanged: controller.setSort,
+              ),
+              AppSpacing.vGapLg,
+              SectionHeader(title: 'Kho tàn cục (${state.puzzles.length})'),
+              AppSpacing.vGapMd,
+              ..._buildBody(state, controller),
+            ],
+          ),
         ),
       ),
     );
   }
+
+  List<Widget> _buildBody(
+    PuzzleListState state,
+    PuzzleListController controller,
+  ) {
+    if (state.isLoading && state.puzzles.isEmpty) {
+      return const [
+        Padding(
+          padding: EdgeInsets.symmetric(vertical: AppSpacing.lg),
+          child: Center(child: CircularProgressIndicator()),
+        ),
+      ];
+    }
+    if (state.error != null && state.puzzles.isEmpty) {
+      return [
+        _ErrorState(onRetry: controller.refresh),
+      ];
+    }
+    if (state.puzzles.isEmpty) {
+      return const [_EmptyPuzzleState()];
+    }
+    return [
+      for (final p in state.puzzles) ...[
+        _PuzzleListItem(
+          puzzle: p,
+          progress: state.progress[p.id] ?? PuzzleProgress(puzzleId: p.id),
+        ),
+        AppSpacing.vGapSm,
+      ],
+      if (state.isLoadingMore)
+        const Padding(
+          padding: EdgeInsets.symmetric(vertical: AppSpacing.md),
+          child: Center(child: CircularProgressIndicator()),
+        )
+      else if (!state.hasMore)
+        Padding(
+          padding: const EdgeInsets.only(top: AppSpacing.sm),
+          child: Text(
+            'Đã hết bài trong bộ lọc này.',
+            textAlign: TextAlign.center,
+            style: AppTextStyles.captionSm.copyWith(
+              color: AppColors.onSurfaceVariant,
+            ),
+          ),
+        ),
+    ];
+  }
 }
 
-class _ProgressSummary extends StatelessWidget {
-  final int solved;
-  final int total;
-  final String? dailyPuzzleTitle;
-  final VoidCallback? onDailyTap;
+/// Featured daily puzzle with a live countdown to the next VN-midnight reset.
+class _DailyChallengeBanner extends StatefulWidget {
+  final AsyncValue<ChessPuzzle?> daily;
+  final ValueChanged<String> onTap;
 
-  const _ProgressSummary({
-    required this.solved,
-    required this.total,
-    required this.dailyPuzzleTitle,
-    required this.onDailyTap,
-  });
+  const _DailyChallengeBanner({required this.daily, required this.onTap});
+
+  @override
+  State<_DailyChallengeBanner> createState() => _DailyChallengeBannerState();
+}
+
+class _DailyChallengeBannerState extends State<_DailyChallengeBanner> {
+  Timer? _timer;
+  Duration _remaining = Duration.zero;
+
+  @override
+  void initState() {
+    super.initState();
+    _remaining = _timeToVnReset();
+    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted) return;
+      setState(() => _remaining = _timeToVnReset());
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  /// Time until the next daily reset (00:00 in Vietnam, UTC+7).
+  static Duration _timeToVnReset() {
+    final nowUtc = DateTime.now().toUtc();
+    final vnNow = nowUtc.add(const Duration(hours: 7));
+    final nextVnMidnight =
+        DateTime.utc(vnNow.year, vnNow.month, vnNow.day)
+            .add(const Duration(days: 1));
+    final nextResetUtc = nextVnMidnight.subtract(const Duration(hours: 7));
+    final diff = nextResetUtc.difference(nowUtc);
+    return diff.isNegative ? Duration.zero : diff;
+  }
+
+  String get _countdown {
+    final h = _remaining.inHours.toString().padLeft(2, '0');
+    final m = (_remaining.inMinutes % 60).toString().padLeft(2, '0');
+    final s = (_remaining.inSeconds % 60).toString().padLeft(2, '0');
+    return '$h:$m:$s';
+  }
 
   @override
   Widget build(BuildContext context) {
-    final ratio = total == 0 ? 0.0 : solved / total;
+    final puzzle = widget.daily.valueOrNull;
     return CChessCard(
       gradient: const LinearGradient(
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
         colors: [AppColors.charcoalDark, AppColors.woodDark],
       ),
-      borderColor: AppColors.accentGold.withValues(alpha: 0.4),
+      borderColor: AppColors.accentGold.withValues(alpha: 0.5),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(
             children: [
-              Text('Tiến độ tổng', style: AppTextStyles.headingMd),
+              const Icon(Icons.local_fire_department,
+                  color: AppColors.accentGold, size: 20),
+              AppSpacing.hGapSm,
+              Text('Thử thách hôm nay', style: AppTextStyles.headingMd),
               const Spacer(),
+              const Icon(Icons.schedule,
+                  size: 14, color: AppColors.parchmentTan),
+              AppSpacing.hGapXs,
               Text(
-                '$solved / $total',
-                style: AppTextStyles.titleLg.copyWith(
+                _countdown,
+                style: AppTextStyles.monoTimer.copyWith(
+                  fontSize: 14,
                   color: AppColors.accentGold,
                 ),
               ),
             ],
           ),
           AppSpacing.vGapSm,
-          CChessProgressBar(value: ratio),
-          AppSpacing.vGapXs,
-          Text(
-            ratio == 1
-                ? 'Hoàn thành tất cả bài tập!'
-                : 'Kho hiện có $total bài tàn cục offline.',
-            style: AppTextStyles.captionSm.copyWith(
-              color: AppColors.parchmentTan,
+          if (widget.daily.isLoading)
+            Text(
+              'Đang tải thử thách…',
+              style: AppTextStyles.captionSm.copyWith(
+                color: AppColors.parchmentTan,
+              ),
+            )
+          else if (puzzle == null)
+            Text(
+              'Hôm nay chưa có thử thách. Quay lại sau nhé!',
+              style: AppTextStyles.captionSm.copyWith(
+                color: AppColors.parchmentTan,
+              ),
+            )
+          else ...[
+            Text(
+              puzzle.titleVi,
+              style: AppTextStyles.titleLg.copyWith(
+                color: AppColors.parchmentTan,
+              ),
             ),
-          ),
-          if (dailyPuzzleTitle != null) ...[
             AppSpacing.vGapMd,
             CChessButton(
-              label: 'Thử thách: $dailyPuzzleTitle',
-              icon: Icons.local_fire_department,
+              label: 'Vào giải ngay',
+              icon: Icons.play_arrow,
               variant: CChessButtonVariant.danger,
               fullWidth: true,
-              onPressed: onDailyTap,
+              onPressed: () => widget.onTap(puzzle.id),
             ),
           ],
         ],
@@ -166,20 +273,91 @@ class _ProgressSummary extends StatelessWidget {
   }
 }
 
+class _ProgressSummary extends StatelessWidget {
+  final int solved;
+  final int shown;
+  final VoidCallback onStatsTap;
+
+  const _ProgressSummary({
+    required this.solved,
+    required this.shown,
+    required this.onStatsTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return CChessCard(
+      onTap: onStatsTap,
+      child: Row(
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: AppColors.accentGold.withValues(alpha: 0.16),
+              shape: BoxShape.circle,
+              border: Border.all(color: AppColors.accentGold),
+            ),
+            alignment: Alignment.center,
+            child: const Icon(Icons.workspace_premium,
+                color: AppColors.accentGold, size: 22),
+          ),
+          AppSpacing.hGapMd,
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Tiến độ luyện tập', style: AppTextStyles.headingMd),
+                AppSpacing.vGapXs,
+                Text(
+                  'Đã giải $solved bài • đang xem $shown bài',
+                  style: AppTextStyles.captionSm.copyWith(
+                    color: AppColors.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Row(
+            children: [
+              Text(
+                'Thống kê',
+                style: AppTextStyles.captionSm.copyWith(
+                  color: AppColors.accentGold,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const Icon(Icons.chevron_right, color: AppColors.parchmentTan),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _PuzzleFilters extends StatelessWidget {
-  final List<String> tags;
-  final String? selectedTag;
+  final String? selectedCategory;
   final int? selectedDifficulty;
-  final ValueChanged<String?> onTagChanged;
+  final PuzzleSort selectedSort;
+  final ValueChanged<String?> onCategoryChanged;
   final ValueChanged<int?> onDifficultyChanged;
+  final ValueChanged<PuzzleSort> onSortChanged;
 
   const _PuzzleFilters({
-    required this.tags,
-    required this.selectedTag,
+    required this.selectedCategory,
     required this.selectedDifficulty,
-    required this.onTagChanged,
+    required this.selectedSort,
+    required this.onCategoryChanged,
     required this.onDifficultyChanged,
+    required this.onSortChanged,
   });
+
+  static const _sorts = <(PuzzleSort, String)>[
+    (PuzzleSort.newest, 'Mới nhất'),
+    (PuzzleSort.hardest, 'Khó nhất'),
+    (PuzzleSort.easiest, 'Dễ nhất'),
+  ];
 
   @override
   Widget build(BuildContext context) {
@@ -196,65 +374,83 @@ class _PuzzleFilters extends StatelessWidget {
             ],
           ),
           AppSpacing.vGapMd,
-          Text(
-            'Chủ đề',
-            style: AppTextStyles.captionSm.copyWith(
-              color: AppColors.parchmentTan,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
+          _FilterLabel('Chủ đề'),
           AppSpacing.vGapXs,
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: [
+          _ChipRow(
+            children: [
+              for (final cat in kPuzzleCategories)
                 _FilterChip(
-                  label: 'Tất cả',
-                  selected: selectedTag == null,
-                  onTap: () => onTagChanged(null),
+                  label: cat.label,
+                  selected: selectedCategory == cat.key,
+                  onTap: () => onCategoryChanged(cat.key),
                 ),
-                AppSpacing.hGapXs,
-                for (final tag in tags) ...[
-                  _FilterChip(
-                    label: tag,
-                    selected: selectedTag == tag,
-                    onTap: () => onTagChanged(tag),
-                  ),
-                  AppSpacing.hGapXs,
-                ],
-              ],
-            ),
+            ],
           ),
           AppSpacing.vGapMd,
-          Text(
-            'Độ khó',
-            style: AppTextStyles.captionSm.copyWith(
-              color: AppColors.parchmentTan,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
+          _FilterLabel('Độ khó'),
           AppSpacing.vGapXs,
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: [
+          _ChipRow(
+            children: [
+              _FilterChip(
+                label: 'Tất cả',
+                selected: selectedDifficulty == null,
+                onTap: () => onDifficultyChanged(null),
+              ),
+              for (int difficulty = 1; difficulty <= 5; difficulty++)
                 _FilterChip(
-                  label: 'Tất cả',
-                  selected: selectedDifficulty == null,
-                  onTap: () => onDifficultyChanged(null),
+                  label: '$difficulty★',
+                  selected: selectedDifficulty == difficulty,
+                  onTap: () => onDifficultyChanged(difficulty),
                 ),
-                AppSpacing.hGapXs,
-                for (int difficulty = 1; difficulty <= 5; difficulty++) ...[
-                  _FilterChip(
-                    label: '$difficulty★',
-                    selected: selectedDifficulty == difficulty,
-                    onTap: () => onDifficultyChanged(difficulty),
-                  ),
-                  AppSpacing.hGapXs,
-                ],
-              ],
-            ),
+            ],
           ),
+          AppSpacing.vGapMd,
+          _FilterLabel('Sắp xếp'),
+          AppSpacing.vGapXs,
+          _ChipRow(
+            children: [
+              for (final (sort, label) in _sorts)
+                _FilterChip(
+                  label: label,
+                  selected: selectedSort == sort,
+                  onTap: () => onSortChanged(sort),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _FilterLabel extends StatelessWidget {
+  final String text;
+  const _FilterLabel(this.text);
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      text,
+      style: AppTextStyles.captionSm.copyWith(
+        color: AppColors.parchmentTan,
+        fontWeight: FontWeight.w700,
+      ),
+    );
+  }
+}
+
+/// Horizontally-scrollable row of chips with consistent spacing.
+class _ChipRow extends StatelessWidget {
+  final List<Widget> children;
+  const _ChipRow({required this.children});
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          for (final child in children) ...[child, AppSpacing.hGapXs],
         ],
       ),
     );
@@ -316,7 +512,7 @@ class _PuzzleListItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return CChessCard(
-      onTap: () => context.go('/puzzle/${puzzle.id}'),
+      onTap: () => context.go('${AppConstants.routePuzzle}/${puzzle.id}'),
       borderColor: progress.solved
           ? AppColors.tealSuccess.withValues(alpha: 0.5)
           : AppColors.outlineVariant,
@@ -339,9 +535,8 @@ class _PuzzleListItem extends StatelessWidget {
             alignment: Alignment.center,
             child: Icon(
               progress.solved ? Icons.check : Icons.extension_outlined,
-              color: progress.solved
-                  ? AppColors.tealSuccess
-                  : AppColors.primary,
+              color:
+                  progress.solved ? AppColors.tealSuccess : AppColors.primary,
               size: 22,
             ),
           ),
@@ -369,9 +564,11 @@ class _PuzzleListItem extends StatelessWidget {
                   children: [
                     _DifficultyStars(value: puzzle.difficulty),
                     _TinyMetaChip(label: '${puzzle.solverMoveCount} nước'),
-                    if (progress.attempts > 0)
+                    if (progress.solved && progress.bestScore > 0)
+                      _TinyMetaChip(label: 'Điểm ${progress.bestScore}'),
+                    if (!progress.solved && progress.attempts > 0)
                       _TinyMetaChip(label: '${progress.attempts} lần thử'),
-                    for (final tag in puzzle.tags.take(3))
+                    for (final tag in puzzle.tags.take(2))
                       _TinyMetaChip(label: tag),
                   ],
                 ),
@@ -421,6 +618,35 @@ class _TinyMetaChip extends StatelessWidget {
         border: Border.all(color: AppColors.outlineVariant),
       ),
       child: Text(label, style: AppTextStyles.captionSm.copyWith(fontSize: 10)),
+    );
+  }
+}
+
+class _ErrorState extends StatelessWidget {
+  final VoidCallback onRetry;
+  const _ErrorState({required this.onRetry});
+
+  @override
+  Widget build(BuildContext context) {
+    return CChessCard(
+      child: Column(
+        children: [
+          const Icon(Icons.cloud_off,
+              color: AppColors.onSurfaceVariant, size: 32),
+          AppSpacing.vGapSm,
+          Text('Không tải được kho bài', style: AppTextStyles.headingMd),
+          AppSpacing.vGapXs,
+          Text(
+            'Kiểm tra kết nối mạng rồi thử lại.',
+            style: AppTextStyles.captionSm.copyWith(
+              color: AppColors.onSurfaceVariant,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          AppSpacing.vGapMd,
+          CChessButton(label: 'Thử lại', icon: Icons.refresh, onPressed: onRetry),
+        ],
+      ),
     );
   }
 }

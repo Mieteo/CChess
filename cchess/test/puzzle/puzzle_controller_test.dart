@@ -28,6 +28,14 @@ class _MemPathProvider extends PathProviderPlatform {
   Future<String?> getTemporaryPath() => _ensureDir();
 }
 
+/// Spin the event loop until [done] is true (or a small timeout elapses) so
+/// tests can wait on the controller's async save/sync without guessing a delay.
+Future<void> _pumpUntil(bool Function() done, {int maxTicks = 50}) async {
+  for (var i = 0; i < maxTicks && !done(); i++) {
+    await Future<void>.delayed(const Duration(milliseconds: 5));
+  }
+}
+
 void main() {
   setUpAll(() async {
     TestWidgetsFlutterBinding.ensureInitialized();
@@ -90,15 +98,49 @@ void main() {
       }
     });
 
-    test('requestHint reveals the solution coordinates', () async {
+    test('requestHint escalates through 3 levels', () async {
       final c = PuzzleController(puzzle: puzzle, repo: repo);
+
+      // Level 1: textual nudge only — no board coordinates revealed yet.
       await c.requestHint();
+      expect(c.state.hintLevel, 1);
+      expect(c.state.hintsRemaining, 2);
+      expect(c.state.hintFrom, isNull);
+      expect(c.state.hintTo, isNull);
+      expect(c.state.hintText, isNotNull);
+
+      // Level 2: highlights the source square.
+      await c.requestHint();
+      expect(c.state.hintLevel, 2);
+      expect(c.state.hintFrom, correctFrom);
+      expect(c.state.hintTo, isNull);
+
+      // Level 3: reveals the full move.
+      await c.requestHint();
+      expect(c.state.hintLevel, 3);
       expect(c.state.hintFrom, correctFrom);
       expect(c.state.hintTo, correctTo);
-      expect(c.state.hintsRemaining, 2);
+      expect(c.state.hintsRemaining, 0);
+      expect(c.state.hintsUsedTotal, 3);
+
+      // No further escalation past level 3.
+      await c.requestHint();
+      expect(c.state.hintLevel, 3);
+      expect(c.state.hintsUsedTotal, 3);
     });
 
-    test('restart resets feedback and step but keeps hint count', () async {
+    test('solved score decays with hints used', () async {
+      final c = PuzzleController(puzzle: puzzle, repo: repo);
+      await c.requestHint(); // one hint → -12
+      c.onTap(correctFrom.row, correctFrom.col);
+      c.onTap(correctTo.row, correctTo.col);
+      // lastScore is set only after the async local-save + sync round-trip.
+      await _pumpUntil(() => c.state.lastScore != null);
+      expect(c.state.isSolved, isTrue);
+      expect(c.state.lastScore, 88); // 100 - 1*12
+    });
+
+    test('restart resets feedback, step and per-step hints', () async {
       final c = PuzzleController(puzzle: puzzle, repo: repo);
       await c.requestHint();
       c.onTap(correctFrom.row, correctFrom.col);
@@ -108,7 +150,8 @@ void main() {
       c.restart();
       expect(c.state.feedback, PuzzleFeedback.idle);
       expect(c.state.solutionStep, 0);
-      expect(c.state.hintsRemaining, 2);
+      expect(c.state.hintLevel, 0);
+      expect(c.state.hintsRemaining, kMaxHintLevel);
     });
   });
 }

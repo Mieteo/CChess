@@ -28,6 +28,7 @@ import '../presentation/openings/opening_list_screen.dart';
 import '../presentation/play/compete_screen.dart';
 import '../presentation/profile/edit_profile_screen.dart';
 import '../presentation/profile/profile_screen.dart';
+import '../presentation/puzzle/endgame_stats_screen.dart';
 import '../presentation/puzzle/puzzle_list_screen.dart';
 import '../presentation/puzzle/puzzle_screen.dart';
 import '../presentation/quests/daily_quests_screen.dart';
@@ -132,6 +133,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppConstants.routePuzzle,
         builder: (context, state) => const PuzzleListScreen(),
+      ),
+      GoRoute(
+        path: AppConstants.routeEndgameStats,
+        builder: (context, state) => const EndgameStatsScreen(),
       ),
       GoRoute(
         path: AppConstants.routeBeginnerLessons,
