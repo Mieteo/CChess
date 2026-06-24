@@ -105,24 +105,13 @@ class ChessPieceWidget extends StatelessWidget {
           switchInCurve: Curves.easeOutCubic,
           switchOutCurve: Curves.easeInCubic,
           child: faceDown
-              ? Container(
+              // Face-down cover: a plain wood disc with the side-colored ring.
+              // No icon / character so the hidden identity is fully concealed;
+              // the piece reveals normally on its first move.
+              ? SizedBox(
                   key: const ValueKey('face-down'),
                   width: innerSize,
                   height: innerSize,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: AppColors.charcoalDark.withValues(alpha: 0.32),
-                    border: Border.all(
-                      color: AppColors.accentGold.withValues(alpha: 0.45),
-                      width: 1,
-                    ),
-                  ),
-                  alignment: Alignment.center,
-                  child: Icon(
-                    Icons.visibility_off_outlined,
-                    color: AppColors.accentGold.withValues(alpha: 0.82),
-                    size: diameter * 0.36,
-                  ),
                 )
               : Container(
                   key: const ValueKey('face-up'),

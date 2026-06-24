@@ -237,6 +237,100 @@ void main() {
       expect(game.getValidMoves(from), isNot(contains(target)));
     });
   });
+
+  group('XiangqiCupGame advisor/elephant confinement', () {
+    test('a revealed advisor stays inside its palace (cannot cross river)', () {
+      // Red advisor revealed OUTSIDE its palace (row 4, across the river).
+      final board = _boardWith({
+        const Position(0, 4): Piece.blackGeneral,
+        const Position(4, 3): Piece.redAdvisor,
+        const Position(9, 4): Piece.redGeneral,
+      });
+      final game = XiangqiCupGame.debug(board: board); // no hidden → revealed
+
+      final moves = game.getValidMoves(const Position(4, 3));
+      // Stranded outside the palace: every diagonal lands off-palace → none.
+      for (final to in moves) {
+        expect(
+          to.isInPalace(true),
+          isTrue,
+          reason: 'revealed advisor left its palace: $to',
+        );
+      }
+      expect(moves, isEmpty);
+    });
+
+    test('a revealed advisor inside the palace moves only within it', () {
+      // Black general off the red general's file so moving the advisor does
+      // not expose a flying-general (which would mask the palace constraint).
+      final board = _boardWith({
+        const Position(0, 3): Piece.blackGeneral,
+        const Position(8, 4): Piece.redAdvisor, // palace centre
+        const Position(9, 4): Piece.redGeneral,
+      });
+      final game = XiangqiCupGame.debug(board: board);
+
+      final moves = game.getValidMoves(const Position(8, 4));
+      expect(moves, isNotEmpty);
+      for (final to in moves) {
+        expect(to.isInPalace(true), isTrue, reason: 'advisor escaped palace: $to');
+      }
+    });
+
+    test('a revealed elephant cannot cross the river', () {
+      // Red elephant revealed on its own side near the river.
+      final board = _boardWith({
+        const Position(0, 4): Piece.blackGeneral,
+        const Position(5, 2): Piece.redElephant,
+        const Position(9, 4): Piece.redGeneral,
+      });
+      final game = XiangqiCupGame.debug(board: board);
+
+      final moves = game.getValidMoves(const Position(5, 2));
+      for (final to in moves) {
+        expect(
+          to.row >= 5,
+          isTrue,
+          reason: 'revealed red elephant crossed the river: $to',
+        );
+      }
+    });
+
+    test('hidden piece on the advisor point moves like an advisor', () {
+      // Cover = advisor but the true hidden piece is a chariot. While face
+      // down it must move like its cover (one diagonal step in the palace),
+      // NOT like the powerful piece underneath.
+      final board = _boardWith({
+        const Position(0, 4): Piece.blackGeneral,
+        const Position(9, 3): Piece.redAdvisor, // cover
+        const Position(9, 4): Piece.redGeneral,
+      });
+      final game = XiangqiCupGame.debug(
+        board: board,
+        hiddenAssignments: {const Position(9, 3): Piece.redChariot},
+      );
+
+      expect(game.getValidMoves(const Position(9, 3)), [const Position(8, 4)]);
+    });
+
+    test('hidden piece on the elephant point moves like an elephant', () {
+      final board = _boardWith({
+        const Position(0, 4): Piece.blackGeneral,
+        const Position(9, 2): Piece.redElephant, // cover
+        const Position(9, 4): Piece.redGeneral,
+      });
+      final game = XiangqiCupGame.debug(
+        board: board,
+        hiddenAssignments: {const Position(9, 2): Piece.redChariot},
+      );
+
+      final moves = game.getValidMoves(const Position(9, 2));
+      expect(moves, contains(const Position(7, 4))); // elephant diagonal
+      for (final to in moves) {
+        expect(to.row >= 5, isTrue, reason: 'elephant cover crossed river: $to');
+      }
+    });
+  });
 }
 
 Board _boardWith(Map<Position, Piece> pieces) {

@@ -83,12 +83,14 @@ class ChessBoard extends ConsumerWidget {
                   _displayPos(lastMove!.from),
                   AppColors.accentGold.withValues(alpha: 0.25),
                   pieceSize,
+                  key: const ValueKey('last-from'),
                 ),
                 _intersectionMarker(
                   size,
                   _displayPos(lastMove!.to),
                   AppColors.accentGold.withValues(alpha: 0.45),
                   pieceSize,
+                  key: const ValueKey('last-to'),
                 ),
               ],
               if (hintMove != null) ...[
@@ -98,6 +100,7 @@ class ChessBoard extends ConsumerWidget {
                   AppColors.tealSuccess.withValues(alpha: 0.30),
                   pieceSize,
                   borderColor: AppColors.tealSuccess,
+                  key: const ValueKey('hint-from'),
                 ),
                 _intersectionMarker(
                   size,
@@ -105,6 +108,7 @@ class ChessBoard extends ConsumerWidget {
                   AppColors.tealSuccess.withValues(alpha: 0.50),
                   pieceSize,
                   borderColor: AppColors.tealSuccess,
+                  key: const ValueKey('hint-to'),
                 ),
               ],
               for (final target in validTargets)
@@ -115,7 +119,14 @@ class ChessBoard extends ConsumerWidget {
                     cellSize: pieceSize,
                     isCaptureTarget: board.at(target) != null,
                   ),
+                  // Key by BOARD square so adding/removing dots never shifts
+                  // the reconciliation of the piece widgets below.
+                  key: ValueKey('dot-${target.row}-${target.col}'),
                 ),
+              // Pieces are keyed by their BOARD square so that selecting a
+              // piece (which inserts the dots above) does not re-create every
+              // piece element — that re-creation was replaying each piece's
+              // entry animation, making the whole board flicker on every tap.
               for (final (pos, piece) in board.occupied())
                 _placeAt(
                   size,
@@ -129,6 +140,7 @@ class ChessBoard extends ConsumerWidget {
                     faceDown: hiddenPositions.contains(pos),
                   ),
                   animateMove: lastMove != null && lastMove!.to == pos,
+                  key: ValueKey('piece-${pos.row}-${pos.col}'),
                 ),
             ],
           ),
@@ -147,6 +159,7 @@ class ChessBoard extends ConsumerWidget {
     Position displayPos,
     Widget child, {
     bool animateMove = false,
+    Key? key,
   }) {
     final center = BoardPainter.cellToOffset(
       size,
@@ -160,7 +173,7 @@ class ChessBoard extends ConsumerWidget {
     // piece-box around the intersection.
     if (animateMove) {
       return AnimatedPositioned(
-        key: ValueKey('animated-${displayPos.row}-${displayPos.col}'),
+        key: key ?? ValueKey('animated-${displayPos.row}-${displayPos.col}'),
         duration: const Duration(milliseconds: 220),
         curve: Curves.easeOutCubic,
         left: center.dx - half,
@@ -171,6 +184,7 @@ class ChessBoard extends ConsumerWidget {
       );
     }
     return Positioned(
+      key: key,
       left: center.dx - half,
       top: center.dy - half,
       width: pieceSize,
@@ -185,6 +199,7 @@ class ChessBoard extends ConsumerWidget {
     Color color,
     double pieceSize, {
     Color? borderColor,
+    Key? key,
   }) {
     final center = BoardPainter.cellToOffset(
       size,
@@ -193,6 +208,7 @@ class ChessBoard extends ConsumerWidget {
     );
     final markerSize = pieceSize * 0.92;
     return Positioned(
+      key: key,
       left: center.dx - markerSize / 2,
       top: center.dy - markerSize / 2,
       width: markerSize,
