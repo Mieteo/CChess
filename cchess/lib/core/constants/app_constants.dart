@@ -42,6 +42,9 @@ class AppConstants {
   static const String boxSettings = 'cchess_settings';
   static const String boxGameHistory = 'cchess_game_history';
   static const String boxPuzzleProgress = 'cchess_puzzle_progress';
+  // Offline cache of remote puzzles (B4 — Kho Tàn Cục). Lets the list/daily
+  // screens fall back to the last-fetched server catalog when offline.
+  static const String boxPuzzleCache = 'cchess_puzzle_cache';
 
   // Hint usage caps.
   static const int dailyHintLimitFree = 3;
@@ -56,6 +59,15 @@ class AppConstants {
   static const String defaultBackendWsUrl = String.fromEnvironment(
     'CCHESS_BACKEND_URL',
     defaultValue: 'wss://cchess-backend.onrender.com',
+  );
+
+  // HTTP origin of the same cchess-backend that serves the WebSocket above.
+  // The puzzle library REST API (B4) is mounted on this host at /puzzles.
+  // Override per environment with:
+  //   --dart-define=CCHESS_BACKEND_HTTP_URL=https://cchess-backend-XXXX.onrender.com
+  static const String defaultBackendHttpUrl = String.fromEnvironment(
+    'CCHESS_BACKEND_HTTP_URL',
+    defaultValue: 'https://cchess-backend.onrender.com',
   );
 
   // Standalone HTTP engine service for online Pikafish analysis.
