@@ -418,6 +418,11 @@ Implement tính năng Cờ Úp:
 Output: lib/core/chess_engine/xiangqi_cup_game.dart
 ```
 
+> **Thực tế đã implement (2026-06-25) — đính chính so với prompt trên:**
+> - Reveal theo **nước đi**, không phải action "lật" riêng: quân úp đi theo **mặt phủ** (vai trò ô đang đứng), rồi **lật lộ danh tính thật ngay khi tới ô đích**. `getValidMoves` trả thẳng nước đi hợp lệ, không có "reveal action" tách biệt.
+> - **Sĩ/Tượng đã mở KHÔNG theo luật cờ tướng thường** (khác dòng "đánh theo luật cờ tướng thường" ở trên): ngửa rồi thì **thoát giới hạn cung/sông** — Sĩ chéo 1 / Tượng chéo 2 đi **khắp bàn** (Tượng vẫn cản mắt), qua sông và áp sát/chiếu Tướng được. Quân **còn úp** trên ô Sĩ/Tượng vẫn bị giam theo mặt phủ.
+> - `XiangqiCupGame implements ChessGameSession` (không extend `XiangqiGame`); phát hiện chiếu riêng `_cupInCheck` theo tầm Sĩ/Tượng ngửa. Khóa bằng test `xiangqi_cup_game_test.dart` (nhóm "revealed Sĩ/Tượng roam freely").
+
 ---
 
 ## PHASE 2 — PROMPT 08: Kỳ Phổ & Phục Bàn

@@ -36,10 +36,10 @@
 | 10 | Achievements + Daily Quests | 🟢 | Engine + UI xong, chờ Cloud Functions trigger server-side khi ván ranked đạt mốc |
 | 11 | Opening Library (Khai cuộc Đại sư) | 🟢 | Seed cứng 5 khai cuộc, chờ CMS |
 | 12 | Online Matchmaking + Spectate (A1, A5, A6) | 🟡 | **A1 Ranked done**; **A5 chat cơ bản + chip nhanh done**; **A6 Spectate/share link/QR done**; **Rematch done**; R/S đã đóng test tay. Đợt 2026-06-19/20 đã tự động hóa lõi C/D/M/G/ELO + widget online + smoke deploy. Còn lại: vòng nhìn-mắt cuối trên thiết bị thật cho D4 OS lifecycle, M5 Firebase thật, H4 chất lượng gợi ý, C2/D/G4 visual + nâng Render Starter khi có user thật |
-| 13 | Cờ Úp + Cờ Casual (A3, A2) | 🔒 | Chờ engine variant + invite-by-link flow |
+| 13 | Cờ Úp + Cờ Casual (A3, A2) | 🟡 | **A3 Cờ Úp bản local DONE 2026-06-25**: engine variant (úp ngẫu nhiên, mở khi đi nước đầu) + luật Sĩ/Tượng đã mở đi **tự do khắp bàn** (đúng luật cờ úp) + UI bàn (mặt úp trơn, sửa nhấp nháy). Còn: ELO/online Cờ Úp ranked (cần S12), A2 Cờ Casual invite-by-link |
 | 14 | Community (Bạn bè, Leaderboard, CLB) | 🔒 | Chờ S12 |
 | 15 | AI Coach (B3) + AI Replay nâng cao (B5) | 🟡 | **Engine lai đã qua smoke thật 2026-06-20** — service Pikafish backend + abstraction Flutter + bot Đại Sư+ + replay analyze + **nút Gợi ý in-game** + attribution GPL + `cchess-engine` Render smoke 8/8 gồm quota. Còn: quota/VIP bền vững, đối chiếu FEN/UCI nhiều thế cố định, NNUE license, AI Coach B3 UI/diễn giải — xem [11](11_KE_HOACH_TICH_HOP_ENGINE.md) §10 |
-| 16 | Khám Phá (Shop, Inventory, Mail, Event) | ⬜ | Cần backend kinh tế |
+| 16 | Khám Phá (Shop, Inventory, Mail, Event) | 🟡 | **Shop + Inventory + Explore UI + repo + backend routes/store + shop.test.ts DONE** (route `/shop` `/inventory`, Explore là hub); còn Mail/Event/Welfare/Crafting + nối ví/kinh tế thật |
 | 17 | VIP Center + IAP | ⬜ | Phụ thuộc store account |
 | 18 | OCR thế cờ (B7), học thuộc kỳ phổ (B8) | ⬜ | Giai đoạn 3 |
 
@@ -253,10 +253,14 @@
 - ⏳ **(việc của bạn) Test tay cuối 2 thiết bị** — R/S đã đóng; còn D4 OS-thật, M5 với Firebase thật, H4 chất lượng gợi ý và một vòng nhìn-mắt cho C2/D/G4 theo [`10_KE_HOACH_TEST.md`](10_KE_HOACH_TEST.md)
 - Online hardening còn lại (tuỳ chọn, chưa làm): graceful server restart / room persistence backend
 
-### 🔒 Sprint 13 — Biến thể: Cờ Úp (A3), Cờ Casual (A2) (cần S12)
-- Engine biến thể Cờ Úp (random úp quân, mở khi đi nước đầu của quân đó).
-- ELO Cờ Úp tính riêng.
-- Mời bạn qua link/ID.
+### 🟡 Sprint 13 — Biến thể: Cờ Úp (A3), Cờ Casual (A2)
+**Đã làm — A3 Cờ Úp bản local (2026-06-25):**
+- Engine `XiangqiCupGame` ([xiangqi_cup_game.dart](cchess/lib/core/chess_engine/xiangqi_cup_game.dart)): úp ngẫu nhiên mọi quân trừ Tướng; quân úp đi theo **mặt phủ** (vai trò ô đang đứng), lật lộ danh tính thật khi đi nước đầu của quân đó.
+- **Luật Sĩ/Tượng đã mở đúng cờ úp**: ngửa rồi thì **thoát giới hạn cung/sông** — Sĩ chéo 1 ô khắp bàn (qua sông, áp sát/chi chiếu Tướng được), Tượng chéo 2 ô khắp bàn (vẫn cản mắt Tượng); phát hiện chiếu (`_cupInCheck`) cũng tính theo tầm mới này.
+- UI bàn cờ: mặt quân úp **trơn** (bỏ icon mắt + gạch chéo), sửa **nhấp nháy toàn bàn khi chọn quân** bằng cách gắn `Key` theo ô cho mọi con của `Stack`. Vào từ Trang Chủ / Đối Đầu → `?mode=cup` (local 2 người).
+- Test: nhóm "revealed Sĩ/Tượng roam freely" trong [xiangqi_cup_game_test.dart](cchess/test/chess_engine/xiangqi_cup_game_test.dart).
+
+**Chưa làm:** ELO Cờ Úp ranked tính riêng + matchmaking/Cờ Úp online (cần S12); A2 Cờ Casual (không tính ELO) + mời bạn qua link/ID.
 
 ### 🔒 Sprint 14 — Community (Module C) (cần S12 + Cloud Functions cho leaderboard aggregation)
 - Bạn bè (C1): tìm theo ID, danh sách online/offline.
@@ -270,9 +274,9 @@
 - ✅ **Đã code/chạy (2026-06-07/11, cập nhật 2026-06-20):** engine-service backend (UCI wrapper/pool/cache/quota/HTTP API + 7 test), Dockerfile.engine + render.yaml service riêng, Flutter `MoveEngine`/`EngineRouter` + fallback, bot **Đại Sư+**, replay analyze qua router, **nút Gợi ý in-game**, **attribution GPL trong Cài đặt**, smoke gate `engine:smoke` + `engine:smoke:quota`, `cchess-engine` Render smoke thật **8/8 PASS** gồm quota.
 - ⬜ **Còn lại:** quota/VIP bền vững (Firestore/Redis thay in-memory), xác nhận **NNUE license thương mại**, đối chiếu FEN/UCI thêm nhiều thế cố định + H4 chất lượng gợi ý, upgrade engine lên Standard trước traffic thật, AI Coach lớp diễn giải rule-based (B3 UI).
 
-### ⬜ Sprint 16 — Khám Phá (Module D)
-- Shop (D1), Inventory (D2), Khung Avatar (D3), Mail (D4), Event (D5), Welfare/điểm danh (D6), Crafting (D7).
-- Cần **tab thứ 6 hoặc gộp vào tab hiện có** — hiện kiến trúc mới có 5 tab. Phải quyết định lại sau Sprint 14.
+### 🟡 Sprint 16 — Khám Phá (Module D)
+**Đã làm:** Shop (D1) + Inventory (D2) + màn **Explore** (hub) — UI `presentation/shop/` (`shop_screen`, `inventory_screen`, `explore_screen`, `shop_visuals`, `shop_controller`); models `shop_item`/`inventory_item`/`wallet`; `shop_repository` + `shop_api_source`; route `/shop` `/inventory` trong `app_router`. Backend `src/shop/` (routes/store/types) + `scripts/import_shop.ts` + `shop.seed.json` + `shop.test.ts`; `firestore.rules` cho inventory/ví.
+**Chưa làm:** Khung Avatar (D3) gắn thật, Mail (D4), Event (D5), Welfare/điểm danh (D6), Crafting (D7); nối ví/kinh tế thật (mua bằng coin/VIP) end-to-end; quyết định **tab thứ 6 hay gộp** (hiện 5 tab).
 
 ### ⬜ Sprint 17 — VIP & In-App Purchase (Module E5)
 - Tích hợp Google Play Billing + Apple StoreKit.
@@ -293,7 +297,7 @@
 |---|---|:---:|:---:|
 | A1 | Cờ Tướng Online Ranked | ✅ | **MVP done 2026-05-24** — matchmaking, ELO, ranked verified prod Render |
 | A2 | Cờ Casual + mời bạn | 🔒 | 13 |
-| A3 | Cờ Úp | 🔒 | 13 |
+| A3 | Cờ Úp | 🟡 | 13 — **bản local DONE 2026-06-25** (engine variant + luật Sĩ/Tượng ngửa đi tự do + UI); ELO/online ranked chờ S12 |
 | A5 | Chat + emoji + AI hint trong ván | 🟡 | Chat text done + **chip preset/emoji done 2026-06-11**; **AI hint done cho ván bot/local 2026-06-11** (EngineRouter, fallback minimax); hint trong ván online ranked cân nhắc sau (fair-play) |
 | A6 | Spectate | 🟡 | Phase 2 — cơ bản done với `spectate-room`/`stop-spectating`, read-only board, active room list, backend read-only tests; **share link/QR done 2026-06-07** (link/QR + deep-link in-app + landing page); còn moderation public |
 | A7 | Đấu Bot AI | ✅ | 5 |
@@ -320,17 +324,17 @@
 
 ---
 
-## 6. Số liệu tổng (cập nhật 2026-06-20)
+## 6. Số liệu tổng (cập nhật 2026-06-25)
 
 - **Tổng file Dart `lib/`:** ~95 file (thêm `core/chess_engine/` lớp engine lai: move_engine / engine_router / local_minimax_engine / remote_pikafish_engine + transports / engine_providers).
 - **Backend TypeScript:** realtime server + lab + engine-service (server, UCI wrapper, pool, analysis, cache, quota, FEN) đã có CI riêng.
-- **Test tự động:** Backend `npm test` **86/86** (14 file) + `backend-ci` chạy `lab`, `lab:load`, `lab:fuzz`; Flutter `flutter test` **233/233** (22 file) + `flutter analyze`. (2026-06-23: +`firestore_quota` 6, +`fen_uci_compat` 5 backend; +`coach_analyzer` 6 Flutter — Sprint 15 hardening.) Phân loại nguồn test: xem bảng cuối [`10_KE_HOACH_TEST.md`](10_KE_HOACH_TEST.md).
+- **Test tự động:** Backend `npm test` **117/117** (19 file: 16 `src/` + 3 `lab/`) + `backend-ci` chạy `lab`, `lab:load`, `lab:fuzz`; Flutter `flutter test` **305/305** (31 file) + `flutter analyze`. (2026-06-25: +nhóm Cờ Úp "revealed Sĩ/Tượng roam freely"; trước đó +`shop.test.ts` backend & shop/inventory Flutter — Sprint 16.) Phân loại nguồn test: xem bảng cuối [`10_KE_HOACH_TEST.md`](10_KE_HOACH_TEST.md).
 - **Test tay:** R **ĐÓNG 12/12**; S **ĐÓNG 15/15**; C8 + H1–H3 PASS. Còn lại chủ yếu là vòng thật/visual: D4 OS lifecycle, M5 Firebase thật, H4 chất lượng gợi ý, C2/D/G4 nhìn-mắt.
 - **Sprint hoàn thành (1 chiều):** 10/18 (1–7 + 8a + 8b + 8c).
 - **Sprint code xong, sync một phần:** 3/18 (S9, S10, S11).
 - **Sprint MVP done phase 1:** 1/18 (S12 — A1 Ranked production).
-- **Sprint đang dở:** S12 phase 2 (chỉ còn test tay cuối + Render upgrade khi có user thật), S15 (engine lai — smoke thật xong, chờ quota/VIP bền vững, license, plan production và AI Coach B3).
-- **Sprint locked:** S13 (Cờ Úp + Casual), S14 (Community), S16-18 (giai đoạn sau).
+- **Sprint đang dở:** S12 phase 2 (chỉ còn test tay cuối + Render upgrade khi có user thật), S13 (A3 Cờ Úp local done — còn ELO/online ranked + A2 casual), S15 (engine lai — smoke thật xong, chờ quota/VIP bền vững, license, plan production và AI Coach B3), S16 (Shop/Inventory/Explore UI + backend đã có — còn Mail/Event/economy thật).
+- **Sprint locked/chưa làm:** S14 (Community — cần S12), S17-18 (giai đoạn sau).
 - **Tỷ lệ hoàn thành code (ước lượng theo spec MVP+G2):** ~82% (tăng sau automation gates, engine smoke thật và quota gate).
 - **Tỷ lệ tính năng end-to-end dùng được production:** ~60–65% (ranked online thật đã chạy; engine Pikafish đã smoke thật trên Render nhưng chưa harden quota/VIP/license/plan cho traffic thật).
 - **Production endpoint**: backend `https://cchess-backend.onrender.com` / `wss://cchess-backend.onrender.com`; engine `https://cchess-engine.onrender.com`. Cả hai đang ở Render free tier cho prototype/smoke; cần Starter/Standard trước khi mở user thật.
@@ -357,7 +361,7 @@
 
 ### 7.3. Sprint 13 (1-2 tuần) — biến thể game
 
-10. **A3 Cờ Úp** — engine variant (random ẩn quân, mở khi đi nước đầu), ELO Cờ Úp riêng, UI mới
+10. **A3 Cờ Úp — bản local DONE 2026-06-25** (engine variant + luật Sĩ/Tượng ngửa đi tự do khắp bàn + UI). Còn lại: **ELO Cờ Úp ranked** tính riêng, **Cờ Úp online** (cần S12 matchmaking + validate luật cờ úp server-side), persist kết quả ván Cờ Úp.
 11. **A2 Cờ Casual + invite link** — không tính ELO, share roomId qua link/QR, friends-only matchmaking option.
 
 ### 7.4. Định hướng dài hạn (Q3-Q4 2026)
@@ -380,3 +384,5 @@
 *Cập nhật 2026-06-13 — **đợt test tay 2 + tuning theo feedback**: R9 retest PASS → **Nhóm R đóng 12/12**; C8 PASS → nâng `CHAT_RATE_LIMIT_MS` 1.5s→2s; H1–H3 PASS (online + offline) với feedback "gợi ý hơi lâu, hơi kém" → `BotEngine` thêm chế độ **best-effort** cho hint/analysis: bỏ delay nhân tạo `minThinkTime` 1.2s, bỏ randomness, iterative deepening ngân sách ~2s (depth 2→6, thế nhẹ đào sâu hơn, giữa ván nặng trả nhanh kết quả depth đã xong) + 2 test mới (T13).*
 
 *Cập nhật 2026-06-13 (đợt 2) — **Nhóm S PASS 12/12 + 3 cải tiến UX theo feedback**: (1) số mắt xem 👁 hiện trên app bar cho **cả người chơi** (trước chỉ người xem thấy); (2) **dialog kết quả người xem** giờ chỉ có 1 nút "Thoát", tự đóng + xem tiếp khi 2 kỳ thủ đấu lại, banner "Một kỳ thủ đã rời — trận đấu khép lại" khi có người thoát — sửa kèm bug tiềm ẩn rematch `game-start{yourColor:null}` biến người xem thành "người chơi Đỏ" trong state client; (3) **phòng chờ tự hủy sau 1 phút** không có đối thủ vào: server gửi `room-expired` + xóa phòng (TTL override env `CCHESS_WAITING_ROOM_TTL_MS`), lobby tự quay về màn chính kèm thông báo. Test mới (T14): backend `server.waitingroom.test.ts` 2 + Flutter 2. Backend `npm test` **28/28**, Flutter `flutter test` **156/156**, analyze sạch. Lưu ý thiết kế: "chờ đối thủ MỚI vào phòng cũ sau khi 1 người rời" KHÔNG nằm trong phạm vi này — phòng khép lại khi 1 kỳ thủ thoát; mời người mới = flow invite/casual của Sprint 13. Các mục này sau đó đã được tự động hóa/smoke tiếp trong đợt 2026-06-19/20; xem phần đầu tài liệu và [`10_KE_HOACH_TEST.md`](10_KE_HOACH_TEST.md).*
+
+*Cập nhật 2026-06-25 — **A3 Cờ Úp bản local + polish bàn cờ (Sprint 13 🔒→🟡)**: (1) sửa luật **Sĩ/Tượng đã mở** trong `XiangqiCupGame` cho đúng cờ úp — ngửa rồi thì **thoát giới hạn cung/sông**, Sĩ đi chéo 1 / Tượng đi chéo 2 đi khắp bàn (Tượng vẫn cản mắt), `_cupInCheck` nhận diện chiếu theo tầm mới; quân **còn úp** vẫn đi theo mặt phủ (vai trò ô). (2) UI bàn cờ: bỏ icon mắt+gạch chéo trên quân úp (mặt trơn), sửa **nhấp nháy toàn bàn khi chọn quân** bằng `Key` theo ô cho mọi con của `Stack`. Test nhóm "revealed Sĩ/Tượng roam freely" trong `xiangqi_cup_game_test.dart`. Đồng bộ doc Sprint 16 (Shop/Inventory/Explore UI + backend `src/shop/`) ⬜→🟡. Flutter `flutter test` **305/305** (31 file), backend `npm test` **117/117** (19 file), `flutter analyze` sạch.*
