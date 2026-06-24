@@ -15,6 +15,59 @@
         { "fieldPath": "isFavorite", "order": "ASCENDING" },
         { "fieldPath": "endedAt", "order": "DESCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "puzzles",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "isDraft", "order": "ASCENDING" },
+        { "fieldPath": "publishedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "puzzles",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "isDraft", "order": "ASCENDING" },
+        { "fieldPath": "difficulty", "order": "DESCENDING" },
+        { "fieldPath": "publishedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "puzzles",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "isDraft", "order": "ASCENDING" },
+        { "fieldPath": "difficulty", "order": "ASCENDING" },
+        { "fieldPath": "publishedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "puzzles",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "isDraft", "order": "ASCENDING" },
+        { "fieldPath": "category", "order": "ASCENDING" },
+        { "fieldPath": "publishedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "puzzles",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "isDraft", "order": "ASCENDING" },
+        { "fieldPath": "theme", "order": "ASCENDING" },
+        { "fieldPath": "publishedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "puzzles",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "isDraft", "order": "ASCENDING" },
+        { "fieldPath": "tags", "arrayConfig": "CONTAINS" },
+        { "fieldPath": "publishedAt", "order": "DESCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

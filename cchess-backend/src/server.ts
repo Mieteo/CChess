@@ -34,6 +34,7 @@ import {
   enqueue as mmEnqueue,
   tryMatch as mmTryMatch,
 } from './matchmaking';
+import { createPuzzleApi, type PuzzleApi } from './puzzles/puzzle_routes';
 
 // Step 2-3 from 08_HUONG_DAN_BACKEND_WEBSOCKET.md.
 //
@@ -263,6 +264,10 @@ export interface CChessServerOptions {
   /// Persist a finished game + update ELO. Defaults to the real Firestore
   /// transaction. Tests inject a no-op so no Firebase is required.
   persist?: (room: Room) => Promise<PersistResult | null>;
+  /// REST API for the endgame puzzle library (B4), mounted on the same HTTP
+  /// server. Defaults to the real Firestore-backed API. Tests that don't touch
+  /// /puzzles can leave it; ones that do inject a fake-store-backed instance.
+  puzzleApi?: PuzzleApi;
   /// Per-instance timing / limits. Each field defaults to its env-backed
   /// module constant, so production (no config) is unchanged. The test lab
   /// passes this PER SCENARIO — unlike env vars (read once at import), an
@@ -307,6 +312,11 @@ export function createCChessServer(options: CChessServerOptions = {}): CChessSer
   // socket -> uid (only after successful auth)
   const sessions = new Map<WebSocket, string>();
 
+  // B4 puzzle library REST API, mounted on this same HTTP server (no separate
+  // Render service). It owns /puzzles* and /admin/puzzles*; everything else
+  // falls through to the routes below.
+  const puzzleApi = options.puzzleApi ?? createPuzzleApi();
+
   const httpServer = createServer((req, res) => {
     const url = new URL(req.url ?? '/', 'http://localhost');
     const pathname = url.pathname;
@@ -332,8 +342,23 @@ export function createCChessServer(options: CChessServerOptions = {}): CChessSer
       return;
     }
 
-    res.writeHead(404);
-    res.end();
+    // Puzzle library REST API. handle() resolves true if it owned the request
+    // (and already sent a response); otherwise we 404 like before.
+    void puzzleApi
+      .handle(req, res)
+      .then((handled) => {
+        if (!handled && !res.headersSent) {
+          res.writeHead(404);
+          res.end();
+        }
+      })
+      .catch((err) => {
+        console.error('[puzzles] unhandled route error:', err);
+        if (!res.headersSent) {
+          res.writeHead(500);
+          res.end();
+        }
+      });
   });
 
   const wss = new WebSocketServer({ server: httpServer, maxPayload: cfg.maxPayloadBytes });

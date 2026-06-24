@@ -169,6 +169,15 @@ service cloud.firestore {
         // Client không được phép ghi (create, update, delete) daily_quests
         allow write: if false;
       }
+
+      // --- SUBCOLLECTION: PUZZLE_PROGRESS (B4 Kho Tàn Cục) ---
+      // Tiến trình giải tàn cục của user. Backend ghi qua Admin SDK (bypass
+      // rules) để counters toàn cục (totalAttempts/solveCount) không bị giả mạo;
+      // client chỉ được ĐỌC tiến trình của chính mình để đồng bộ đa thiết bị.
+      match /puzzle_progress/{puzzleId} {
+        allow read: if isOwner(uid);
+        allow write: if false;
+      }
     }
 
     // --- FRIENDSHIPS COLLECTION ---
@@ -191,6 +200,13 @@ service cloud.firestore {
     match /puzzles/{puzzleId} {
       allow read: if true;
       allow write: if false; // Chỉ server hoặc admin có thể ghi
+    }
+
+    // Daily puzzles (B4): lookup bài tàn cục theo ngày YYYY-MM-DD. Public read,
+    // chỉ backend/Cloud Function ghi (qua Admin SDK).
+    match /daily_puzzles/{date} {
+      allow read: if true;
+      allow write: if false;
     }
 
     // Openings: Ai cũng đọc được, chỉ server mới được ghi
