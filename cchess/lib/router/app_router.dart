@@ -34,6 +34,9 @@ import '../presentation/puzzle/puzzle_screen.dart';
 import '../presentation/quests/daily_quests_screen.dart';
 import '../presentation/replay/game_replay_screen.dart';
 import '../presentation/settings/settings_screen.dart';
+import '../presentation/shop/explore_screen.dart';
+import '../presentation/shop/inventory_screen.dart';
+import '../presentation/shop/shop_screen.dart';
 import '../presentation/shell/app_shell.dart';
 import '../presentation/splash/splash_screen.dart';
 
@@ -129,6 +132,20 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppConstants.routeBotSelect,
         builder: (context, state) => const BotSelectScreen(),
+      ),
+      // Khám Phá (S16): hub → shop + inventory. Top-level routes (pushed over
+      // the shell), like the puzzle screens.
+      GoRoute(
+        path: AppConstants.routeExplore,
+        builder: (context, state) => const ExploreScreen(),
+      ),
+      GoRoute(
+        path: AppConstants.routeShop,
+        builder: (context, state) => const ShopScreen(),
+      ),
+      GoRoute(
+        path: AppConstants.routeInventory,
+        builder: (context, state) => const InventoryScreen(),
       ),
       GoRoute(
         path: AppConstants.routePuzzle,

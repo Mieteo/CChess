@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/chess_engine/chess_engine.dart';
+import '../../presentation/shop/shop_controller.dart';
 import '../../theme/app_colors.dart';
 import 'board_painter.dart';
 import 'chess_piece_widget.dart';
@@ -10,7 +12,10 @@ import 'chess_piece_widget.dart';
 /// Renders the static board via [BoardPainter] and overlays pieces / valid
 /// move dots / last-move indicators as positioned children. Forwards taps
 /// to [onTap] as (row, col) once they snap to an intersection.
-class ChessBoard extends StatelessWidget {
+///
+/// A [ConsumerWidget] so it can watch the equipped board theme (S16) and
+/// re-skin the surface when a board cosmetic is equipped.
+class ChessBoard extends ConsumerWidget {
   final Board board;
   final Position? selected;
   final List<Position> validTargets;
@@ -35,7 +40,8 @@ class ChessBoard extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = ref.watch(equippedBoardThemeProvider);
     return LayoutBuilder(
       builder: (context, constraints) {
         final size = Size(constraints.maxWidth, constraints.maxHeight);
@@ -60,7 +66,17 @@ class ChessBoard extends StatelessWidget {
           },
           child: Stack(
             children: [
-              Positioned.fill(child: CustomPaint(painter: BoardPainter())),
+              Positioned.fill(
+                child: CustomPaint(
+                  painter: BoardPainter(
+                    background: theme.background,
+                    grid: theme.grid,
+                    riverText: theme.riverText,
+                    markerInk: theme.markerInk,
+                    woodGradient: theme.woodGradient,
+                  ),
+                ),
+              ),
               if (lastMove != null) ...[
                 _intersectionMarker(
                   size,

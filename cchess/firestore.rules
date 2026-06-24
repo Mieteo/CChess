@@ -178,6 +178,22 @@ service cloud.firestore {
         allow read: if isOwner(uid);
         allow write: if false;
       }
+
+      // --- SUBCOLLECTION: INVENTORY (S16 Khám Phá — Balo) ---
+      // Vật phẩm user đã sở hữu. Backend ghi qua Admin SDK trong transaction
+      // (cùng lúc trừ coins/gems) để không thể giả mạo; client chỉ được ĐỌC
+      // kho đồ của chính mình.
+      match /inventory/{itemId} {
+        allow read: if isOwner(uid);
+        allow write: if false;
+      }
+
+      // --- SUBCOLLECTION: WALLET_TX (S16 — sổ giao dịch) ---
+      // Nhật ký mua bán để đối soát. Chỉ backend ghi; user chỉ đọc của mình.
+      match /wallet_tx/{txId} {
+        allow read: if isOwner(uid);
+        allow write: if false;
+      }
     }
 
     // --- FRIENDSHIPS COLLECTION ---
@@ -213,6 +229,13 @@ service cloud.firestore {
     match /openings/{openingId} {
       allow read: if true;
       allow write: if false; // Chỉ server hoặc admin có thể ghi
+    }
+
+    // Shop catalog (S16 Khám Phá — Thương Thành): ai cũng đọc được để xem cửa
+    // hàng; chỉ backend/admin ghi (qua Admin SDK + x-admin-key).
+    match /shop_items/{itemId} {
+      allow read: if true;
+      allow write: if false;
     }
 
     // Leaderboards: Ai cũng đọc được, chỉ server mới được ghi

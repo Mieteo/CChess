@@ -1,0 +1,138 @@
+{
+  "items": [
+    {
+      "id": "board_sandalwood",
+      "kind": "boardTheme",
+      "nameVi": "Bàn Gỗ Đàn Hương",
+      "descVi": "Tông nâu trầm ấm của gỗ đàn hương quý.",
+      "payloadKey": "sandalwood",
+      "priceCoins": 800,
+      "priceGems": 0,
+      "rarity": "rare",
+      "sortOrder": 10,
+      "active": true
+    },
+    {
+      "id": "board_jade",
+      "kind": "boardTheme",
+      "nameVi": "Bàn Ngọc Bích",
+      "descVi": "Sắc xanh ngọc bích thanh tao, dịu mắt khi đấu lâu.",
+      "payloadKey": "jade",
+      "priceCoins": 1200,
+      "priceGems": 0,
+      "rarity": "rare",
+      "sortOrder": 11,
+      "active": true
+    },
+    {
+      "id": "board_midnight",
+      "kind": "boardTheme",
+      "nameVi": "Bàn Mực Nửa Đêm",
+      "descVi": "Nền mực đen sang trọng, đường kẻ ánh kim.",
+      "payloadKey": "midnight",
+      "priceCoins": 0,
+      "priceGems": 60,
+      "rarity": "epic",
+      "sortOrder": 12,
+      "active": true
+    },
+    {
+      "id": "board_festive",
+      "kind": "boardTheme",
+      "nameVi": "Bàn Tết Đỏ",
+      "descVi": "Sắc đỏ rực rỡ ngày Tết — phiên bản sự kiện.",
+      "payloadKey": "festive",
+      "priceCoins": 0,
+      "priceGems": 88,
+      "rarity": "legendary",
+      "sortOrder": 13,
+      "active": true
+    },
+    {
+      "id": "pieces_ink",
+      "kind": "pieceSet",
+      "nameVi": "Quân Cờ Thủy Mặc",
+      "descVi": "Nét chữ thủy mặc bay bổng trên mặt quân.",
+      "payloadKey": "ink",
+      "priceCoins": 1000,
+      "priceGems": 0,
+      "rarity": "rare",
+      "sortOrder": 20,
+      "active": true
+    },
+    {
+      "id": "pieces_bronze",
+      "kind": "pieceSet",
+      "nameVi": "Quân Cờ Đồng Cổ",
+      "descVi": "Quân cờ đúc đồng phong cách cổ vật.",
+      "payloadKey": "bronze",
+      "priceCoins": 0,
+      "priceGems": 50,
+      "rarity": "epic",
+      "sortOrder": 21,
+      "active": true
+    },
+    {
+      "id": "frame_gold",
+      "kind": "avatarFrame",
+      "nameVi": "Khung Avatar Vàng",
+      "descVi": "Viền vàng kim cho ảnh đại diện thêm nổi bật.",
+      "payloadKey": "gold",
+      "priceCoins": 600,
+      "priceGems": 0,
+      "rarity": "rare",
+      "sortOrder": 30,
+      "active": true
+    },
+    {
+      "id": "frame_dragon",
+      "kind": "avatarFrame",
+      "nameVi": "Khung Long Vân",
+      "descVi": "Rồng mây uốn lượn quanh avatar — đẳng cấp kỳ vương.",
+      "payloadKey": "dragon",
+      "priceCoins": 0,
+      "priceGems": 120,
+      "rarity": "legendary",
+      "sortOrder": 31,
+      "active": true
+    },
+    {
+      "id": "bubble_scroll",
+      "kind": "chatBubble",
+      "nameVi": "Bong Bóng Thư Pháp",
+      "descVi": "Khung chat kiểu cuộn thư pháp cổ.",
+      "payloadKey": "scroll",
+      "priceCoins": 400,
+      "priceGems": 0,
+      "rarity": "common",
+      "sortOrder": 40,
+      "active": true
+    },
+    {
+      "id": "nameplate_general",
+      "kind": "nameplate",
+      "nameVi": "Biển Hiệu Đại Tướng",
+      "descVi": "Biển tên phong cách ấn triện đại tướng.",
+      "payloadKey": "general",
+      "priceCoins": 700,
+      "priceGems": 0,
+      "rarity": "rare",
+      "sortOrder": 50,
+      "active": true
+    },
+    {
+      "id": "hint_pack_5",
+      "kind": "consumable",
+      "nameVi": "Gói 5 Gợi Ý",
+      "descVi": "Thêm 5 lượt gợi ý nước đi để dùng dần.",
+      "payloadKey": "hint_pack",
+      "priceCoins": 150,
+      "priceGems": 0,
+      "rarity": "common",
+      "consumable": true,
+      "consumableQty": 5,
+      "sortOrder": 60,
+      "active": true
+    }
+  ]
+}

@@ -421,9 +421,9 @@ class _ProfileMenu extends StatelessWidget {
         onTap: () => context.go(AppConstants.routeDailyQuests),
       ),
       _MenuEntry(
-        icon: Icons.checkroom_outlined,
-        label: 'Trang Phục Cá Nhân',
-        onTap: () {},
+        icon: Icons.storefront_outlined,
+        label: 'Khám Phá (Cửa Hàng & Balo)',
+        onTap: () => context.push(AppConstants.routeExplore),
       ),
       _MenuEntry(
         icon: Icons.settings_outlined,

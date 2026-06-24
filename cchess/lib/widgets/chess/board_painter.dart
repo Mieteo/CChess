@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/material.dart';
 
 import '../../theme/app_colors.dart';
@@ -19,11 +20,20 @@ class BoardPainter extends CustomPainter {
   final Color riverText;
   final Color markerInk;
 
+  /// Top→bottom gradient painted as the board surface. Defaults to the classic
+  /// wood grain; an equipped board-theme cosmetic overrides it.
+  final List<Color> woodGradient;
+
   BoardPainter({
     this.background = AppColors.woodLight,
     this.grid = AppColors.inkBlack,
     this.riverText = AppColors.parchmentTan,
     this.markerInk = AppColors.charcoalDark,
+    this.woodGradient = const [
+      Color(0xFFE6BF85),
+      AppColors.woodLight,
+      Color(0xFFC59559),
+    ],
   });
 
   /// Maps a (row, col) board coordinate to its pixel center within [size].
@@ -287,10 +297,10 @@ class BoardPainter extends CustomPainter {
   }
 
   Shader _woodShader(_BoardGeometry geom) {
-    return const LinearGradient(
+    return LinearGradient(
       begin: Alignment.topCenter,
       end: Alignment.bottomCenter,
-      colors: [Color(0xFFE6BF85), AppColors.woodLight, Color(0xFFC59559)],
+      colors: woodGradient,
     ).createShader(
       Rect.fromLTWH(0, 0, geom.size.width, geom.size.height),
     );
@@ -301,7 +311,8 @@ class BoardPainter extends CustomPainter {
       old.background != background ||
       old.grid != grid ||
       old.riverText != riverText ||
-      old.markerInk != markerInk;
+      old.markerInk != markerInk ||
+      !listEquals(old.woodGradient, woodGradient);
 }
 
 /// Internal helper precomputing the geometry of the board so painters

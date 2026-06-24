@@ -29,7 +29,10 @@ class AppConstants {
   static const String routeEndgameStats = '/puzzle-stats';
   static const String routeBeginnerLessons = '/beginner-lessons';
   static const String routeSettings = '/settings';
+  // Khám Phá (S16): hub → Thương Thành (shop) + Balo (inventory).
+  static const String routeExplore = '/explore';
   static const String routeShop = '/shop';
+  static const String routeInventory = '/inventory';
   static const String routeAchievements = '/achievements';
   static const String routeHistory = '/history';
   static const String routeDailyQuests = '/daily-quests';
@@ -48,6 +51,10 @@ class AppConstants {
   // Offline cache of remote puzzles (B4 — Kho Tàn Cục). Lets the list/daily
   // screens fall back to the last-fetched server catalog when offline.
   static const String boxPuzzleCache = 'cchess_puzzle_cache';
+  // Offline cache of the economy (S16 — Khám Phá): last-fetched shop catalog,
+  // wallet, inventory and equipped loadout, so the shop renders and the equipped
+  // board theme keeps applying when offline.
+  static const String boxShop = 'cchess_shop';
 
   // Hint usage caps.
   static const int dailyHintLimitFree = 3;

@@ -86,7 +86,57 @@ class HomeScreen extends StatelessWidget {
         ),
         AppSpacing.vGapMd,
         const _DailyRewardCard(),
+        AppSpacing.vGapLg,
+        const SectionHeader(title: 'Khám Phá'),
+        AppSpacing.vGapMd,
+        _ExploreCard(
+          onTap: () => context.push(AppConstants.routeExplore),
+        ),
       ],
+    );
+  }
+}
+
+class _ExploreCard extends StatelessWidget {
+  final VoidCallback onTap;
+  const _ExploreCard({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return CChessCard(
+      onTap: onTap,
+      borderColor: AppColors.accentGold.withValues(alpha: 0.4),
+      child: Row(
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: AppColors.accentGold.withValues(alpha: 0.12),
+              shape: BoxShape.circle,
+              border: Border.all(color: AppColors.accentGold.withValues(alpha: 0.4)),
+            ),
+            child: const Icon(Icons.storefront, color: AppColors.accentGold, size: 22),
+          ),
+          AppSpacing.hGapMd,
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Thương Thành & Balo', style: AppTextStyles.headingMd),
+                AppSpacing.vGapXs,
+                Text(
+                  'Sắm bàn cờ, quân cờ và trang bị vật phẩm',
+                  style: AppTextStyles.captionSm
+                      .copyWith(color: AppColors.onSurfaceVariant),
+                ),
+              ],
+            ),
+          ),
+          const Icon(Icons.chevron_right, color: AppColors.onSurfaceVariant),
+        ],
+      ),
     );
   }
 }

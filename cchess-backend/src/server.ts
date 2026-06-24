@@ -35,6 +35,7 @@ import {
   tryMatch as mmTryMatch,
 } from './matchmaking';
 import { createPuzzleApi, type PuzzleApi } from './puzzles/puzzle_routes';
+import { createShopApi, type ShopApi } from './shop/shop_routes';
 
 // Step 2-3 from 08_HUONG_DAN_BACKEND_WEBSOCKET.md.
 //
@@ -268,6 +269,10 @@ export interface CChessServerOptions {
   /// server. Defaults to the real Firestore-backed API. Tests that don't touch
   /// /puzzles can leave it; ones that do inject a fake-store-backed instance.
   puzzleApi?: PuzzleApi;
+  /// REST API for the economy (S16 — Thương Thành / Balo), mounted on the same
+  /// HTTP server. Defaults to the real Firestore-backed API; tests inject a
+  /// fake-store-backed instance.
+  shopApi?: ShopApi;
   /// Per-instance timing / limits. Each field defaults to its env-backed
   /// module constant, so production (no config) is unchanged. The test lab
   /// passes this PER SCENARIO — unlike env vars (read once at import), an
@@ -316,6 +321,9 @@ export function createCChessServer(options: CChessServerOptions = {}): CChessSer
   // Render service). It owns /puzzles* and /admin/puzzles*; everything else
   // falls through to the routes below.
   const puzzleApi = options.puzzleApi ?? createPuzzleApi();
+  // S16 economy REST API, mounted on the same HTTP server. It owns /shop*,
+  // /wallet, /inventory* and /admin/shop*; everything else falls through.
+  const shopApi = options.shopApi ?? createShopApi();
 
   const httpServer = createServer((req, res) => {
     const url = new URL(req.url ?? '/', 'http://localhost');
@@ -342,10 +350,12 @@ export function createCChessServer(options: CChessServerOptions = {}): CChessSer
       return;
     }
 
-    // Puzzle library REST API. handle() resolves true if it owned the request
-    // (and already sent a response); otherwise we 404 like before.
+    // Mounted REST APIs. Each handle() resolves true if it owned the request
+    // (and already sent a response); we try the puzzle API, then the shop API,
+    // and 404 only if neither claimed the path.
     void puzzleApi
       .handle(req, res)
+      .then((handled) => (handled ? true : shopApi.handle(req, res)))
       .then((handled) => {
         if (!handled && !res.headersSent) {
           res.writeHead(404);
@@ -353,7 +363,7 @@ export function createCChessServer(options: CChessServerOptions = {}): CChessSer
         }
       })
       .catch((err) => {
-        console.error('[puzzles] unhandled route error:', err);
+        console.error('[rest] unhandled route error:', err);
         if (!res.headersSent) {
           res.writeHead(500);
           res.end();

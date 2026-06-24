@@ -6,6 +6,7 @@ export '../constants/piece_constants.dart'
 export 'ai/bot_difficulty.dart';
 export 'ai/bot_engine.dart';
 export 'ai/coach_analyzer.dart';
+export 'ai/coach_recommender.dart';
 export 'ai/evaluator.dart';
 export 'ai/game_analyzer.dart';
 export 'ai/minimax.dart';

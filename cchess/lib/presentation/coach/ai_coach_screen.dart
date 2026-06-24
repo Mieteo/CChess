@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/chess_engine/chess_engine.dart';
 import '../../core/constants/app_constants.dart';
+import '../../data/models/chess_puzzle.dart';
 import '../../data/models/game_record.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_spacing.dart';
@@ -150,7 +151,114 @@ class _CoachBody extends ConsumerWidget {
                 context.push('${AppConstants.routeReplay}/${record.id}'),
           ),
         ],
+        AppSpacing.vGapLg,
+        _RecommendedSection(record: record),
       ],
+    );
+  }
+}
+
+/// Spec B3 "đề xuất bài tập cá nhân hoá": a small set of puzzles picked to
+/// target the player's weakest phase, with the coach's rationale on top.
+class _RecommendedSection extends ConsumerWidget {
+  final GameRecord record;
+  const _RecommendedSection({required this.record});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final plan = ref.watch(coachPlanProvider(record));
+    final puzzlesAsync = ref.watch(coachRecommendedPuzzlesProvider(record));
+    final puzzles = puzzlesAsync.valueOrNull ?? const [];
+    if (plan == null || puzzles.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SectionHeader(title: 'Bài Tập Đề Xuất Hôm Nay'),
+        AppSpacing.vGapSm,
+        CChessCard(
+          borderColor: AppColors.accentGold.withValues(alpha: 0.4),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Icon(Icons.fitness_center,
+                  color: AppColors.accentGold, size: 20),
+              AppSpacing.hGapSm,
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Trọng tâm: ${plan.focus.nameVi}',
+                        style: AppTextStyles.headingMd),
+                    AppSpacing.vGapXs,
+                    Text(
+                      plan.rationaleVi,
+                      style: AppTextStyles.bodyMd
+                          .copyWith(color: AppColors.onSurfaceVariant),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        AppSpacing.vGapSm,
+        for (final p in puzzles) _RecommendedRow(puzzle: p),
+      ],
+    );
+  }
+}
+
+class _RecommendedRow extends StatelessWidget {
+  final ChessPuzzle puzzle;
+  const _RecommendedRow({required this.puzzle});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.xs),
+      child: CChessCard(
+        onTap: () => context.push('${AppConstants.routePuzzle}/${puzzle.id}'),
+        padding: const EdgeInsets.all(AppSpacing.sm),
+        child: Row(
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: AppColors.accentGold.withValues(alpha: 0.12),
+                shape: BoxShape.circle,
+                border:
+                    Border.all(color: AppColors.accentGold.withValues(alpha: 0.3)),
+              ),
+              child: const Icon(Icons.extension,
+                  color: AppColors.accentGold, size: 18),
+            ),
+            AppSpacing.hGapSm,
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    puzzle.titleVi.isEmpty ? 'Bài tập' : puzzle.titleVi,
+                    style: AppTextStyles.bodyMd,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  Text(
+                    'Độ khó ${puzzle.difficulty}'
+                    '${puzzle.tags.isNotEmpty ? ' • ${puzzle.tags.first}' : ''}',
+                    style: AppTextStyles.captionSm
+                        .copyWith(color: AppColors.onSurfaceVariant),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(Icons.chevron_right, color: AppColors.onSurfaceVariant),
+          ],
+        ),
+      ),
     );
   }
 }

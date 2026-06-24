@@ -306,6 +306,27 @@ class CoachAnalyzer {
           action: CoachActionKind.studyOpenings,
         );
       case GamePhase.middlegame:
+        // Tune the message to the error shape: blunder-heavy play means missed
+        // tactics (drill attacking combinations), while mistakes without
+        // blunders means getting slowly outplayed (drill solid defense).
+        if (wr.blunders > 0 && wr.blunders >= wr.mistakes) {
+          return CoachInsight(
+            title: 'Trung cuộc bỏ lỡ đòn quyết định',
+            detail:
+                'Trung cuộc của bạn đạt ${wr.accuracy.toStringAsFixed(0)}% với ${wr.blunders} sai lầm lớn. Luyện các thế tấn công và phối hợp để chớp thời cơ dứt điểm.',
+            tone: CoachTone.warning,
+            action: CoachActionKind.practicePuzzles,
+          );
+        }
+        if (wr.mistakes > 0 && wr.blunders == 0) {
+          return CoachInsight(
+            title: 'Trung cuộc bị lấn thế dần',
+            detail:
+                'Trung cuộc của bạn đạt ${wr.accuracy.toStringAsFixed(0)}% (${wr.errorCount} nước chưa tối ưu). Luyện phòng thủ chắc chắn để không bị ép thế từng nước.',
+            tone: CoachTone.tip,
+            action: CoachActionKind.practicePuzzles,
+          );
+        }
         return CoachInsight(
           title: 'Trung cuộc dễ tính sai',
           detail:
