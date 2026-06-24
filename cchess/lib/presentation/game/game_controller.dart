@@ -236,6 +236,7 @@ class GameController extends StateNotifier<GameUiState> {
   /// Apply a CPU-generated move (called by the screen after running the bot
   /// in an isolate / async future). Skipped if the game state moved on.
   void applyBotMove(Position from, Position to) {
+    if (state.game.status.isOver) return;
     if (state.game.turn != state.cpuColor) return;
     if (!state.game.isValidMove(from, to)) return;
     final move = state.game.makeMove(from, to);

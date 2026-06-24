@@ -51,8 +51,14 @@ class _GameScreenState extends ConsumerState<GameScreen> {
 
   late Duration _redTime;
   late Duration _blackTime;
-  // Countdown for the current side to move; reset to _moveClock each move.
+  // Countdown for the current side to move; reset each move to
+  // min(90s, that side's remaining total) — see [_moveClockFor].
   late Duration _moveTime;
+  // Move count already reflected in [_moveTime]. The game session is a single
+  // MUTABLE instance, so prev/next GameUiState share the same `game` object —
+  // we can't detect a new move by comparing prev.game vs next.game, so we
+  // track the count here and reset the per-move clock when it changes.
+  int _lastMoveCount = 0;
   Timer? _ticker;
   DateTime? _gameStartedAt;
   bool _soundOn = true;
@@ -76,7 +82,8 @@ class _GameScreenState extends ConsumerState<GameScreen> {
     );
     _redTime = _gameClock;
     _blackTime = _gameClock;
-    _moveTime = _moveClock;
+    _moveTime = _moveClockFor(PieceColor.red);
+    _lastMoveCount = 0;
     _gameStartedAt = DateTime.now();
     _startTicker();
 
@@ -96,6 +103,17 @@ class _GameScreenState extends ConsumerState<GameScreen> {
       ref.read(gameControllerProvider(_args).notifier);
 
   GameUiState get _state => ref.read(gameControllerProvider(_args));
+
+  /// Remaining total-game time for [color].
+  Duration _totalTimeFor(PieceColor color) =>
+      color == PieceColor.red ? _redTime : _blackTime;
+
+  /// Per-move clock value at the start of [color]'s turn: a fresh 90s, but
+  /// never more than that side's remaining total (e.g. total 70s → 70s).
+  Duration _moveClockFor(PieceColor color) {
+    final total = _totalTimeFor(color);
+    return total < _moveClock ? total : _moveClock;
+  }
 
   void _startTicker() {
     _ticker?.cancel();
@@ -123,12 +141,11 @@ class _GameScreenState extends ConsumerState<GameScreen> {
           }
         }
 
-        // Per-move clock (90s). Skip the bot's turn so engine latency never
-        // costs it the game; expiry = the side to move loses, like online.
-        // Re-check status: the total clock above may have just ended the game.
-        final isCpuTurn =
-            state.mode == GameMode.vsBot && state.turn == state.cpuColor;
-        if (!isCpuTurn && !_state.game.status.isOver) {
+        // Per-move clock — applies to BOTH sides, including the bot, so the
+        // chip counts down on every turn. Expiry = the side to move loses,
+        // like online. Re-check status: the total clock above may have just
+        // ended the game.
+        if (!_state.game.status.isOver) {
           _moveTime -= const Duration(seconds: 1);
           if (_moveTime.isNegative) {
             _moveTime = Duration.zero;
@@ -239,7 +256,8 @@ class _GameScreenState extends ConsumerState<GameScreen> {
     setState(() {
       _redTime = _gameClock;
       _blackTime = _gameClock;
-      _moveTime = _moveClock;
+      _moveTime = _moveClockFor(PieceColor.red);
+      _lastMoveCount = 0;
       _gameStartedAt = DateTime.now();
       _resultPersisted = false;
     });
@@ -443,10 +461,15 @@ class _GameScreenState extends ConsumerState<GameScreen> {
         _persistGameResult();
       }
       // Reset the per-move clock whenever the move count changes (a move was
-      // played by either side, undone, or the board reset) so each turn starts
-      // fresh at 90s.
-      if (prev?.game.history.length != next.game.history.length) {
-        setState(() => _moveTime = _moveClock);
+      // played by either side, undone, or the board reset). NOTE: prev.game and
+      // next.game alias the SAME mutable session, so comparing prev.game vs
+      // next.game would never differ and the clock would never reset — we
+      // compare against our own tracked count instead. The reset value is
+      // min(90s, the new side-to-move's remaining total).
+      final moveCount = next.game.history.length;
+      if (moveCount != _lastMoveCount) {
+        _lastMoveCount = moveCount;
+        setState(() => _moveTime = _moveClockFor(next.turn));
       }
     });
 
