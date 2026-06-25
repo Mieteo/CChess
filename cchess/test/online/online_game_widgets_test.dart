@@ -143,6 +143,7 @@ void main() {
       bool oppOffered = false,
       bool opponentLeft = false,
       String? errorMessage,
+      String roomMode = 'ranked',
     }) {
       return OnlineMatchState(
         phase: OnlineMatchPhase.ended,
@@ -154,6 +155,7 @@ void main() {
         rematchOfferedByOpponent: oppOffered,
         opponentLeftRoom: opponentLeft,
         errorMessage: errorMessage,
+        roomMode: roomMode,
       );
     }
 
@@ -211,6 +213,29 @@ void main() {
 
     testWidgets('no ELO row when the server sent no elo', (tester) async {
       await pump(tester, dialog(ended()));
+      expect(find.textContaining('ELO:'), findsNothing);
+    });
+
+    testWidgets('A2 — casual game shows the "không tính ELO" note, no ELO', (
+      tester,
+    ) async {
+      // A casual room ends with elo:null; the dialog must say WHY there is no
+      // ELO rather than silently dropping the row.
+      await pump(tester, dialog(ended(roomMode: 'casual')));
+      expect(find.text('Cờ giao hữu — không tính ELO.'), findsOneWidget);
+      expect(find.textContaining('ELO:'), findsNothing);
+    });
+
+    testWidgets('A2 — casual hides ELO even if a stray delta is present', (
+      tester,
+    ) async {
+      // Defensive: even if the server somehow sent an elo map for a casual
+      // room, the casual note wins and no ELO delta is rendered.
+      await pump(
+        tester,
+        dialog(ended(roomMode: 'casual', eloUpdate: eloRedGains)),
+      );
+      expect(find.text('Cờ giao hữu — không tính ELO.'), findsOneWidget);
       expect(find.textContaining('ELO:'), findsNothing);
     });
 

@@ -49,5 +49,62 @@ void main() {
       final move = await CupBotEngine().chooseMove(game, BotDifficulty.easy);
       expect(move, isNull);
     });
+
+    test(
+      'prefers a known high-value capture over a face-down one (no peeking)',
+      () async {
+        // Red chariot on row 5 can capture EITHER a REVEALED black chariot
+        // (worth ~900) to its left, or a FACE-DOWN black piece to its right.
+        // The face-down piece is SECRETLY a chariot too, but a fair bot can't
+        // see that — it must value it at the bag expectation (~280, since one
+        // black chariot is already revealed) and therefore grab the known 900.
+        // Generals sit in their palaces on DIFFERENT files (3 vs 5) so nothing
+        // about flying-general or a lucky check competes with the material call.
+        final board = Board.empty()
+          ..setAt(const Position(9, 3), Piece.redGeneral)
+          ..setAt(const Position(0, 5), Piece.blackGeneral)
+          ..setAt(const Position(5, 4), Piece.redChariot) // revealed mover
+          ..setAt(const Position(5, 1), Piece.blackChariot) // revealed victim
+          ..setAt(const Position(5, 7), Piece.blackSoldier); // cover of a hidden
+        final game = XiangqiCupGame.debug(
+          board: board,
+          turn: PieceColor.red,
+          hiddenAssignments: {const Position(5, 7): Piece.blackChariot},
+        );
+
+        // hard → deterministic, no randomness.
+        final move = await CupBotEngine().chooseMove(game, BotDifficulty.hard);
+
+        expect(move, isNotNull);
+        expect(
+          move!.to,
+          const Position(5, 1),
+          reason: 'take the KNOWN chariot (900), not the face-down ~280',
+        );
+        expect(game.isValidMove(move.from, move.to), isTrue);
+      },
+    );
+
+    test(
+      'searches a full face-down opening at depth without hanging',
+      () async {
+        // A fresh cup position is almost all covers, so EVERY developing move is
+        // a reveal → a chance node. This exercises the expectiminimax fan-out at
+        // its heaviest; the time-budgeted iterative deepening must still return a
+        // legal move promptly.
+        final game = XiangqiCupGame.initial(seed: 11);
+        final sw = Stopwatch()..start();
+        final move = await CupBotEngine().chooseMove(
+          game,
+          BotDifficulty.medium,
+        );
+        sw.stop();
+
+        expect(move, isNotNull);
+        expect(game.isValidMove(move!.from, move.to), isTrue);
+        // Budget is ~1s + min think time; allow generous slack for slow CI.
+        expect(sw.elapsedMilliseconds, lessThan(8000));
+      },
+    );
   });
 }

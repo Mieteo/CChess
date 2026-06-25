@@ -167,8 +167,17 @@ class OnlineResultDialog extends StatelessWidget {
     final content = <Widget>[
       Text('Lý do: ${onlineReasonLabel(state.endReason)}'),
     ];
-    final eloWidget = _eloWidget();
-    if (eloWidget != null) content.add(eloWidget);
+    // Casual (Cờ giao hữu): no ELO is computed for either side, so make that
+    // explicit instead of silently omitting the ELO row. Ranked games fall
+    // through to the ELO delta below.
+    if (state.isCasual) {
+      content.add(
+        _rematchTile('Cờ giao hữu — không tính ELO.', Icons.favorite_outline),
+      );
+    } else {
+      final eloWidget = _eloWidget();
+      if (eloWidget != null) content.add(eloWidget);
+    }
 
     if (watching) {
       content.add(

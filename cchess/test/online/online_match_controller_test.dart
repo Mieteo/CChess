@@ -20,6 +20,9 @@ class FakeGameSocketService implements GameSocketService {
   int? lastCreateRoomClockMs;
   int? lastFindMatchClockMs;
 
+  /// A2: whether the last create-room asked for a casual (no-ELO) room.
+  bool lastCreateRoomCasual = false;
+
   @override
   void Function()? onConnectionLost;
 
@@ -42,6 +45,7 @@ class FakeGameSocketService implements GameSocketService {
   @override
   void createRoom({int? clockMs, bool casual = false, String? variant}) {
     lastCreateRoomClockMs = clockMs;
+    lastCreateRoomCasual = casual;
     sentTypes.add('create-room');
   }
 
@@ -986,6 +990,73 @@ void main() {
       expect(socket.sentTypes, isNot(contains('create-room')));
       expect(socket.sentTypes, isNot(contains('find-match')));
       expect(ctrl.state.errorMessage, isNotNull);
+    });
+  });
+
+  group('A2 — casual (Cờ giao hữu, no ELO)', () {
+    test('createRoom(casual:true) forwards the casual flag to the socket', () {
+      // setUp leaves us authed. "Mời Bạn Đấu" creates a casual private room.
+      ctrl.createRoom(clockMs: 600000, casual: true);
+
+      expect(socket.sentTypes, contains('create-room'));
+      expect(socket.lastCreateRoomCasual, isTrue);
+    });
+
+    test('room-created mode=casual marks the state casual', () async {
+      ctrl.createRoom(clockMs: 600000, casual: true);
+      socket.emit({
+        'type': 'room-created',
+        'roomId': 'CAS001',
+        'mode': 'casual',
+      });
+      await pump();
+
+      expect(ctrl.state.phase, OnlineMatchPhase.waitingForPeer);
+      expect(ctrl.state.roomMode, 'casual');
+      expect(ctrl.state.isCasual, isTrue);
+    });
+
+    test('game-start carries mode=casual through to the board state', () async {
+      socket.emit({
+        'type': 'game-start',
+        'roomId': 'CAS001',
+        'redUid': 'red-uid',
+        'blackUid': 'black-uid',
+        'yourColor': 'red',
+        'mode': 'casual',
+        'clock': {'red': 600000, 'black': 600000},
+      });
+      await pump();
+
+      expect(ctrl.state.phase, OnlineMatchPhase.playing);
+      expect(ctrl.state.isCasual, isTrue);
+    });
+
+    test('casual game-ended keeps isCasual and has no ELO update', () async {
+      // Drive a casual game to its end: the server resigns it with elo:null.
+      socket.emit({
+        'type': 'game-start',
+        'roomId': 'CAS001',
+        'redUid': 'red-uid',
+        'blackUid': 'black-uid',
+        'yourColor': 'red',
+        'mode': 'casual',
+        'clock': {'red': 600000, 'black': 600000},
+      });
+      await pump();
+
+      socket.emit({
+        'type': 'game-ended',
+        'result': 'black-win',
+        'reason': 'resign',
+        'mode': 'casual',
+        'elo': null,
+      });
+      await pump();
+
+      expect(ctrl.state.phase, OnlineMatchPhase.ended);
+      expect(ctrl.state.isCasual, isTrue);
+      expect(ctrl.state.eloUpdate, isNull);
     });
   });
 }

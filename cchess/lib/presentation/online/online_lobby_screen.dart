@@ -402,6 +402,18 @@ class _OnlineLobbyScreenState extends ConsumerState<OnlineLobbyScreen> {
                     ),
                   ),
                 ),
+                if (state.isCasual) ...[
+                  AppSpacing.vGapSm,
+                  Center(
+                    child: Text(
+                      'Cờ giao hữu — không tính ELO',
+                      style: AppTextStyles.captionSm.copyWith(
+                        color: AppColors.tealSuccess,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ],
                 AppSpacing.vGapBase,
                 ElevatedButton.icon(
                   icon: const Icon(Icons.share),
