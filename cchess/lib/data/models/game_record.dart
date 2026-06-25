@@ -158,7 +158,7 @@ class GameRecord extends Equatable {
 
 /// Mode the game was played in. Mirrors [GameMode] in game_controller so we
 /// can persist without coupling the data layer to presentation.
-enum GameMode { localTwoPlayer, vsBot, vsOnline, cupLocal, onlineCasual }
+enum GameMode { localTwoPlayer, vsBot, vsOnline, cupLocal, cupVsBot, onlineCasual }
 
 extension GameModeX on GameMode {
   String get nameVi {
@@ -171,6 +171,8 @@ extension GameModeX on GameMode {
         return 'Đấu online';
       case GameMode.cupLocal:
         return 'Cờ Úp';
+      case GameMode.cupVsBot:
+        return 'Cờ Úp với Máy';
       case GameMode.onlineCasual:
         return 'Đấu casual';
     }

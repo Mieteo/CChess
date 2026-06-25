@@ -27,6 +27,7 @@ import type { GameResult, Room } from './rooms';
 
 interface StoredUser {
   eloChess: number;
+  eloCup: number;
   wins: number;
   losses: number;
   draws: number;
@@ -38,8 +39,8 @@ class FakeStore implements PersistStore {
   readonly records = new Map<string, GameRecordData>(); // key `${uid}/${gameId}`
   commits = 0;
 
-  seedElo(uid: string, eloChess: number): void {
-    this.users.set(uid, { ...this.blankUser(), eloChess });
+  seedElo(uid: string, elo: number, field: 'eloChess' | 'eloCup' = 'eloChess'): void {
+    this.users.set(uid, { ...this.blankUser(), [field]: elo });
   }
 
   user(uid: string): StoredUser {
@@ -54,26 +55,31 @@ class FakeStore implements PersistStore {
     redUid,
     blackUid,
     gameId,
+    ratingField,
     plan,
   }: Parameters<PersistStore['commit']>[0]) {
     this.commits++;
     // Idempotency mirrors the Firestore adapter: already recorded → no-op.
     if (this.records.has(`${redUid}/${gameId}`)) return null;
 
-    const redElo = this.users.get(redUid)?.eloChess ?? DEFAULT_RATING;
-    const blackElo = this.users.get(blackUid)?.eloChess ?? DEFAULT_RATING;
+    const redElo = this.users.get(redUid)?.[ratingField] ?? DEFAULT_RATING;
+    const blackElo = this.users.get(blackUid)?.[ratingField] ?? DEFAULT_RATING;
     const p = plan(redElo, blackElo);
 
-    this.applyStats(p.red.uid, p.red.stats);
-    this.applyStats(p.black.uid, p.black.stats);
+    this.applyStats(p.red.uid, p.red.stats, ratingField);
+    this.applyStats(p.black.uid, p.black.stats, ratingField);
     this.records.set(`${redUid}/${gameId}`, p.red.record);
     this.records.set(`${blackUid}/${gameId}`, p.black.record);
     return p.elo;
   }
 
-  private applyStats(uid: string, s: PersistPlan['red']['stats']): void {
+  private applyStats(
+    uid: string,
+    s: PersistPlan['red']['stats'],
+    ratingField: 'eloChess' | 'eloCup',
+  ): void {
     const u = this.users.get(uid) ?? this.blankUser();
-    u.eloChess = s.eloChess;
+    u[ratingField] = s.rating;
     u.wins += s.winsInc;
     u.losses += s.lossesInc;
     u.draws += s.drawsInc;
@@ -82,7 +88,14 @@ class FakeStore implements PersistStore {
   }
 
   private blankUser(): StoredUser {
-    return { eloChess: DEFAULT_RATING, wins: 0, losses: 0, draws: 0, totalGames: 0 };
+    return {
+      eloChess: DEFAULT_RATING,
+      eloCup: DEFAULT_RATING,
+      wins: 0,
+      losses: 0,
+      draws: 0,
+      totalGames: 0,
+    };
   }
 }
 
@@ -93,6 +106,8 @@ function finishedRoom(overrides: Partial<Room> = {}): Room {
     id: 'ROOMAA',
     status: 'finished',
     moveCount: 2,
+    mode: 'ranked',
+    variant: 'standard',
     redUid: 'red-uid',
     blackUid: 'black-uid',
     result: 'red-win',
@@ -110,8 +125,8 @@ function finishedRoom(overrides: Partial<Room> = {}): Room {
 test('M5: an equal-rated red win writes +16/−16 into both records', () => {
   const plan = buildPersistPlan(finishedRoom(), 1000, 1000, 'g1');
 
-  assert.equal(plan.red.stats.eloChess, 1016);
-  assert.equal(plan.black.stats.eloChess, 984);
+  assert.equal(plan.red.stats.rating, 1016);
+  assert.equal(plan.black.stats.rating, 984);
 
   assert.equal(plan.red.record.eloBefore, 1000);
   assert.equal(plan.red.record.eloAfter, 1016);
@@ -171,6 +186,7 @@ test('M5/counters: red win → red.wins+1, black.losses+1, totalGames+1 each', a
   assert.ok(out, 'persistGame returned a result');
   assert.deepEqual(store.user('red-uid'), {
     eloChess: 1016,
+    eloCup: 1000,
     wins: 1,
     losses: 0,
     draws: 0,
@@ -178,6 +194,7 @@ test('M5/counters: red win → red.wins+1, black.losses+1, totalGames+1 each', a
   });
   assert.deepEqual(store.user('black-uid'), {
     eloChess: 984,
+    eloCup: 1000,
     wins: 0,
     losses: 1,
     draws: 0,
@@ -200,6 +217,7 @@ test('counters: a draw bumps draws (not wins/losses) on both sides', async () =>
   const { store } = await persistResult('draw');
   assert.deepEqual(store.user('red-uid'), {
     eloChess: 1000, // equal ratings → draw moves nothing
+    eloCup: 1000,
     wins: 0,
     losses: 0,
     draws: 1,
@@ -220,6 +238,43 @@ test('persistGame computes from each player CURRENT rating, not the default', as
   assert.ok(out!.elo!.redDelta > 0 && out!.elo!.redDelta < 16, 'small gain for the favourite');
   assert.equal(out!.elo!.redDelta + out!.elo!.blackDelta, 0, 'rating is conserved');
   assert.equal(store.user('red-uid').eloChess, 1400 + out!.elo!.redDelta);
+});
+
+// ── Cờ Úp: separate eloCup pool ──────────────────────────────────────────────
+
+test('Cờ Úp ranked moves eloCup, leaves eloChess untouched, tags the record', async () => {
+  const store = new FakeStore();
+  store.seedElo('red-uid', 1200, 'eloCup');
+  store.seedElo('black-uid', 1000, 'eloCup');
+
+  const out = await persistGame(
+    finishedRoom({ variant: 'cup', result: 'red-win', endReason: 'checkmate' }),
+    store,
+  );
+
+  assert.ok(out?.elo, 'cup game persisted');
+  assert.equal(out!.elo!.redOld, 1200, 'read the eloCup pool, not eloChess');
+  // eloCup changes; eloChess stays at its (default) value.
+  assert.equal(store.user('red-uid').eloCup, 1200 + out!.elo!.redDelta);
+  assert.equal(store.user('red-uid').eloChess, 1000, 'eloChess untouched by a cup game');
+  assert.equal(store.user('black-uid').eloCup, 1000 + out!.elo!.blackDelta);
+  // Shared activity counters still move.
+  assert.equal(store.user('red-uid').wins, 1);
+  assert.equal(store.user('red-uid').totalGames, 1);
+
+  // The mirror record is tagged as a cup game on both sides.
+  const red = store.record('red-uid', 'ROOMAA_1000');
+  const black = store.record('black-uid', 'ROOMAA_1000');
+  assert.equal(red?.variant, 'cup');
+  assert.equal(red?.startingPosition, 'cup');
+  assert.equal(black?.variant, 'cup');
+});
+
+test('a standard game still writes eloChess and tags variant=standard', async () => {
+  const { store } = await persistResult('red-win');
+  assert.equal(store.user('red-uid').eloChess, 1016);
+  assert.equal(store.user('red-uid').eloCup, 1000, 'eloCup untouched by a standard game');
+  assert.equal(store.record('red-uid', 'ROOMAA_1000')?.variant, 'standard');
 });
 
 // ── P-C3: idempotency ─────────────────────────────────────────────────────────

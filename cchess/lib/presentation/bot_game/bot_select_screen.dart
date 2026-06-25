@@ -9,8 +9,15 @@ import '../../theme/app_text_styles.dart';
 import '../../widgets/common/common.dart';
 
 /// Screen where the user picks a bot difficulty before starting a CPU game.
+/// [variant] selects the rule set: 'standard' Xiangqi or 'cup' (Cờ Úp). The cup
+/// variant uses the offline cup-aware bot, so the Pikafish "Đại Sư+" tier (which
+/// can't read hidden pieces) is hidden.
 class BotSelectScreen extends StatelessWidget {
-  const BotSelectScreen({super.key});
+  final String variant;
+
+  const BotSelectScreen({super.key, this.variant = 'standard'});
+
+  bool get _isCup => variant == 'cup';
 
   @override
   Widget build(BuildContext context) {
@@ -18,7 +25,7 @@ class BotSelectScreen extends StatelessWidget {
       backgroundColor: AppColors.background,
       appBar: AppBar(
         backgroundColor: AppColors.woodDark,
-        title: const Text('Chọn cấp độ Bot'),
+        title: Text(_isCup ? 'Cờ Úp với Máy' : 'Chọn cấp độ Bot'),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () => context.go(AppConstants.routeHome),
@@ -28,20 +35,26 @@ class BotSelectScreen extends StatelessWidget {
         child: ListView(
           padding: const EdgeInsets.all(AppSpacing.base),
           children: [
-            Text('Bot AI offline', style: AppTextStyles.titleLg),
+            Text(
+              _isCup ? 'Bot Cờ Úp offline' : 'Bot AI offline',
+              style: AppTextStyles.titleLg,
+            ),
             AppSpacing.vGapXs,
             Text(
-              'Mỗi cấp độ tính trước số nước khác nhau. Càng cao càng chậm và khó.',
+              _isCup
+                  ? 'Máy chỉ thấy mặt phủ và quân đã lộ như bạn — định giá quân úp theo kỳ vọng. Cấp càng cao tính càng sâu.'
+                  : 'Mỗi cấp độ tính trước số nước khác nhau. Càng cao càng chậm và khó.',
               style: AppTextStyles.bodyMd.copyWith(
                 color: AppColors.onSurfaceVariant,
               ),
             ),
             AppSpacing.vGapLg,
             for (final difficulty in BotDifficulty.values) ...[
-              _BotCard(difficulty: difficulty),
+              _BotCard(difficulty: difficulty, variant: variant),
               AppSpacing.vGapMd,
             ],
-            const _GrandmasterCard(),
+            // Pikafish can't reason about hidden pieces — only standard chess.
+            if (!_isCup) const _GrandmasterCard(),
           ],
         ),
       ),
@@ -51,8 +64,9 @@ class BotSelectScreen extends StatelessWidget {
 
 class _BotCard extends StatelessWidget {
   final BotDifficulty difficulty;
+  final String variant;
 
-  const _BotCard({required this.difficulty});
+  const _BotCard({required this.difficulty, this.variant = 'standard'});
 
   Color get _accent {
     switch (difficulty) {
@@ -86,9 +100,10 @@ class _BotCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final mode = variant == 'cup' ? 'cupbot' : 'bot';
     return CChessCard(
       onTap: () => context.go(
-        '${AppConstants.routeGame}?mode=bot&level=${difficulty.name}',
+        '${AppConstants.routeGame}?mode=$mode&level=${difficulty.name}',
       ),
       borderColor: _accent.withValues(alpha: 0.5),
       child: Row(

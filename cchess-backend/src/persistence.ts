@@ -26,7 +26,15 @@ import {
   type Transaction,
 } from 'firebase-admin/firestore';
 import { computeElo, DEFAULT_RATING, type EloUpdate } from './elo';
-import type { Color, EndReason, Room } from './rooms';
+import type { Color, EndReason, GameVariant, Room } from './rooms';
+
+/// The Firestore user field that holds a variant's rating. Cờ Úp keeps a
+/// separate pool (eloCup) from standard Xiangqi (eloChess).
+export type RatingField = 'eloChess' | 'eloCup';
+
+export function ratingFieldFor(variant: GameVariant): RatingField {
+  return variant === 'cup' ? 'eloCup' : 'eloChess';
+}
 
 export interface PersistResult {
   gameId: string;
@@ -36,7 +44,7 @@ export interface PersistResult {
 /// Counter/rating change to apply to one user doc. Increments are plain numbers
 /// (0 or 1) here; the Firestore adapter translates them to FieldValue.increment.
 export interface PlayerStatsDelta {
-  eloChess: number; // absolute new rating
+  rating: number; // absolute new rating (written to the variant's rating field)
   winsInc: number;
   lossesInc: number;
   drawsInc: number;
@@ -50,6 +58,7 @@ export interface GameRecordData {
   gameId: string;
   roomId: string;
   mode: 'ranked';
+  variant: GameVariant;
   redUid: string;
   blackUid: string;
   opponent: string;
@@ -62,7 +71,7 @@ export interface GameRecordData {
   moveCount: number;
   endReason: EndReason | null;
   durationMs: number;
-  startingPosition: 'standard';
+  startingPosition: 'standard' | 'cup';
   startedAtMs: number | null;
   endedAtMs: number | null;
   clockRemainingMs: { red: number; black: number };
@@ -87,6 +96,8 @@ export interface PersistStore {
     redUid: string;
     blackUid: string;
     gameId: string;
+    /// Which rating field to read (current ratings) and write (new ratings).
+    ratingField: RatingField;
     plan: (redElo: number, blackElo: number) => PersistPlan;
   }): Promise<EloUpdate | null>;
 }
@@ -105,12 +116,14 @@ export async function persistGame(
   }
 
   const gameId = `${room.id}_${room.startedAt ?? Date.now()}`;
+  const ratingField = ratingFieldFor(room.variant);
 
   try {
     const elo = await store.commit({
       redUid: room.redUid,
       blackUid: room.blackUid,
       gameId,
+      ratingField,
       plan: (redElo, blackElo) => buildPersistPlan(room, redElo, blackElo, gameId),
     });
 
@@ -188,7 +201,7 @@ function statsDeltaFor(
     (result === 'red-win' && color === 'red') ||
     (result === 'black-win' && color === 'black');
   return {
-    eloChess: newElo,
+    rating: newElo,
     winsInc: !isDraw && won ? 1 : 0,
     lossesInc: !isDraw && !won ? 1 : 0,
     drawsInc: isDraw ? 1 : 0,
@@ -207,6 +220,7 @@ function buildBaseRecord(
     gameId,
     roomId: room.id,
     mode: 'ranked',
+    variant: room.variant,
     redUid: room.redUid!,
     blackUid: room.blackUid!,
     moveList: room.movesUci ?? [],
@@ -214,7 +228,7 @@ function buildBaseRecord(
     endReason: room.endReason ?? null,
     durationMs:
       room.endedAt && room.startedAt ? room.endedAt - room.startedAt : 0,
-    startingPosition: 'standard',
+    startingPosition: room.variant === 'cup' ? 'cup' : 'standard',
     startedAtMs: room.startedAt ?? null,
     endedAtMs: room.endedAt ?? null,
     clockRemainingMs: {
@@ -240,7 +254,7 @@ function perspective(
 
 function firestoreStore(): PersistStore {
   return {
-    async commit({ redUid, blackUid, gameId, plan }) {
+    async commit({ redUid, blackUid, gameId, ratingField, plan }) {
       const db = getFirestore();
       const redRef = db.collection('users').doc(redUid);
       const blackRef = db.collection('users').doc(blackUid);
@@ -255,13 +269,13 @@ function firestoreStore(): PersistStore {
         const redSnap = await tx.get(redRef);
         const blackSnap = await tx.get(blackRef);
         const redElo =
-          (redSnap.data()?.eloChess as number | undefined) ?? DEFAULT_RATING;
+          (redSnap.data()?.[ratingField] as number | undefined) ?? DEFAULT_RATING;
         const blackElo =
-          (blackSnap.data()?.eloChess as number | undefined) ?? DEFAULT_RATING;
+          (blackSnap.data()?.[ratingField] as number | undefined) ?? DEFAULT_RATING;
 
         const p = plan(redElo, blackElo);
-        applyStats(tx, redRef, p.red.stats);
-        applyStats(tx, blackRef, p.black.stats);
+        applyStats(tx, redRef, p.red.stats, ratingField);
+        applyStats(tx, blackRef, p.black.stats, ratingField);
         tx.set(redGameRef, toFirestoreRecord(p.red.record));
         tx.set(blackGameRef, toFirestoreRecord(p.black.record));
         return p.elo;
@@ -274,9 +288,10 @@ function applyStats(
   tx: Transaction,
   userRef: DocumentReference,
   s: PlayerStatsDelta,
+  ratingField: RatingField,
 ): void {
   const update: Record<string, unknown> = {
-    eloChess: s.eloChess,
+    [ratingField]: s.rating,
     totalGames: FieldValue.increment(s.totalGamesInc),
     lastActiveAt: FieldValue.serverTimestamp(),
   };
@@ -291,6 +306,7 @@ function toFirestoreRecord(r: GameRecordData): Record<string, unknown> {
     gameId: r.gameId,
     roomId: r.roomId,
     mode: r.mode,
+    variant: r.variant,
     redUid: r.redUid,
     blackUid: r.blackUid,
     opponent: r.opponent,

@@ -11,7 +11,7 @@
     "dev": "tsx watch src/server.ts",
     "engine:dev": "tsx watch src/engine-service/server.ts",
     "lint": "tsc --noEmit",
-    "test": "tsx --test src/rooms.test.ts src/match.test.ts src/matchmaking.test.ts src/elo.test.ts src/persistence.test.ts src/server.test.ts src/server.disconnect.test.ts src/server.waitingroom.test.ts src/server.liveness.test.ts src/engine/fen_uci_compat.test.ts src/engine-service/uci_parser.test.ts src/engine-service/engine_pool.test.ts src/engine-service/server.test.ts src/engine-service/firestore_quota.test.ts src/puzzles/puzzles.test.ts src/shop/shop.test.ts",
+    "test": "tsx --test src/rooms.test.ts src/match.test.ts src/match.cup.test.ts src/matchmaking.test.ts src/elo.test.ts src/persistence.test.ts src/server.test.ts src/server.disconnect.test.ts src/server.waitingroom.test.ts src/server.liveness.test.ts src/engine/fen_uci_compat.test.ts src/engine/cupGame.test.ts src/engine-service/uci_parser.test.ts src/engine-service/engine_pool.test.ts src/engine-service/server.test.ts src/engine-service/firestore_quota.test.ts src/puzzles/puzzles.test.ts src/shop/shop.test.ts",
     "puzzles:import": "tsx scripts/import_puzzles.ts",
     "puzzles:set-daily": "tsx scripts/set_daily.ts",
     "shop:import": "tsx scripts/import_shop.ts",

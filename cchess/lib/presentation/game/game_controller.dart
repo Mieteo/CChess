@@ -93,11 +93,23 @@ class GameUiState {
   /// Whose turn it is currently.
   PieceColor get turn => game.turn;
 
+  /// Any mode where one seat is the local bot (standard or Cờ Úp).
+  bool get isVsBot =>
+      mode == GameMode.vsBot || mode == GameMode.cupVsBot;
+
+  /// Any Cờ Úp mode (local hotseat or vs bot).
+  bool get isCup =>
+      mode == GameMode.cupLocal || mode == GameMode.cupVsBot;
+
+  /// Two humans sharing one device (no bot, no network).
+  bool get isLocalHotseat =>
+      mode == GameMode.localTwoPlayer || mode == GameMode.cupLocal;
+
   /// True if the human input should be accepted right now.
   bool get acceptsInput {
     if (game.status.isOver) return false;
     if (cpuThinking) return false;
-    if (mode == GameMode.vsBot && cpuColor == turn) return false;
+    if (isVsBot && cpuColor == turn) return false;
     return true;
   }
 }
@@ -211,7 +223,7 @@ class GameController extends StateNotifier<GameUiState> {
     if (state.cpuThinking) return;
     game.undoMove();
     // In bot mode, also undo the human's last move so they get another try.
-    if (state.mode == GameMode.vsBot && game.history.isNotEmpty) {
+    if (state.isVsBot && game.history.isNotEmpty) {
       game.undoMove();
     }
     state = state.copyWith(
@@ -284,7 +296,7 @@ class GameController extends StateNotifier<GameUiState> {
 }
 
 ChessGameSession _newSession(GameMode mode) {
-  return mode == GameMode.cupLocal
+  return (mode == GameMode.cupLocal || mode == GameMode.cupVsBot)
       ? XiangqiCupGame.initial()
       : XiangqiGame.initial();
 }

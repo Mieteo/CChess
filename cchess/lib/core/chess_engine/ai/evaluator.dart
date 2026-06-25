@@ -115,6 +115,12 @@ class Evaluator {
     [0, 0, 0, 1, 5, 1, 0, 0, 0],
   ];
 
+  /// Material value + piece-square bonus for one piece at (row, col), from its
+  /// OWN perspective (not signed by color). Used by the Cờ Úp bot to value a
+  /// revealed piece with the same tuning the standard evaluator uses.
+  static int pieceScore(Piece piece, int row, int col) =>
+      pieceValue[piece.type]! + _pstValue(piece, row, col);
+
   /// Evaluate the position from Red's perspective. Positive favors Red.
   static int evaluate(Board board) {
     int score = 0;

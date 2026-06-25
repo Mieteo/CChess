@@ -4,3 +4,4 @@ export * from './position';
 export * from './board';
 export * from './moveRules';
 export * from './game';
+export * from './cupGame';

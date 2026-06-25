@@ -15,6 +15,7 @@ import {
   spectateRoom,
   type EndReason,
   type GameResult,
+  type GameVariant,
   type Room,
 } from './rooms';
 import {
@@ -22,6 +23,7 @@ import {
   clockSnapshot,
   colorOfSocket,
   consumeTimeoutIfExpired,
+  cupSnapshot,
   endMatch,
   opponentOf,
   RECONNECT_GRACE_MS,
@@ -440,14 +442,16 @@ export function createCChessServer(options: CChessServerOptions = {}): CChessSer
   /// startGameForRoom. Sends explicit `match-found` to both first so they know
   /// matchmaking succeeded.
   function pairAndStartMatch(
-    a: { socket: WebSocket; uid: string; clockMs?: number },
-    b: { socket: WebSocket; uid: string; clockMs?: number },
+    a: { socket: WebSocket; uid: string; clockMs?: number; variant?: GameVariant },
+    b: { socket: WebSocket; uid: string; clockMs?: number; variant?: GameVariant },
   ): void {
     const clockMs = a.clockMs ?? b.clockMs;
+    // tryMatch only pairs equal variants, so a.variant === b.variant here.
+    const variant: GameVariant = a.variant ?? 'standard';
     const room = createRoom(a.socket, {
       initialClockMs: clockMs,
       mode: 'ranked',
-      variant: 'standard',
+      variant,
     });
     // Attach B as 2nd member. attachReconnectingSocket also registers B in
     // socketToRoom; the redSocket/blackSocket fields it sets are overwritten
@@ -697,12 +701,15 @@ export function createCChessServer(options: CChessServerOptions = {}): CChessSer
           typeof rawClock === 'number' && rawClock >= cfg.minClockMs && rawClock <= cfg.maxClockMs
             ? rawClock
             : undefined;
+        // Cờ Úp has its own rating pool — bucket on eloCup, not eloChess.
+        const variant: GameVariant = msg.variant === 'cup' ? 'cup' : 'standard';
+        const eloField = variant === 'cup' ? 'eloCup' : 'eloChess';
         // Fetch current ELO from Firestore so bucket matchmaking can pair fairly
         let elo = 1000;
         try {
           const { getFirestore } = await import('firebase-admin/firestore');
           const snap = await getFirestore().collection('users').doc(uid).get();
-          const e = snap.data()?.eloChess as number | undefined;
+          const e = snap.data()?.[eloField] as number | undefined;
           if (typeof e === 'number') elo = e;
         } catch (e) {
           console.warn(`[matchmaking] failed to fetch ELO for ${uid}, using default 1000:`, e);
@@ -720,9 +727,9 @@ export function createCChessServer(options: CChessServerOptions = {}): CChessSer
           send(socket, { type: 'error', code: 'already-in-room' });
           return;
         }
-        const size = mmEnqueue(socket, uid, elo, clockMs);
-        send(socket, { type: 'matching', queueSize: size, elo });
-        console.log(`[matchmaking] ${uid} enqueued (queue size=${size}, elo=${elo})`);
+        const size = mmEnqueue(socket, uid, elo, clockMs, variant);
+        send(socket, { type: 'matching', queueSize: size, elo, variant });
+        console.log(`[matchmaking] ${uid} enqueued (queue size=${size}, elo=${elo} variant=${variant})`);
         const pair = mmTryMatch();
         if (pair) {
           const [a, b] = pair;
@@ -842,6 +849,9 @@ export function createCChessServer(options: CChessServerOptions = {}): CChessSer
         const peerEntry = room.disconnectGrace
           ? [...room.disconnectGrace.values()][0]
           : undefined;
+        // Cờ Úp: a UCI replay can't reconstruct revealed identities, so ship the
+        // cheat-safe board snapshot (covers + revealed + hidden squares).
+        const cupState = cupSnapshot(room);
         send(socket, {
           type: 'reconnected',
           roomId: room.id,
@@ -851,6 +861,7 @@ export function createCChessServer(options: CChessServerOptions = {}): CChessSer
           mode: room.mode,
           variant: room.variant,
           moves: room.movesUci ?? [],
+          ...(cupState ? { cup: cupState } : {}),
           chat: room.chatMessages ?? [],
           currentTurn: room.currentTurn,
           clock: clockSnapshot(room),
@@ -1141,6 +1152,9 @@ export function createCChessServer(options: CChessServerOptions = {}): CChessSer
           moveNumber: result.moveNumber,
           clock: clockSnapshot(room),
           ts: Date.now(),
+          // Cờ Úp: the revealed identity + captured piece so peers/spectators can
+          // flip the cover. Absent for standard games.
+          ...(result.reveal ? { reveal: result.reveal } : {}),
         };
         broadcastToRoom(room, socket, movePayload);
         send(socket, {
@@ -1148,6 +1162,7 @@ export function createCChessServer(options: CChessServerOptions = {}): CChessSer
           uci: rawUci,
           moveNumber: result.moveNumber,
           clock: clockSnapshot(room),
+          ...(result.reveal ? { reveal: result.reveal } : {}),
         });
         console.log(`[match] ${room.id} #${result.moveNumber} ${result.color} ${rawUci} (red=${room.clockMsByColor!.red}ms black=${room.clockMsByColor!.black}ms)`);
 

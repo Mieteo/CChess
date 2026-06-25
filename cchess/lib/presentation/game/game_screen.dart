@@ -64,6 +64,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
   bool _soundOn = true;
   late final GameControllerArgs _args;
   bool _resultPersisted = false;
+  final CupBotEngine _cupBot = CupBotEngine();
 
   @override
   void initState() {
@@ -71,14 +72,15 @@ class _GameScreenState extends ConsumerState<GameScreen> {
     final mode = switch (widget.mode) {
       'bot' => GameMode.vsBot,
       'cup' => GameMode.cupLocal,
+      'cupbot' => GameMode.cupVsBot,
       _ => GameMode.localTwoPlayer,
     };
+    final isBot = mode == GameMode.vsBot || mode == GameMode.cupVsBot;
     _args = GameControllerArgs(
       mode: mode,
-      cpuColor: mode == GameMode.vsBot ? widget.cpuColor : null,
-      botDifficulty: mode == GameMode.vsBot
-          ? (widget.botDifficulty ?? BotDifficulty.medium)
-          : null,
+      cpuColor: isBot ? widget.cpuColor : null,
+      botDifficulty:
+          isBot ? (widget.botDifficulty ?? BotDifficulty.medium) : null,
     );
     _redTime = _gameClock;
     _blackTime = _gameClock;
@@ -159,21 +161,39 @@ class _GameScreenState extends ConsumerState<GameScreen> {
 
   Future<void> _maybePlayBotMove() async {
     final state = _state;
-    if (state.mode != GameMode.vsBot) return;
+    if (!state.isVsBot) return;
     if (state.game.status.isOver) return;
     if (state.cpuThinking) return;
     if (state.turn != state.cpuColor) return;
 
     _controller.setBotThinking(true);
     final difficulty = state.botDifficulty ?? BotDifficulty.medium;
-    final engine = ref.read(engineRouterProvider);
-    final result = await engine.bestMove(
-      state.game.toFen(),
-      level: widget.engineLevel ?? _engineLevelForDifficulty(difficulty),
-      useCase: EngineUseCase.bot,
-    );
+    final game = state.game;
+
+    Position? from;
+    Position? to;
+    if (game is XiangqiCupGame) {
+      // Cờ Úp can't use Pikafish / the standard minimax (hidden identities) —
+      // run the cup-aware bot, which sees only covers + revealed pieces.
+      final move = await _cupBot.chooseMove(game, difficulty);
+      if (move != null) {
+        from = move.from;
+        to = move.to;
+      }
+    } else {
+      final engine = ref.read(engineRouterProvider);
+      final result = await engine.bestMove(
+        game.toFen(),
+        level: widget.engineLevel ?? _engineLevelForDifficulty(difficulty),
+        useCase: EngineUseCase.bot,
+      );
+      if (result != null) {
+        from = result.move.from;
+        to = result.move.to;
+      }
+    }
     if (!mounted) return;
-    if (result == null) {
+    if (from == null || to == null) {
       _controller.setBotThinking(false);
       return;
     }
@@ -183,7 +203,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
       _controller.setBotThinking(false);
       return;
     }
-    _controller.applyBotMove(result.move.from, result.move.to);
+    _controller.applyBotMove(from, to);
   }
 
   /// Ask the engine router for a hint (remote Pikafish when online, local
@@ -277,7 +297,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
     final game = state.game;
     if (!game.status.isOver) return;
 
-    final humanColor = state.mode == GameMode.vsBot
+    final humanColor = state.isVsBot
         ? (state.cpuColor == PieceColor.red ? PieceColor.black : PieceColor.red)
         : null;
     final won =
@@ -289,7 +309,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
 
     // 1. Save a kỳ phổ record.
     final repo = ref.read(gameHistoryRepositoryProvider);
-    final opponentLabel = state.mode == GameMode.vsBot
+    final opponentLabel = state.isVsBot
         ? _botOpponentLabel(state.botDifficulty ?? BotDifficulty.medium)
         : 'Người Chơi 2';
     final duration = _gameStartedAt == null
@@ -312,9 +332,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
     );
 
     // 2. Apply to profile stats (no ELO change for local / bot games yet).
-    if (humanColor != null ||
-        state.mode == GameMode.localTwoPlayer ||
-        state.mode == GameMode.cupLocal) {
+    if (humanColor != null || state.isLocalHotseat) {
       // For local 2-player we still bump totalGames but no win/loss credit.
       if (humanColor != null) {
         await ref
@@ -425,7 +443,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
       icon: Icons.flag,
     );
     if (!confirmed) return;
-    final loser = state.mode == GameMode.vsBot
+    final loser = state.isVsBot
         ? (state.cpuColor == PieceColor.red ? PieceColor.black : PieceColor.red)
         : state.turn;
     _controller.resign(loser);
@@ -433,8 +451,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
 
   void _onDraw() async {
     final state = _state;
-    if (state.mode == GameMode.localTwoPlayer ||
-        state.mode == GameMode.cupLocal) {
+    if (state.isLocalHotseat) {
       final confirmed = await CChessDialog.confirm(
         context,
         title: 'Đồng ý hòa?',
@@ -485,11 +502,11 @@ class _GameScreenState extends ConsumerState<GameScreen> {
         ? game.hiddenPositions
         : const <Position>{};
 
-    final humanColor = state.mode == GameMode.vsBot
+    final humanColor = state.isVsBot
         ? (state.cpuColor == PieceColor.red ? PieceColor.black : PieceColor.red)
         : null;
 
-    final opponentLabel = state.mode == GameMode.vsBot
+    final opponentLabel = state.isVsBot
         ? _botOpponentLabel(state.botDifficulty ?? BotDifficulty.medium)
         : 'Người Chơi 2';
     final opponentElo = state.botDifficulty?.estimatedElo ?? 1500;
@@ -573,8 +590,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
                   AppSpacing.vGapSm,
                   GameActionBar(
                     canUndo: game.history.isNotEmpty && !state.cpuThinking,
-                    canHint:
-                        state.acceptsInput && state.mode != GameMode.cupLocal,
+                    canHint: state.acceptsInput && !state.isCup,
                     hintThinking: state.hintThinking,
                     soundOn: _soundOn,
                     onLeave: _onLeave,
@@ -678,6 +694,8 @@ class _GameScreenState extends ConsumerState<GameScreen> {
         return 'Đấu với Bot AI';
       case GameMode.cupLocal:
         return 'Cờ Úp';
+      case GameMode.cupVsBot:
+        return 'Cờ Úp với Máy';
       case GameMode.onlineCasual:
         return 'Đấu casual';
       case GameMode.localTwoPlayer:

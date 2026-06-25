@@ -66,6 +66,16 @@ class CompeteScreen extends StatelessWidget {
         ),
         AppSpacing.vGapMd,
         _CompeteOption(
+          title: 'Cờ Úp với Máy',
+          subtitle: 'Đấu bot Cờ Úp — 5 cấp độ',
+          icon: Icons.smart_toy_outlined,
+          color: AppColors.vermilionRed,
+          badge: 'Mới',
+          onTap: () =>
+              context.go('${AppConstants.routeBotSelect}?variant=cup'),
+        ),
+        AppSpacing.vGapMd,
+        _CompeteOption(
           title: 'Giải Đấu',
           subtitle: 'Bracket loại trực tiếp',
           icon: Icons.emoji_events_outlined,

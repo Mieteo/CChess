@@ -4,6 +4,7 @@
 // longest-waiting player is checked first, and tolerance widens over time.
 
 import { WebSocket } from 'ws';
+import type { GameVariant } from './rooms';
 
 export interface QueueEntry {
   socket: WebSocket;
@@ -13,8 +14,11 @@ export interface QueueEntry {
   /// first matched player's preference (or default if both absent).
   clockMs?: number;
   /// Current ELO rating for bucket matchmaking (fetched from Firestore).
-  /// Defaults to 1000 if user doc is missing eloChess field.
+  /// For 'standard' this is eloChess; for 'cup' it is eloCup. Defaults to 1000.
   elo: number;
+  /// Game variant. Cờ Úp and standard players queue together but are ONLY ever
+  /// paired with their own variant — the rule sets and ELO pools are distinct.
+  variant: GameVariant;
 }
 
 const queue = new Map<WebSocket, QueueEntry>();
@@ -34,9 +38,10 @@ export function enqueue(
   uid: string,
   elo: number,
   clockMs?: number,
+  variant: GameVariant = 'standard',
 ): number {
   if (queue.has(socket)) return queue.size;
-  queue.set(socket, { socket, uid, joinedAt: Date.now(), clockMs, elo });
+  queue.set(socket, { socket, uid, joinedAt: Date.now(), clockMs, elo, variant });
   return queue.size;
 }
 
@@ -72,6 +77,7 @@ export function tryMatch(): [QueueEntry, QueueEntry] | null {
       if (i === j) continue;
       const b = entries[j];
       if (a.uid === b.uid) continue; // can't match against yourself
+      if (a.variant !== b.variant) continue; // never cross cup ↔ standard
       const waitB = now - b.joinedAt;
       const toleranceB =
         BASE_TOLERANCE + Math.floor(waitB / STEP_INTERVAL_MS) * TOLERANCE_STEP;

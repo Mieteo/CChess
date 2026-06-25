@@ -131,7 +131,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: AppConstants.routeBotSelect,
-        builder: (context, state) => const BotSelectScreen(),
+        builder: (context, state) => BotSelectScreen(
+          variant:
+              state.uri.queryParameters['variant'] == 'cup' ? 'cup' : 'standard',
+        ),
       ),
       // Khám Phá (S16): hub → shop + inventory. Top-level routes (pushed over
       // the shell), like the puzzle screens.

@@ -5,7 +5,7 @@
 import type { WebSocket } from 'ws';
 import type { Color, EndReason, GameResult, Room } from './rooms';
 import { clearDisconnectGrace, deleteRoomIfEmpty } from './rooms';
-import { XiangqiGame, GameStatus, parseUci, EndReason as EngineEndReason } from './engine';
+import { XiangqiGame, XiangqiCupGame, GameStatus, parseUci, EndReason as EngineEndReason } from './engine';
 
 /// Initial total clock per color (in ms). Currently 10 minutes — Fischer
 /// increment will come later. Configurable per room via lobby is the next
@@ -46,8 +46,11 @@ export function startMatch(room: Room, uidOf: (s: WebSocket) => string | undefin
   room.startedAt = now;
   room.movesUci = [];
   room.status = 'playing';
-  // Step 5: fresh Xiangqi engine for legality validation.
-  room.engine = XiangqiGame.initial();
+  // Step 5: fresh engine for legality validation. Cờ Úp rooms get a
+  // server-authoritative shuffled cup engine (clients never see the hidden
+  // assignments); standard rooms get the plain Xiangqi engine.
+  room.engine =
+    room.variant === 'cup' ? XiangqiCupGame.initial() : XiangqiGame.initial();
 }
 
 /// Sprint 12 rematch: start a fresh game in an existing (finished) room with
@@ -82,7 +85,8 @@ export function startRematch(room: Room): boolean {
   room.movesUci = [];
   room.moveCount = 0;
   room.status = 'playing';
-  room.engine = XiangqiGame.initial();
+  room.engine =
+    room.variant === 'cup' ? XiangqiCupGame.initial() : XiangqiGame.initial();
   room.rematchOfferedBy = undefined;
   clearDisconnectGrace(room);
   return true;
@@ -91,6 +95,23 @@ export function startRematch(room: Room): boolean {
 /// Cast helper — engine is stored as `unknown` on Room to avoid a circular import.
 function engineOf(room: Room): XiangqiGame | null {
   return (room.engine as XiangqiGame | undefined) ?? null;
+}
+
+/// Cup variant of [engineOf]. Only valid when room.variant === 'cup'.
+function cupEngineOf(room: Room): XiangqiCupGame | null {
+  return (room.engine as XiangqiCupGame | undefined) ?? null;
+}
+
+/// Cheat-safe public snapshot of a cup room's board (covers + revealed pieces +
+/// which squares are still face-down), or null for non-cup / unstarted rooms.
+/// Used on reconnect so a returning client can rebuild the board without ever
+/// learning the hidden identities.
+export function cupSnapshot(
+  room: Room,
+): { fen: string; hidden: number[] } | null {
+  if (room.variant !== 'cup') return null;
+  const engine = cupEngineOf(room);
+  return engine ? engine.publicSnapshot() : null;
 }
 
 /// Determine color by socket identity (the only reliable way when both sockets
@@ -105,6 +126,15 @@ export function opponentOf(color: Color): Color {
   return color === 'red' ? 'black' : 'red';
 }
 
+/// Cờ Úp reveal info for a single move — the only piece-identity data a client
+/// learns, and only AFTER the move happens. Pieces are FEN chars (uppercase =
+/// red). `wasHidden` flags a face-down piece that just flipped face-up.
+export interface CupReveal {
+  revealed: string;
+  captured: string | null;
+  wasHidden: boolean;
+}
+
 export interface ApplyMoveOk {
   ok: true;
   /// Color that just moved.
@@ -113,6 +143,8 @@ export interface ApplyMoveOk {
   remainingMs: number;
   /// New move number (1-indexed).
   moveNumber: number;
+  /// Present only for Cờ Úp rooms — broadcast so clients update their covers.
+  reveal?: CupReveal;
 }
 
 export interface ApplyMoveErr {
@@ -149,8 +181,13 @@ export function applyMove(
   if (!color) return { ok: false, code: 'not-player' };
   if (color !== room.currentTurn) return { ok: false, code: 'not-your-turn' };
 
-  const engine = engineOf(room);
-  if (!engine) return { ok: false, code: 'engine-missing' };
+  // Pick the right engine for the room's variant. Both expose the same
+  // isValidMove/makeMove/status/endReason surface; the cup engine additionally
+  // returns reveal info (piece identities) the standard engine doesn't need.
+  const isCup = room.variant === 'cup';
+  const stdEngine = isCup ? null : engineOf(room);
+  const cupEngine = isCup ? cupEngineOf(room) : null;
+  if (!stdEngine && !cupEngine) return { ok: false, code: 'engine-missing' };
 
   // Timeout blocks any move; invalid moves inside the window do not cost time.
   const clocks = room.clockMsByColor!;
@@ -164,15 +201,32 @@ export function applyMove(
 
   const coords = parseUci(uci);
   if (!coords) return { ok: false, code: 'illegal-move' };
-  if (!engine.isValidMove(coords.from, coords.to)) {
-    return { ok: false, code: 'illegal-move' };
-  }
+  const valid = isCup
+    ? cupEngine!.isValidMove(coords.from, coords.to)
+    : stdEngine!.isValidMove(coords.from, coords.to);
+  if (!valid) return { ok: false, code: 'illegal-move' };
 
   clocks[color] = Math.max(0, clocks[color] - elapsed);
 
   // Apply on engine (status auto-updates: checkmate/stalemate detection).
+  let reveal: CupReveal | undefined;
+  let status: GameStatus;
+  let endReason: EngineEndReason | null;
   try {
-    engine.makeMove(coords.from, coords.to);
+    if (isCup) {
+      const r = cupEngine!.makeMove(coords.from, coords.to);
+      reveal = {
+        revealed: r.revealed.fenChar(),
+        captured: r.captured ? r.captured.fenChar() : null,
+        wasHidden: r.wasHidden,
+      };
+      status = cupEngine!.status;
+      endReason = cupEngine!.endReason;
+    } else {
+      stdEngine!.makeMove(coords.from, coords.to);
+      status = stdEngine!.status;
+      endReason = stdEngine!.endReason;
+    }
   } catch (e) {
     // Should never happen given isValidMove check above, but defensive.
     return { ok: false, code: 'illegal-move' };
@@ -188,18 +242,19 @@ export function applyMove(
     color,
     remainingMs: clocks[color],
     moveNumber: room.moveCount,
+    reveal,
   };
 
   // Auto-finish on checkmate/stalemate
-  if (engine.status !== GameStatus.Playing) {
+  if (status !== GameStatus.Playing) {
     let result: GameResult;
-    if (engine.status === GameStatus.RedWin) result = 'red-win';
-    else if (engine.status === GameStatus.BlackWin) result = 'black-win';
+    if (status === GameStatus.RedWin) result = 'red-win';
+    else if (status === GameStatus.BlackWin) result = 'black-win';
     else result = 'draw'; // not currently reachable but safe
     const reason: EndReason =
-      engine.endReason === EngineEndReason.Checkmate
+      endReason === EngineEndReason.Checkmate
         ? 'checkmate'
-        : engine.endReason === EngineEndReason.Stalemate
+        : endReason === EngineEndReason.Stalemate
         ? 'stalemate'
         : 'resign'; // fallback — won't happen on auto path
     ok.autoFinish = { result, reason };

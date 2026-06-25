@@ -99,6 +99,28 @@ test('a player is never matched against another socket sharing its uid', () => {
   assert.equal(queueSize(), 2);
 });
 
+test('cup and standard seekers never cross-match', () => {
+  setNow(1_000_000);
+  enqueue(fakeSocket(), 'std', 1000, undefined, 'standard');
+  enqueue(fakeSocket(), 'cup', 1000, undefined, 'cup'); // identical ELO, different variant
+
+  assert.equal(tryMatch(), null, 'a cup seeker must not pair with a standard seeker');
+  assert.equal(queueSize(), 2, 'both stay queued');
+});
+
+test('two cup seekers in tolerance pair (same variant only)', () => {
+  setNow(1_000_000);
+  enqueue(fakeSocket(), 'std', 1000, undefined, 'standard');
+  enqueue(fakeSocket(), 'cupA', 1000, undefined, 'cup');
+  enqueue(fakeSocket(), 'cupB', 1050, undefined, 'cup');
+
+  const pair = tryMatch();
+  assert.ok(pair, 'the two cup seekers pair');
+  assert.deepEqual([pair![0].uid, pair![1].uid].sort(), ['cupA', 'cupB']);
+  assert.equal(pair![0].variant, 'cup');
+  assert.equal(queueSize(), 1, 'the standard seeker is left waiting');
+});
+
 test('the longest-waiting player is paired with the closest-ELO opponent', () => {
   // 'a' waits longest; both 'b' (diff 100) and 'c' (diff 50) are in range.
   setNow(1_000_000);

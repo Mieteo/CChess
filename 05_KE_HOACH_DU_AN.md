@@ -260,7 +260,15 @@
 - UI bàn cờ: mặt quân úp **trơn** (bỏ icon mắt + gạch chéo), sửa **nhấp nháy toàn bàn khi chọn quân** bằng cách gắn `Key` theo ô cho mọi con của `Stack`. Vào từ Trang Chủ / Đối Đầu → `?mode=cup` (local 2 người).
 - Test: nhóm "revealed Sĩ/Tượng roam freely" trong [xiangqi_cup_game_test.dart](cchess/test/chess_engine/xiangqi_cup_game_test.dart).
 
-**Chưa làm:** ELO Cờ Úp ranked tính riêng + matchmaking/Cờ Úp online (cần S12); A2 Cờ Casual (không tính ELO) + mời bạn qua link/ID.
+**Đã làm — backend foundation Cờ Úp online + Bot Cờ Úp (2026-06-25):**
+- **Engine cup server-side** ([cupGame.ts](cchess-backend/src/engine/cupGame.ts)): port `XiangqiCupGame` sang TS, **shuffle + hidden-assignment do server giữ** (seed cho test), validate đúng luật cờ úp (Sĩ/Tượng ngửa đi tự do), `publicSnapshot()` = view công khai (mặt phủ + quân đã lộ + danh sách ô úp) **không lộ danh tính ẩn**.
+- **match.ts variant-aware**: phòng `variant:'cup'` dùng engine cup; `applyMove` trả **reveal** (danh tính quân vừa lộ + quân bị ăn) để broadcast; `cupSnapshot()` cho reconnect.
+- **Matchmaking theo variant** ([matchmaking.ts](cchess-backend/src/matchmaking.ts)): cup ↔ standard **không bao giờ ghép chéo**; `find-match` lấy `eloCup` cho cup; protocol `opponent-move`/`move-ack` kèm `reveal`, `reconnected` kèm `cup` snapshot.
+- **ELO Cờ Úp riêng** ([persistence.ts](cchess-backend/src/persistence.ts)): ván cup ranked ghi `eloCup` (pool riêng, không đụng `eloChess`) + game record gắn `variant:'cup'`; counters tổng (`wins/losses/draws/totalGames`) dùng chung.
+- **Bot Cờ Úp** ([cup_bot_engine.dart](cchess/lib/core/chess_engine/ai/cup_bot_engine.dart)): minimax cup riêng (Pikafish/minimax chuẩn không hiểu quân ẩn), **không gian lận** — chỉ nhận bàn nhìn thấy + tập ô úp; quân úp định giá theo **kỳ vọng** (~320cp). Vào từ Đối Đầu → "Cờ Úp với Máy" (`GameMode.cupVsBot`, chọn cấp độ).
+- Test: [cupGame.test.ts](cchess-backend/src/engine/cupGame.test.ts) (16), [match.cup.test.ts](cchess-backend/src/match.cup.test.ts) (6), +matchmaking variant +persistence eloCup; Flutter [cup_bot_engine_test.dart](cchess/test/chess_engine/ai/cup_bot_engine_test.dart) (3).
+
+**Chưa làm:** Client online Cờ Úp (engine cup phía client cho thông tin ẩn, render mặt úp trong ván online, áp reveal + reconnect snapshot) — **backend đã sẵn sàng**; A2 Cờ Casual (không tính ELO) + mời bạn qua link/ID. Bot cup v1 giả định lật-thành-mặt-phủ trong cây tìm kiếm (chưa expectiminimax đầy đủ).
 
 ### 🔒 Sprint 14 — Community (Module C) (cần S12 + Cloud Functions cho leaderboard aggregation)
 - Bạn bè (C1): tìm theo ID, danh sách online/offline.
@@ -297,7 +305,7 @@
 |---|---|:---:|:---:|
 | A1 | Cờ Tướng Online Ranked | ✅ | **MVP done 2026-05-24** — matchmaking, ELO, ranked verified prod Render |
 | A2 | Cờ Casual + mời bạn | 🔒 | 13 |
-| A3 | Cờ Úp | 🟡 | 13 — **bản local DONE 2026-06-25** (engine variant + luật Sĩ/Tượng ngửa đi tự do + UI); ELO/online ranked chờ S12 |
+| A3 | Cờ Úp | 🟡 | 13 — **local DONE + backend online foundation DONE + Bot Cờ Úp DONE (2026-06-25)** (engine cup TS server-authoritative, matchmaking theo variant, ELO `eloCup` riêng, protocol reveal/snapshot; bot cup offline). Còn: **client online Cờ Úp** (render mặt úp + áp reveal) |
 | A5 | Chat + emoji + AI hint trong ván | 🟡 | Chat text done + **chip preset/emoji done 2026-06-11**; **AI hint done cho ván bot/local 2026-06-11** (EngineRouter, fallback minimax); hint trong ván online ranked cân nhắc sau (fair-play) |
 | A6 | Spectate | 🟡 | Phase 2 — cơ bản done với `spectate-room`/`stop-spectating`, read-only board, active room list, backend read-only tests; **share link/QR done 2026-06-07** (link/QR + deep-link in-app + landing page); còn moderation public |
 | A7 | Đấu Bot AI | ✅ | 5 |
@@ -328,12 +336,12 @@
 
 - **Tổng file Dart `lib/`:** ~95 file (thêm `core/chess_engine/` lớp engine lai: move_engine / engine_router / local_minimax_engine / remote_pikafish_engine + transports / engine_providers).
 - **Backend TypeScript:** realtime server + lab + engine-service (server, UCI wrapper, pool, analysis, cache, quota, FEN) đã có CI riêng.
-- **Test tự động:** Backend `npm test` **117/117** (19 file: 16 `src/` + 3 `lab/`) + `backend-ci` chạy `lab`, `lab:load`, `lab:fuzz`; Flutter `flutter test` **305/305** (31 file) + `flutter analyze`. (2026-06-25: +nhóm Cờ Úp "revealed Sĩ/Tượng roam freely"; trước đó +`shop.test.ts` backend & shop/inventory Flutter — Sprint 16.) Phân loại nguồn test: xem bảng cuối [`10_KE_HOACH_TEST.md`](10_KE_HOACH_TEST.md).
+- **Test tự động:** Backend `npm test` **142/142** (21 file) + `lab` 22/22 + `backend-ci` chạy `lab`, `lab:load`, `lab:fuzz`; Flutter `flutter test` **308/308** (32 file) + `flutter analyze`. (2026-06-25: +backend foundation Cờ Úp online — `cupGame.test.ts`, `match.cup.test.ts`, matchmaking variant, persistence eloCup — và Bot Cờ Úp `cup_bot_engine_test.dart`; trước đó +nhóm "revealed Sĩ/Tượng roam freely".) Phân loại nguồn test: xem bảng cuối [`10_KE_HOACH_TEST.md`](10_KE_HOACH_TEST.md).
 - **Test tay:** R **ĐÓNG 12/12**; S **ĐÓNG 15/15**; C8 + H1–H3 PASS. Còn lại chủ yếu là vòng thật/visual: D4 OS lifecycle, M5 Firebase thật, H4 chất lượng gợi ý, C2/D/G4 nhìn-mắt.
 - **Sprint hoàn thành (1 chiều):** 10/18 (1–7 + 8a + 8b + 8c).
 - **Sprint code xong, sync một phần:** 3/18 (S9, S10, S11).
 - **Sprint MVP done phase 1:** 1/18 (S12 — A1 Ranked production).
-- **Sprint đang dở:** S12 phase 2 (chỉ còn test tay cuối + Render upgrade khi có user thật), S13 (A3 Cờ Úp local done — còn ELO/online ranked + A2 casual), S15 (engine lai — smoke thật xong, chờ quota/VIP bền vững, license, plan production và AI Coach B3), S16 (Shop/Inventory/Explore UI + backend đã có — còn Mail/Event/economy thật).
+- **Sprint đang dở:** S12 phase 2 (chỉ còn test tay cuối + Render upgrade khi có user thật), S13 (A3 Cờ Úp local + backend online foundation + Bot Cờ Úp done — còn **client online cup** + A2 casual), S15 (engine lai — smoke thật xong, chờ quota/VIP bền vững, license, plan production và AI Coach B3), S16 (Shop/Inventory/Explore UI + backend đã có — còn Mail/Event/economy thật).
 - **Sprint locked/chưa làm:** S14 (Community — cần S12), S17-18 (giai đoạn sau).
 - **Tỷ lệ hoàn thành code (ước lượng theo spec MVP+G2):** ~82% (tăng sau automation gates, engine smoke thật và quota gate).
 - **Tỷ lệ tính năng end-to-end dùng được production:** ~60–65% (ranked online thật đã chạy; engine Pikafish đã smoke thật trên Render nhưng chưa harden quota/VIP/license/plan cho traffic thật).
@@ -361,7 +369,7 @@
 
 ### 7.3. Sprint 13 (1-2 tuần) — biến thể game
 
-10. **A3 Cờ Úp — bản local DONE 2026-06-25** (engine variant + luật Sĩ/Tượng ngửa đi tự do khắp bàn + UI). Còn lại: **ELO Cờ Úp ranked** tính riêng, **Cờ Úp online** (cần S12 matchmaking + validate luật cờ úp server-side), persist kết quả ván Cờ Úp.
+10. **A3 Cờ Úp — local DONE + backend online foundation DONE + Bot Cờ Úp DONE (2026-06-25)**: engine cup TS server-authoritative (shuffle/hidden ẩn với client, validate luật cờ úp), matchmaking tách theo variant, **ELO `eloCup` riêng**, protocol lộ-danh-tính + snapshot reconnect; bot cup offline không gian lận. Còn lại: **client online Cờ Úp** (engine cup phía client + render mặt úp + áp reveal trong ván online).
 11. **A2 Cờ Casual + invite link** — không tính ELO, share roomId qua link/QR, friends-only matchmaking option.
 
 ### 7.4. Định hướng dài hạn (Q3-Q4 2026)
@@ -384,5 +392,7 @@
 *Cập nhật 2026-06-13 — **đợt test tay 2 + tuning theo feedback**: R9 retest PASS → **Nhóm R đóng 12/12**; C8 PASS → nâng `CHAT_RATE_LIMIT_MS` 1.5s→2s; H1–H3 PASS (online + offline) với feedback "gợi ý hơi lâu, hơi kém" → `BotEngine` thêm chế độ **best-effort** cho hint/analysis: bỏ delay nhân tạo `minThinkTime` 1.2s, bỏ randomness, iterative deepening ngân sách ~2s (depth 2→6, thế nhẹ đào sâu hơn, giữa ván nặng trả nhanh kết quả depth đã xong) + 2 test mới (T13).*
 
 *Cập nhật 2026-06-13 (đợt 2) — **Nhóm S PASS 12/12 + 3 cải tiến UX theo feedback**: (1) số mắt xem 👁 hiện trên app bar cho **cả người chơi** (trước chỉ người xem thấy); (2) **dialog kết quả người xem** giờ chỉ có 1 nút "Thoát", tự đóng + xem tiếp khi 2 kỳ thủ đấu lại, banner "Một kỳ thủ đã rời — trận đấu khép lại" khi có người thoát — sửa kèm bug tiềm ẩn rematch `game-start{yourColor:null}` biến người xem thành "người chơi Đỏ" trong state client; (3) **phòng chờ tự hủy sau 1 phút** không có đối thủ vào: server gửi `room-expired` + xóa phòng (TTL override env `CCHESS_WAITING_ROOM_TTL_MS`), lobby tự quay về màn chính kèm thông báo. Test mới (T14): backend `server.waitingroom.test.ts` 2 + Flutter 2. Backend `npm test` **28/28**, Flutter `flutter test` **156/156**, analyze sạch. Lưu ý thiết kế: "chờ đối thủ MỚI vào phòng cũ sau khi 1 người rời" KHÔNG nằm trong phạm vi này — phòng khép lại khi 1 kỳ thủ thoát; mời người mới = flow invite/casual của Sprint 13. Các mục này sau đó đã được tự động hóa/smoke tiếp trong đợt 2026-06-19/20; xem phần đầu tài liệu và [`10_KE_HOACH_TEST.md`](10_KE_HOACH_TEST.md).*
+
+*Cập nhật 2026-06-25 (đợt 2) — **A3 Cờ Úp: backend online foundation + Bot Cờ Úp**: (A) Backend server-authoritative cho Cờ Úp online — port engine `cupGame.ts` (shuffle/hidden-assignment do server giữ, **client không bao giờ biết trước**), `match.ts` chọn engine theo `variant` và trả `reveal` mỗi nước, matchmaking **tách cup ↔ standard** (không ghép chéo) bucket theo `eloCup`, protocol kèm reveal + `cup` snapshot khi reconnect, persistence ghi **`eloCup` pool riêng** + record `variant:'cup'`. (B) **Bot Cờ Úp** `cup_bot_engine.dart` — cup-minimax chạy trong isolate, **không gian lận** (chỉ thấy mặt phủ + quân đã lộ, quân úp định giá kỳ vọng ~320cp); `GameMode.cupVsBot` + điểm vào "Cờ Úp với Máy" (chọn cấp độ). Test: backend **142/142** (+`cupGame.test.ts`, `match.cup.test.ts`, matchmaking variant, persistence eloCup) + lab 22/22; Flutter **308/308** (+`cup_bot_engine_test.dart`), analyze sạch. Còn lại của A3: **client online Cờ Úp** (render mặt úp + áp reveal) — backend đã sẵn sàng.*
 
 *Cập nhật 2026-06-25 — **A3 Cờ Úp bản local + polish bàn cờ (Sprint 13 🔒→🟡)**: (1) sửa luật **Sĩ/Tượng đã mở** trong `XiangqiCupGame` cho đúng cờ úp — ngửa rồi thì **thoát giới hạn cung/sông**, Sĩ đi chéo 1 / Tượng đi chéo 2 đi khắp bàn (Tượng vẫn cản mắt), `_cupInCheck` nhận diện chiếu theo tầm mới; quân **còn úp** vẫn đi theo mặt phủ (vai trò ô). (2) UI bàn cờ: bỏ icon mắt+gạch chéo trên quân úp (mặt trơn), sửa **nhấp nháy toàn bàn khi chọn quân** bằng `Key` theo ô cho mọi con của `Stack`. Test nhóm "revealed Sĩ/Tượng roam freely" trong `xiangqi_cup_game_test.dart`. Đồng bộ doc Sprint 16 (Shop/Inventory/Explore UI + backend `src/shop/`) ⬜→🟡. Flutter `flutter test` **305/305** (31 file), backend `npm test` **117/117** (19 file), `flutter analyze` sạch.*
