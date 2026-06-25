@@ -13,6 +13,8 @@ export 'ai/game_analyzer.dart';
 export 'ai/minimax.dart';
 export 'board.dart';
 export 'chess_game_session.dart';
+export 'cup_client_game.dart';
+export 'cup_rules.dart';
 export 'engine_providers.dart';
 export 'engine_quota.dart';
 export 'engine_router.dart';

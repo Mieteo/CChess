@@ -183,10 +183,12 @@ class GameSocketService {
   }
 
   /// Step A3: enter matchmaking queue. Server pairs by ELO tolerance that
-  /// widens as players wait, then creates a room automatically.
-  void findMatch({int? clockMs}) {
+  /// widens as players wait, then creates a room automatically. [variant]
+  /// `cup` queues in the Cờ Úp pool (never paired against standard players).
+  void findMatch({int? clockMs, String? variant}) {
     final message = <String, dynamic>{'type': 'find-match'};
     if (clockMs != null) message['clockMs'] = clockMs;
+    if (variant != null) message['variant'] = variant;
     send(message);
   }
 

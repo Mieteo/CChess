@@ -895,6 +895,10 @@ export function createCChessServer(options: CChessServerOptions = {}): CChessSer
         // Becoming a spectator also leaves any pending matchmaking search.
         mmDequeue(socket);
         const room = result.room;
+        // Cờ Úp: a UCI replay can't reconstruct revealed identities, so ship the
+        // cheat-safe board snapshot (covers + revealed + hidden squares) just
+        // like reconnect — otherwise a fresh watcher can't rebuild the board.
+        const spectateCup = cupSnapshot(room);
         send(socket, {
           type: 'spectate-started',
           roomId: room.id,
@@ -903,6 +907,7 @@ export function createCChessServer(options: CChessServerOptions = {}): CChessSer
           mode: room.mode,
           variant: room.variant,
           moves: room.movesUci ?? [],
+          ...(spectateCup ? { cup: spectateCup } : {}),
           chat: room.chatMessages ?? [],
           currentTurn: room.currentTurn,
           clock: clockSnapshot(room),

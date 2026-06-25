@@ -341,6 +341,10 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
                         validTargets: _validTargets,
                         lastMove: game.lastMove,
                         checkedKing: checkedKing,
+                        // Cờ Úp: face-down covers render as blank discs.
+                        hiddenPositions: game is CupClientGame
+                            ? game.hiddenPositions
+                            : const <Position>{},
                         flipped: flipped,
                         onTap: _onTap,
                       ),
@@ -403,7 +407,7 @@ class _OnlineGameScreenState extends ConsumerState<OnlineGameScreen>
     );
   }
 
-  Position? _findCheckedKing(XiangqiGame? game) {
+  Position? _findCheckedKing(ChessGameSession? game) {
     if (game == null) return null;
     for (final color in PieceColor.values) {
       if (!game.isInCheck(color)) continue;

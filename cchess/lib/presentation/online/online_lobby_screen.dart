@@ -18,6 +18,7 @@ class OnlineLobbyScreen extends ConsumerStatefulWidget {
     this.deepLinkRoomId,
     this.deepLinkSpectate = true,
     this.initialCasual = false,
+    this.variant = 'standard',
   });
 
   /// A6 share link: when arriving via a shared link the room id is passed here;
@@ -25,6 +26,10 @@ class OnlineLobbyScreen extends ConsumerStatefulWidget {
   final String? deepLinkRoomId;
   final bool deepLinkSpectate;
   final bool initialCasual;
+
+  /// Game variant for matchmaking / private rooms created here. `cup` queues in
+  /// the Cờ Úp pool (own ELO bucket, never paired against standard players).
+  final String variant;
 
   @override
   ConsumerState<OnlineLobbyScreen> createState() => _OnlineLobbyScreenState();
@@ -128,17 +133,23 @@ class _OnlineLobbyScreenState extends ConsumerState<OnlineLobbyScreen> {
     await _ctrl.connect(_urlCtrl.text.trim());
   });
 
+  String? get _variantArg => widget.variant == 'cup' ? 'cup' : null;
+
   void _createRoom() {
     setState(() => _localError = null);
     _ctrl.createRoom(
       clockMs: _selectedClockMin * 60 * 1000,
       casual: widget.initialCasual,
+      variant: _variantArg,
     );
   }
 
   void _findMatch() {
     setState(() => _localError = null);
-    _ctrl.findMatch(clockMs: _selectedClockMin * 60 * 1000);
+    _ctrl.findMatch(
+      clockMs: _selectedClockMin * 60 * 1000,
+      variant: _variantArg,
+    );
   }
 
   void _cancelMatching() {
@@ -181,6 +192,12 @@ class _OnlineLobbyScreenState extends ConsumerState<OnlineLobbyScreen> {
     if (mounted) context.go(AppConstants.routeCompete);
   }
 
+  String _lobbyTitle() {
+    final isCup = widget.variant == 'cup';
+    if (isCup) return widget.initialCasual ? 'Cờ Úp Casual' : 'Cờ Úp Online';
+    return widget.initialCasual ? 'Cờ Casual' : 'Xếp Hạng Online';
+  }
+
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(onlineMatchControllerProvider);
@@ -205,7 +222,7 @@ class _OnlineLobbyScreenState extends ConsumerState<OnlineLobbyScreen> {
       backgroundColor: AppColors.background,
       appBar: AppBar(
         backgroundColor: AppColors.woodDark,
-        title: Text(widget.initialCasual ? 'Cờ Casual' : 'Xếp Hạng Online'),
+        title: Text(_lobbyTitle()),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () => context.go(AppConstants.routeCompete),

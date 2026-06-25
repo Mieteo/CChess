@@ -188,7 +188,11 @@ class OnlineMatchState {
   final String? redUid;
   final String? blackUid;
   final int spectatorCount;
-  final XiangqiGame? game;
+
+  /// Active board session. [XiangqiGame] for standard rooms, [CupClientGame] for
+  /// Cờ Úp rooms (covers + reveals only — the client never learns hidden
+  /// identities). Null until `game-start` / reconnect / spectate arrives.
+  final ChessGameSession? game;
   final int redClockMs;
   final int blackClockMs;
   final int moveClockLimitMs;
@@ -244,7 +248,7 @@ class OnlineMatchState {
     String? redUid,
     String? blackUid,
     int? spectatorCount,
-    XiangqiGame? game,
+    ChessGameSession? game,
     int? redClockMs,
     int? blackClockMs,
     int? moveClockLimitMs,
@@ -404,13 +408,14 @@ class OnlineMatchController extends StateNotifier<OnlineMatchState> {
     return true;
   }
 
-  /// Step A3: enter matchmaking queue. Server pairs by ELO tolerance.
-  void findMatch({int? clockMs}) {
+  /// Step A3: enter matchmaking queue. Server pairs by ELO tolerance. [variant]
+  /// `cup` joins the Cờ Úp pool (own ELO bucket, never paired with standard).
+  void findMatch({int? clockMs, String? variant}) {
     if (state.phase != OnlineMatchPhase.authed) {
       _setError('Chưa sẵn sàng (phase=${state.phase.name})');
       return;
     }
-    _socket.findMatch(clockMs: clockMs);
+    _socket.findMatch(clockMs: clockMs, variant: variant);
   }
 
   void cancelMatching() {
@@ -718,12 +723,18 @@ class OnlineMatchController extends StateNotifier<OnlineMatchState> {
     final clock = msg['clock'] as Map<String, dynamic>?;
     final clockUpdate = _clockUpdateFromServer(clock, state);
     final roomId = msg['roomId'] as String?;
+    final variant = msg['variant'] as String? ?? state.variant;
+    // Cờ Úp rooms get the cover-only client engine; standard rooms the plain
+    // Xiangqi engine. Both implement [ChessGameSession] for the board layer.
+    final ChessGameSession game = variant == 'cup'
+        ? CupClientGame.initial()
+        : XiangqiGame.initial();
     state = state.copyWith(
       phase: watching ? OnlineMatchPhase.spectating : OnlineMatchPhase.playing,
       roomId: roomId,
-      game: XiangqiGame.initial(),
+      game: game,
       roomMode: msg['mode'] as String? ?? state.roomMode,
-      variant: msg['variant'] as String? ?? state.variant,
+      variant: variant,
       // copyWith ignores nulls, so a watcher keeps myColor/opponentUid null.
       myColor: watching ? null : myColor,
       opponentUid: watching ? null : opponentUid,
@@ -766,15 +777,35 @@ class OnlineMatchController extends StateNotifier<OnlineMatchState> {
     );
   }
 
-  void _onReconnected(Map<String, dynamic> msg, List<String> log) {
-    final redUid = msg['redUid'] as String?;
-    final blackUid = msg['blackUid'] as String?;
-    final yourColor = msg['yourColor'] as String?;
-    final myColor = yourColor == 'black' ? PieceColor.black : PieceColor.red;
-    final opponentUid = myColor == PieceColor.red ? blackUid : redUid;
+  /// Rebuild the active board from a reconnect/spectate snapshot. Standard rooms
+  /// replay the UCI move list into a fresh game; Cờ Úp rooms can't (a UCI replay
+  /// can't reconstruct revealed identities) so they rebuild from the server's
+  /// cheat-safe `cup` snapshot (covers + revealed pieces + hidden squares).
+  ChessGameSession _buildGameFromSnapshot(
+    Map<String, dynamic> msg,
+    String variant,
+    PieceColor turn,
+  ) {
+    if (variant == 'cup') {
+      final cup = msg['cup'] as Map<String, dynamic>?;
+      final fen = cup?['fen'] as String?;
+      if (fen != null) {
+        final hidden =
+            (cup?['hidden'] as List?)
+                ?.whereType<num>()
+                .map((n) => n.toInt())
+                .toList() ??
+            const <int>[];
+        return CupClientGame.fromSnapshot(
+          fen: fen,
+          hiddenIndices: hidden,
+          turn: turn,
+        );
+      }
+      return CupClientGame.initial();
+    }
     final moves =
         (msg['moves'] as List?)?.whereType<String>().toList() ?? const [];
-    // Replay moves into a fresh game.
     final game = XiangqiGame.initial();
     for (final uci in moves) {
       final coords = Move.parseUciCoords(uci);
@@ -785,13 +816,25 @@ class OnlineMatchController extends StateNotifier<OnlineMatchState> {
         break; // server gave us inconsistent move list — bail to avoid divergence
       }
     }
+    return game;
+  }
+
+  void _onReconnected(Map<String, dynamic> msg, List<String> log) {
+    final redUid = msg['redUid'] as String?;
+    final blackUid = msg['blackUid'] as String?;
+    final yourColor = msg['yourColor'] as String?;
+    final myColor = yourColor == 'black' ? PieceColor.black : PieceColor.red;
+    final opponentUid = myColor == PieceColor.red ? blackUid : redUid;
+    final variant = msg['variant'] as String? ?? state.variant;
     final clock = msg['clock'] as Map<String, dynamic>?;
     final clockUpdate = _clockUpdateFromServer(clock, state);
-    final currentTurnStr = msg['currentTurn'] as String?;
-    final currentTurn =
-        _pieceColorFromServer(currentTurnStr) ??
-        clockUpdate.currentTurn ??
-        game.turn;
+    final serverTurn = _pieceColorFromServer(msg['currentTurn']);
+    final game = _buildGameFromSnapshot(
+      msg,
+      variant,
+      serverTurn ?? clockUpdate.currentTurn ?? PieceColor.red,
+    );
+    final currentTurn = serverTurn ?? clockUpdate.currentTurn ?? game.turn;
     final chat =
         (msg['chat'] as List?)
             ?.whereType<Map>()
@@ -806,7 +849,7 @@ class OnlineMatchController extends StateNotifier<OnlineMatchState> {
       roomId: msg['roomId'] as String?,
       game: game,
       roomMode: msg['mode'] as String? ?? state.roomMode,
-      variant: msg['variant'] as String? ?? state.variant,
+      variant: variant,
       myColor: myColor,
       opponentUid: opponentUid,
       redUid: redUid,
@@ -828,25 +871,16 @@ class OnlineMatchController extends StateNotifier<OnlineMatchState> {
   }
 
   void _onSpectateStarted(Map<String, dynamic> msg, List<String> log) {
-    final moves =
-        (msg['moves'] as List?)?.whereType<String>().toList() ?? const [];
-    final game = XiangqiGame.initial();
-    for (final uci in moves) {
-      final coords = Move.parseUciCoords(uci);
-      if (coords == null) continue;
-      try {
-        game.makeMove(coords.$1, coords.$2);
-      } catch (_) {
-        break;
-      }
-    }
+    final variant = msg['variant'] as String? ?? state.variant;
     final clock = msg['clock'] as Map<String, dynamic>?;
     final clockUpdate = _clockUpdateFromServer(clock, state);
-    final currentTurnStr = msg['currentTurn'] as String?;
-    final currentTurn =
-        _pieceColorFromServer(currentTurnStr) ??
-        clockUpdate.currentTurn ??
-        game.turn;
+    final serverTurn = _pieceColorFromServer(msg['currentTurn']);
+    final game = _buildGameFromSnapshot(
+      msg,
+      variant,
+      serverTurn ?? clockUpdate.currentTurn ?? PieceColor.red,
+    );
+    final currentTurn = serverTurn ?? clockUpdate.currentTurn ?? game.turn;
     final chat =
         (msg['chat'] as List?)
             ?.whereType<Map>()
@@ -863,7 +897,7 @@ class OnlineMatchController extends StateNotifier<OnlineMatchState> {
       roomId: msg['roomId'] as String?,
       myUid: state.myUid,
       roomMode: msg['mode'] as String? ?? state.roomMode,
-      variant: msg['variant'] as String? ?? state.variant,
+      variant: variant,
       redUid: msg['redUid'] as String?,
       blackUid: msg['blackUid'] as String?,
       spectatorCount: (msg['spectatorCount'] as num?)?.toInt() ?? 1,
@@ -880,9 +914,26 @@ class OnlineMatchController extends StateNotifier<OnlineMatchState> {
   }
 
   void _onMoveAck(Map<String, dynamic> msg, List<String> log) {
+    // Cờ Úp: my optimistically-moved piece slid as a blank cover; the ack now
+    // carries its true identity, so flip the destination square face-up.
+    final game = state.game;
+    if (game is CupClientGame) {
+      final reveal = msg['reveal'] as Map<String, dynamic>?;
+      final uci = msg['uci'] as String?;
+      if (reveal != null && uci != null) {
+        final coords = Move.parseUciCoords(uci);
+        final revealed = CupClientGame.pieceFromFenChar(
+          reveal['revealed'] as String?,
+        );
+        if (coords != null && revealed != null) {
+          game.applyReveal(coords.$2, revealed);
+        }
+      }
+    }
     final clock = msg['clock'] as Map<String, dynamic>?;
     final clockUpdate = _clockUpdateFromServer(clock, state);
     state = state.copyWith(
+      game: game,
       redClockMs: clockUpdate.redClockMs ?? state.redClockMs,
       blackClockMs: clockUpdate.blackClockMs ?? state.blackClockMs,
       currentTurn: clockUpdate.currentTurn ?? state.game?.turn,
@@ -906,7 +957,29 @@ class OnlineMatchController extends StateNotifier<OnlineMatchState> {
       return;
     }
     try {
-      game.makeMove(coords.$1, coords.$2);
+      if (game is CupClientGame) {
+        // Cờ Úp: the server tells us the revealed identity (+ captured piece) so
+        // we can flip the right cover. Without a reveal we can't place the true
+        // piece, so fall back to the cover-as-placeholder apply.
+        final reveal = msg['reveal'] as Map<String, dynamic>?;
+        final revealed = CupClientGame.pieceFromFenChar(
+          reveal?['revealed'] as String?,
+        );
+        if (revealed != null) {
+          game.applyServerMove(
+            coords.$1,
+            coords.$2,
+            revealed: revealed,
+            captured: CupClientGame.pieceFromFenChar(
+              reveal?['captured'] as String?,
+            ),
+          );
+        } else {
+          game.makeMove(coords.$1, coords.$2);
+        }
+      } else {
+        game.makeMove(coords.$1, coords.$2);
+      }
     } catch (_) {
       _setError('Server gửi nước trái luật cờ: $uci');
       return;

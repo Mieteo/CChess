@@ -76,6 +76,16 @@ class CompeteScreen extends StatelessWidget {
         ),
         AppSpacing.vGapMd,
         _CompeteOption(
+          title: 'Cờ Úp Online',
+          subtitle: 'Ghép trận Cờ Úp — ELO riêng',
+          icon: Icons.public,
+          color: AppColors.vermilionRed,
+          badge: 'Mới',
+          onTap: () =>
+              context.push('${AppConstants.routeOnlineLobby}?variant=cup'),
+        ),
+        AppSpacing.vGapMd,
+        _CompeteOption(
           title: 'Giải Đấu',
           subtitle: 'Bracket loại trực tiếp',
           icon: Icons.emoji_events_outlined,

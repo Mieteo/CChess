@@ -46,7 +46,7 @@ class FakeGameSocketService implements GameSocketService {
   }
 
   @override
-  void findMatch({int? clockMs}) {
+  void findMatch({int? clockMs, String? variant}) {
     lastFindMatchClockMs = clockMs;
     sentTypes.add('find-match');
   }

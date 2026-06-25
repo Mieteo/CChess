@@ -3,6 +3,7 @@ import 'dart:math';
 import '../constants/piece_constants.dart';
 import 'board.dart';
 import 'chess_game_session.dart';
+import 'cup_rules.dart';
 import 'move.dart';
 import 'move_rules.dart';
 import 'piece.dart';
@@ -142,7 +143,7 @@ class XiangqiCupGame implements ChessGameSession {
     final hiddenAfter = _hiddenAssignments.keys.toSet()
       ..remove(from)
       ..remove(to);
-    if (_cupInCheck(copy, hiddenAfter, coverPiece.color)) return false;
+    if (CupRules.inCheck(copy, hiddenAfter, coverPiece.color)) return false;
     return true;
   }
 
@@ -248,74 +249,14 @@ class XiangqiCupGame implements ChessGameSession {
   bool areGeneralsFacing() => MoveRules.areGeneralsFacing(_board);
 
   bool _inCheckNow(PieceColor color) =>
-      _cupInCheck(_board, _hiddenAssignments.keys.toSet(), color);
+      CupRules.inCheck(_board, _hiddenAssignments.keys.toSet(), color);
 
-  /// Cờ úp move generation. A FACE-DOWN piece moves by its cover (the role of
-  /// the square it sits on — so a cover Sĩ/Tượng stays confined like normal).
-  /// Once REVEALED, Sĩ and Tượng shed the palace / river limits and roam the
-  /// whole board, keeping only their 1-/2-step diagonal pattern (Tượng still
-  /// blocked by a "cản mắt"). Every other piece uses the standard rules.
+  /// Cờ úp move generation — delegated to the shared [CupRules] so the offline
+  /// (full-information) and online (cover-only) engines never diverge. A
+  /// FACE-DOWN piece moves by its cover; a REVEALED Sĩ/Tượng roams the whole
+  /// board on its diagonal pattern.
   List<Position> _cupPseudoLegal(Position from) =>
-      _cupPseudoLegalOn(_board, _hiddenAssignments.keys.toSet(), from);
-
-  static List<Position> _cupPseudoLegalOn(
-    Board board,
-    Set<Position> hidden,
-    Position from,
-  ) {
-    final piece = board.at(from);
-    if (piece == null) return const [];
-    if (!hidden.contains(from)) {
-      if (piece.type == PieceType.advisor) {
-        return _freeDiagonalMoves(board, from, piece, 1);
-      }
-      if (piece.type == PieceType.elephant) {
-        return _freeDiagonalMoves(board, from, piece, 2);
-      }
-    }
-    return MoveRules.pseudoLegalMoves(board, from);
-  }
-
-  /// Diagonal slider for revealed Sĩ ([step] 1) and Tượng ([step] 2) in Cờ úp:
-  /// no palace / river bounds, but the 2-step Tượng is still blocked when the
-  /// midpoint ("mắt Tượng") is occupied.
-  static List<Position> _freeDiagonalMoves(
-    Board b,
-    Position from,
-    Piece p,
-    int step,
-  ) {
-    final out = <Position>[];
-    final deltas = [
-      (-step, -step),
-      (-step, step),
-      (step, -step),
-      (step, step),
-    ];
-    for (final (dr, dc) in deltas) {
-      final to = from.offset(dr, dc);
-      if (!to.isValid) continue;
-      if (step == 2 && b.at(from.offset(dr ~/ 2, dc ~/ 2)) != null) {
-        continue; // cản mắt Tượng
-      }
-      final occupant = b.at(to);
-      if (occupant == null || occupant.color != p.color) out.add(to);
-    }
-    return out;
-  }
-
-  /// Check detection that honours the Cờ úp reach of revealed Sĩ/Tượng (and the
-  /// flying-general face-off). Face-down pieces still threaten by their cover.
-  static bool _cupInCheck(Board board, Set<Position> hidden, PieceColor color) {
-    final kingPos = board.generalPosition(color);
-    if (kingPos == null) return false;
-    if (MoveRules.areGeneralsFacing(board)) return true;
-    for (final (pos, piece) in board.occupied()) {
-      if (piece.color == color) continue;
-      if (_cupPseudoLegalOn(board, hidden, pos).contains(kingPos)) return true;
-    }
-    return false;
-  }
+      CupRules.pseudoLegalOn(_board, _hiddenAssignments.keys.toSet(), from);
 
   @override
   void resign(PieceColor resigningColor) {
