@@ -1,0 +1,105 @@
+import 'package:flutter/foundation.dart';
+
+import 'ai/game_analyzer.dart';
+import 'ffi/eleeye_ffi.dart';
+import 'local_minimax_engine.dart';
+import 'move.dart';
+import 'move_engine.dart';
+import 'xiangqi_game.dart';
+
+/// Local move engine backed by the native ElephantEye search (Android only).
+///
+/// Falls back to a pure-Dart [LocalMinimaxEngine] whenever the native engine
+/// can't or shouldn't be used:
+///   - the platform has no `.so` (web / iOS / desktop) or it failed to load;
+///   - the requested bot tier is weak/medium — those keep the minimax engine
+///     for human-like, beatable play (ElephantEye has no randomness knob);
+///   - the native search returns no move (e.g. checkmate / stalemate).
+///
+/// Strong bot tiers (hard and above) and every hint/analysis request use the
+/// native engine, giving a much stronger offline experience.
+class LocalElephantEye implements MoveEngine {
+  LocalElephantEye({MoveEngine? fallback, this.analysisDepth = 2})
+      : _fallback =
+            fallback ?? LocalMinimaxEngine(analysisDepth: analysisDepth);
+
+  final MoveEngine _fallback;
+  final int analysisDepth;
+
+  @override
+  Future<EngineMove?> bestMove(
+    String fen, {
+    required EngineLevel level,
+    EngineUseCase useCase = EngineUseCase.bot,
+  }) async {
+    final depth = _nativeDepthFor(level, useCase);
+    if (depth == null || !EleeyeFfi.isSupported) {
+      return _fallback.bestMove(fen, level: level, useCase: useCase);
+    }
+
+    // Run the (blocking) native search off the UI isolate.
+    final uci = await compute(_runNativeSearch, _EleeyeInput(fen, depth));
+    if (uci == null) {
+      // Native unavailable at runtime or no legal move — defer to the fallback.
+      return _fallback.bestMove(fen, level: level, useCase: useCase);
+    }
+
+    final move = _moveFromUci(fen, uci);
+    if (move == null) {
+      return _fallback.bestMove(fen, level: level, useCase: useCase);
+    }
+    return EngineMove(
+      move: move,
+      uci: uci,
+      depth: depth,
+      source: EngineSource.localElephantEye,
+    );
+  }
+
+  @override
+  Future<GameAnalysis> analyze({
+    required String startingFen,
+    required List<String> moveUcis,
+  }) {
+    // The native engine exposes no analyze entrypoint; use the Dart analyzer.
+    return _fallback.analyze(startingFen: startingFen, moveUcis: moveUcis);
+  }
+
+  /// Native search depth for the given request, or null to defer to the
+  /// minimax fallback (weak/medium bot tiers keep their tuned, beatable feel).
+  static int? _nativeDepthFor(EngineLevel level, EngineUseCase useCase) {
+    if (useCase != EngineUseCase.bot) return 8; // strong offline hint/analysis
+    switch (level) {
+      case EngineLevel.veryEasy:
+      case EngineLevel.easy:
+      case EngineLevel.medium:
+        return null;
+      case EngineLevel.hard:
+        return 6;
+      case EngineLevel.veryHard:
+        return 8;
+      case EngineLevel.grandmaster:
+        return 10;
+    }
+  }
+
+  static Move? _moveFromUci(String fen, String uci) {
+    final coords = Move.parseUciCoords(uci);
+    if (coords == null) return null;
+    final game = XiangqiGame.fromFen(fen);
+    final (from, to) = coords;
+    final piece = game.board.at(from);
+    if (piece == null) return null;
+    return Move(from: from, to: to, moved: piece, captured: game.board.at(to));
+  }
+}
+
+/// Isolate entry point — must be a top-level function for [compute].
+String? _runNativeSearch(_EleeyeInput input) =>
+    EleeyeFfi.bestMoveUci(input.fen, input.depth);
+
+class _EleeyeInput {
+  final String fen;
+  final int depth;
+  const _EleeyeInput(this.fen, this.depth);
+}

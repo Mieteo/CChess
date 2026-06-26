@@ -29,6 +29,9 @@ dependencies:
   hive_flutter: ^1.1.0
   shared_preferences: ^2.3.2
 
+  # Native engine (Android FFI → ElephantEye .so)
+  ffi: ^2.1.0
+
   # Utilities
   equatable: ^2.0.5
   collection: ^1.18.0

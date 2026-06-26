@@ -4,12 +4,20 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../constants/app_constants.dart';
 import 'engine_quota.dart';
 import 'engine_router.dart';
+import 'local_elephanteye_engine.dart';
 import 'local_minimax_engine.dart';
 import 'move_engine.dart';
 import 'remote_pikafish_engine.dart';
 
 final localMinimaxEngineProvider = Provider<MoveEngine>((ref) {
   return LocalMinimaxEngine();
+});
+
+/// The on-device engine used as the router's local fallback. Prefers the native
+/// ElephantEye search on Android and transparently degrades to pure-Dart
+/// minimax elsewhere (or when the native library is unavailable).
+final localEngineProvider = Provider<MoveEngine>((ref) {
+  return LocalElephantEye();
 });
 
 final remotePikafishEngineProvider = Provider<RemotePikafishEngine>((ref) {
@@ -27,7 +35,7 @@ final remotePikafishEngineProvider = Provider<RemotePikafishEngine>((ref) {
 
 final engineRouterProvider = Provider<EngineRouter>((ref) {
   return EngineRouter(
-    local: ref.watch(localMinimaxEngineProvider),
+    local: ref.watch(localEngineProvider),
     remote: ref.watch(remotePikafishEngineProvider),
     canUseRemote: () => true,
   );

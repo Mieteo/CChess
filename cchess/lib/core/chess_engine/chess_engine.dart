@@ -18,6 +18,7 @@ export 'cup_rules.dart';
 export 'engine_providers.dart';
 export 'engine_quota.dart';
 export 'engine_router.dart';
+export 'local_elephanteye_engine.dart';
 export 'local_minimax_engine.dart';
 export 'move.dart';
 export 'move_engine.dart';

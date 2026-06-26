@@ -6,7 +6,7 @@ enum EngineLevel { veryEasy, easy, medium, hard, veryHard, grandmaster }
 
 enum EngineUseCase { bot, hint, analysis }
 
-enum EngineSource { localMinimax, remotePikafish }
+enum EngineSource { localMinimax, localElephantEye, remotePikafish }
 
 /// Why a result came from the local engine instead of remote Pikafish.
 /// Lets the UI distinguish "server busy/offline" from "you're out of free
