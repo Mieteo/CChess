@@ -165,18 +165,30 @@ int eloDelta({required EloBracket bracket, required bool won, required bool drew
 Phase 0 → 1 → 2 → 3 (lõi FE, có thể test ngay với engine hiện có) → 5 (backend, mở khoá dải cao) → 4 (UI) → 6 (calibrate + dọn). Mỗi phase là một commit/PR độc lập, chạy test xanh trước khi sang phase sau.
 
 
-## 8.test
-flutter run --release --dart-define=CALIBRATION=true
-Vào Settings → cuộn xuống → Bot Calibration → ELO Calibration (Zone A).
-Cách đọc kết quả
-Sau khi chạy xong, bảng kết quả hiện màu:
+## 8. Công cụ Calibration (đã dựng — Phase 6)
 
-Màu	Ý nghĩa
-🟢 Xanh (win% < 35%)	Gap ổn — bot yếu hơn đang thua đúng mức
-🟠 Cam (35–50%)	Gap quá nhỏ — tăng depth hoặc giảm blunder cho band trên
-🔴 Đỏ (> 50%)	Đảo ngược — band trên thực ra yếu hơn band dưới
-Nhấn icon Copy ở AppBar để lấy bảng số liệu dán vào tài liệu.
+> **Trạng thái:** UI calibration **đã code 2026-06-26** (commit `f281e87`). Việc còn lại là **chạy đấu thử thực tế** rồi chỉnh bảng số `configForElo` ([engine_config.dart](cchess/lib/core/chess_engine/ai/engine_config.dart)) + env backend Pikafish. Đây là bước **thủ công**, không tự động hoá được vì cần đánh giá chất lượng nước cờ.
+
+**Cách chạy:**
+1. `flutter run --release --dart-define=CALIBRATION=true` (cờ `CALIBRATION` mở entry trong Settings).
+2. Vào **Settings → cuộn xuống → Bot Calibration → ELO Calibration**.
+3. Runner ([calibration_runner.dart](cchess/lib/presentation/calibration/calibration_runner.dart)) cho các band trong thang đấu lẫn nhau N ván; màn ([calibration_screen.dart](cchess/lib/presentation/calibration/calibration_screen.dart)) hiện bảng win% theo màu.
+
+**Đọc kết quả** (win% của band trên so với band dưới):
+
+| Màu | Ý nghĩa |
+|---|---|
+| 🟢 Xanh (win% < 35%) | Gap ổn — bot yếu hơn đang thua đúng mức |
+| 🟠 Cam (35–50%) | Gap quá nhỏ — tăng depth / giảm blunder cho band trên |
+| 🔴 Đỏ (> 50%) | Đảo ngược — band trên thực ra yếu hơn band dưới, phải sửa bảng |
+
+Nhấn icon **Copy** ở AppBar để lấy bảng số liệu dán vào tài liệu/PR calibrate.
 
 ---
 
-##
+## 9. Việc lớn còn lại (sau Phase 0–6 code)
+
+- ⬜ **Calibrate bảng `configForElo` bằng đấu thử thực tế** (mục 8) — quan trọng nhất; bảng số hiện tại chỉ là điểm xuất phát.
+- ⬜ **Calibrate env backend Pikafish** (`UCI_Elo`/`Skill Level`/movetime cho dải 2000–2900) cùng lúc với trên; kiểm tra build Pikafish có hỗ trợ `UCI_LimitStrength` thật.
+- ⬜ **Build ElephantEye `.so` thật cho mọi ABI Android** + xác nhận FFI chạy trên thiết bị thật (hiện có fallback an toàn về minimax khi lib vắng).
+- ⬜ **Test tay**: chơi vài ván mỗi dải để cảm nhận "đúng tầm", đặc biệt biên 1400/2000 (đổi engine minimax↔ElephantEye↔Pikafish).

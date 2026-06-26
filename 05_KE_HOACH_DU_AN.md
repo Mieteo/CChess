@@ -1,6 +1,6 @@
 # 📊 KẾ HOẠCH & TIẾN ĐỘ DỰ ÁN — CChess
 
-> Tài liệu sống — cập nhật ngày **2026-06-20**: chốt đợt T16–T24. Backend `npm test` **86/86** (14 file), Flutter `flutter test` **233/233** (22 file); `backend-ci` đã chạy `lint` + `lab:check` + `npm test` + lab/load/fuzz, `flutter-ci` chạy analyze/test, thêm gate thủ công `post-deploy-smoke` và `engine-smoke`. Engine service `https://cchess-engine.onrender.com` đã smoke thật **8/8 PASS** gồm quota `429 quota-exceeded`. Việc còn lại chuyển sang hardening sản phẩm: quota/VIP bền vững, license NNUE, test tay cuối D4/M5/H4 và AI Coach B3.
+> Tài liệu sống — cập nhật ngày **2026-06-26** (xem mục thay đổi mới nhất ở cuối: hệ Bot ELO liên tục Phase 0–6, ElephantEye native, Zobrist/TT, quota Firestore TTL, ví đồng bộ — Flutter `flutter test` **350/350**, backend `npm test` **146/146**). Mốc trước **2026-06-20**: chốt đợt T16–T24. Backend `npm test` **86/86** (14 file), Flutter `flutter test` **233/233** (22 file); `backend-ci` đã chạy `lint` + `lab:check` + `npm test` + lab/load/fuzz, `flutter-ci` chạy analyze/test, thêm gate thủ công `post-deploy-smoke` và `engine-smoke`. Engine service `https://cchess-engine.onrender.com` đã smoke thật **8/8 PASS** gồm quota `429 quota-exceeded`. Việc còn lại chuyển sang hardening sản phẩm: quota/VIP bền vững, license NNUE, test tay cuối D4/M5/H4 và AI Coach B3.
 > Mục đích: tổng kết **đã làm**, **chưa làm**, **đang chờ phụ thuộc** theo từng Sprint.
 > Tham chiếu chéo: [`01_FEATURE_SPECIFICATION.md`](01_FEATURE_SPECIFICATION.md), [`02_PROMPT_UI_UX.md`](02_PROMPT_UI_UX.md), [`03_PROMPT_FEATURES_ROADMAP.md`](03_PROMPT_FEATURES_ROADMAP.md), [`07_HUONG_DAN_THIET_LAP_FIREBASE.md`](07_HUONG_DAN_THIET_LAP_FIREBASE.md), [`08_HUONG_DAN_BACKEND_WEBSOCKET.md`](08_HUONG_DAN_BACKEND_WEBSOCKET.md), [`09_BACKEND_SERVER_HOAT_DONG.md`](09_BACKEND_SERVER_HOAT_DONG.md), [`10_KE_HOACH_TEST.md`](10_KE_HOACH_TEST.md) — **kế hoạch test các mục online chưa xác nhận**.
 
@@ -26,7 +26,7 @@
 | 2 | App Shell + Navigation 5-tab | ✅ | GoRouter, AppShell, BottomNav, Splash |
 | 3 | Xiangqi Engine (Pure Dart) | ✅ | `lib/core/chess_engine/` + 41 unit test |
 | 4 | ChessBoard UI (CustomPainter) | ✅ | `widgets/chess/`, `presentation/game/` |
-| 5 | Bot AI (Minimax + Evaluator) | ✅ | 5 mức độ, `chess_engine/ai/` |
+| 5 | Bot AI (Minimax + Evaluator) | ✅ | `chess_engine/ai/`. **Refactor 2026-06-26 → thang ELO liên tục** (doc [13](13_KE_HOACH_ELO_BOT_LADDER.md) Phase 0–6): `configForElo` + matchmaking ±100 + ElephantEye native + Zobrist/TT; còn calibrate thủ công |
 | 6 | Puzzle System (Tàn Cục) | ✅ | Seed 5+ bài, controller + UI + test |
 | 7 | Settings, Profile, Hồ sơ chi tiết | ✅ | Settings + EditProfile + Onboarding |
 | 8a | Firebase setup (config + Auth + Firestore) | ✅ | `cchess-dev`/`cchess-prod`, rules + indexes deployed, Anonymous + Google linking, splash auto-sync |
@@ -37,9 +37,9 @@
 | 11 | Opening Library (Khai cuộc Đại sư) | 🟢 | Seed cứng 5 khai cuộc, chờ CMS |
 | 12 | Online Matchmaking + Spectate (A1, A5, A6) | 🟡 | **A1 Ranked done**; **A5 chat cơ bản + chip nhanh done**; **A6 Spectate/share link/QR done**; **Rematch done**; R/S đã đóng test tay. Đợt 2026-06-19/20 đã tự động hóa lõi C/D/M/G/ELO + widget online + smoke deploy. Còn lại: vòng nhìn-mắt cuối trên thiết bị thật cho D4 OS lifecycle, M5 Firebase thật, H4 chất lượng gợi ý, C2/D/G4 visual + nâng Render Starter khi có user thật |
 | 13 | Cờ Úp + Cờ Casual (A3, A2) | 🟢 | **A3 Cờ Úp + A2 Cờ Casual DONE 2026-06-25**: A3 local + backend online + Bot + client online (ELO `eloCup` riêng); **A2 Cờ Casual** (vào từ Đối Đầu → "Mời Bạn Đấu" `?casual=1`) — phòng riêng **không tính ELO** (server bỏ persist), mời bạn qua link/QR/ID, dialog kết quả ghi rõ "Cờ giao hữu — không tính ELO". **Bot Cờ Úp nâng lên expectiminimax đầy đủ** (chance node tại nước lật + định giá quân úp theo túi xác suất). Còn: chỉ test tay đa thiết bị |
-| 14 | Community (Bạn bè, Leaderboard, CLB) | 🔒 | Chờ S12 |
+| 14 | Community (Bạn bè, Leaderboard, CLB) | 🟡 | **C1 Bạn bè + C2 Leaderboard đã nối backend thật**: friend request/accept/decline/remove ghi Firestore (`friendships`, batch 2 chiều) + rules; Cloud Function `syncCommunityProfile` mirror `users`→`public_profiles`→`leaderboards/{chess,cup}/{national,regional}`. **Còn:** C3 CLB / C4 Giải đấu mới read-only + seed (chưa có tạo/tham gia/engine giải), C6 tin tức/tàn cục hàng ngày |
 | 15 | AI Coach (B3) + AI Replay nâng cao (B5) | 🟡 | **Engine lai đã qua smoke thật 2026-06-20** — service Pikafish backend + abstraction Flutter + bot Đại Sư+ + replay analyze + **nút Gợi ý in-game** + attribution GPL + `cchess-engine` Render smoke 8/8 gồm quota. Còn: quota/VIP bền vững, đối chiếu FEN/UCI nhiều thế cố định, NNUE license, AI Coach B3 UI/diễn giải — xem [11](11_KE_HOACH_TICH_HOP_ENGINE.md) §10 |
-| 16 | Khám Phá (Shop, Inventory, Mail, Event) | 🟡 | **Shop + Inventory + Explore UI + repo + backend routes/store + shop.test.ts DONE** (route `/shop` `/inventory`, Explore là hub); còn Mail/Event/Welfare/Crafting + nối ví/kinh tế thật |
+| 16 | Khám Phá (Shop, Inventory, Mail, Event) | 🟡 | **Shop + Inventory + Explore UI + repo + backend routes/store + shop.test.ts DONE** (route `/shop` `/inventory`, Explore là hub); **ví đồng bộ từ backend** (`walletProvider` GET /wallet) vào shop/explore/profile (2026-06-26); còn Mail/Event/Welfare/Crafting + nối kinh tế mua-bán thật end-to-end |
 | 17 | VIP Center + IAP | ⬜ | Phụ thuộc store account |
 | 18 | OCR thế cờ (B7), học thuộc kỳ phổ (B8) | ⬜ | Giai đoạn 3 |
 
@@ -276,17 +276,21 @@
 
 **Còn lại:** chỉ test tay đa thiết bị cho ván casual/cup online thật.
 
-### 🔒 Sprint 14 — Community (Module C) (cần S12 + Cloud Functions cho leaderboard aggregation)
-- Bạn bè (C1): tìm theo ID, danh sách online/offline.
-- Leaderboard server-side (C2): toàn quốc + khu vực.
-- Câu lạc bộ Kỳ Xã (C3).
-- Giải đấu định kỳ (C4).
-- Tin tức + Tàn Cục Thách Đấu hàng ngày (C6).
+### 🟡 Sprint 14 — Community (Module C) — C1/C2 đã nối backend, C3/C4/C6 còn lại
+**Đã làm (nối Firestore thật, không phải UI shell):**
+- ✅ **C1 Bạn bè** — `friend_repository.dart` ghi Firestore thật: tìm theo `public_profiles`, gửi/chấp nhận/từ chối/xoá kết bạn bằng `WriteBatch` 2 chiều (`friendships/{uid}/friends/{friendUid}`), rules đã định nghĩa. Màn `friends_screen.dart` + `friendsProvider`. (Còn presence online/offline realtime nếu cần.)
+- ✅ **C2 Leaderboard server-side** — Cloud Function `syncCommunityProfile` (`functions/src/index.ts`) trigger `onDocumentWritten('users/{uid}')` mirror sang `public_profiles` + `leaderboards/{chess,cup}/{national, <region>}` (toàn quốc + khu vực, cả ELO cờ tướng + cờ úp), rules "ai cũng đọc, chỉ server ghi". `leaderboard_repository.dart` đọc Firestore, fallback seed khi rỗng.
+
+**Còn lại:**
+- 🟡 **C3 Câu lạc bộ Kỳ Xã** — `community_repository.dart` mới **read-only** (`getClubs` Firestore-or-seed), **chưa có** tạo CLB / vào CLB / vai trò thành viên.
+- 🟡 **C4 Giải đấu định kỳ** — tương tự read-only + seed; **chưa có** đăng ký/bốc thăm/engine chạy giải.
+- ⬜ **C6 Tin tức + Tàn Cục Thách Đấu hàng ngày** (Tàn cục hàng ngày đã có ở B4 backend, cần gắn vào hub cộng đồng).
+- ⬜ Provisioning nội dung thật vào `clubs`/`tournaments` (hiện hiển thị seed demo khi collection rỗng).
 
 ### 🟡 Sprint 15 — AI Coach (B3) + Pikafish server-side (engine lai) — engine smoke thật xong, chờ hardening sản phẩm
 > **Kế hoạch chi tiết + trạng thái:** [`11_KE_HOACH_TICH_HOP_ENGINE.md`](11_KE_HOACH_TICH_HOP_ENGINE.md) §10. Hướng cũ "Pikafish FFI on-device" đã **bỏ** do ràng buộc GPL-3.0 (app thương mại) + iOS App Store xung khắc GPL.
-- ✅ **Đã code/chạy (2026-06-07/11, cập nhật 2026-06-20):** engine-service backend (UCI wrapper/pool/cache/quota/HTTP API + 7 test), Dockerfile.engine + render.yaml service riêng, Flutter `MoveEngine`/`EngineRouter` + fallback, bot **Đại Sư+**, replay analyze qua router, **nút Gợi ý in-game**, **attribution GPL trong Cài đặt**, smoke gate `engine:smoke` + `engine:smoke:quota`, `cchess-engine` Render smoke thật **8/8 PASS** gồm quota.
-- ⬜ **Còn lại:** quota/VIP bền vững (Firestore/Redis thay in-memory), xác nhận **NNUE license thương mại**, đối chiếu FEN/UCI thêm nhiều thế cố định + H4 chất lượng gợi ý, upgrade engine lên Standard trước traffic thật, AI Coach lớp diễn giải rule-based (B3 UI).
+- ✅ **Đã code/chạy (2026-06-07/11, cập nhật tới 2026-06-26):** engine-service backend (UCI wrapper/pool/cache/quota/HTTP API), Dockerfile.engine + render.yaml service riêng, Flutter `MoveEngine`/`EngineRouter` + fallback, replay analyze qua router, **nút Gợi ý in-game**, **attribution GPL trong Cài đặt**, smoke gate `engine:smoke` + `engine:smoke:quota`, `cchess-engine` Render smoke thật **8/8 PASS** gồm quota. **AI Coach B3 DONE (2026-06-23)** — `CoachAnalyzer` + `AiCoachScreen` (phân tích theo giai đoạn, remote→fallback). **Quota/VIP bền vững DONE (2026-06-23/26)** — `FirestoreQuotaStore` (transaction tại `users/{uid}/engine_usage/{ngày}` + `expireAt`, sống sót restart), VIP đọc thật `isVip`/`vipExpiresAt`, fail-open an toàn; TTL policy + deny-rule cho `engine_usage` đã đưa vào `firestore.indexes.json`/`rules`.
+- ⬜ **Còn lại:** **deploy `firestore:rules,indexes` + bật TTL policy** (1 lệnh `firebase deploy`), xác nhận **NNUE license thương mại**, đối chiếu FEN/UCI thêm nhiều thế + **H4 chất lượng gợi ý/calibrate** với Pikafish thật, upgrade engine lên Render **Standard** trước traffic thật.
 
 ### 🟡 Sprint 16 — Khám Phá (Module D)
 **Đã làm:** Shop (D1) + Inventory (D2) + màn **Explore** (hub) — UI `presentation/shop/` (`shop_screen`, `inventory_screen`, `explore_screen`, `shop_visuals`, `shop_controller`); models `shop_item`/`inventory_item`/`wallet`; `shop_repository` + `shop_api_source`; route `/shop` `/inventory` trong `app_router`. Backend `src/shop/` (routes/store/types) + `scripts/import_shop.ts` + `shop.seed.json` + `shop.test.ts`; `firestore.rules` cho inventory/ví.
@@ -314,7 +318,7 @@
 | A3 | Cờ Úp | 🟢 | 13 — **DONE end-to-end (2026-06-25)**: local + backend online (engine cup TS server-authoritative, matchmaking theo variant, ELO `eloCup` riêng, protocol reveal/snapshot) + Bot cup offline + **client online** (`CupClientGame` cover-only, áp reveal/snapshot, render mặt úp, vào từ "Cờ Úp Online"). Còn lại: chỉ test tay đa thiết bị |
 | A5 | Chat + emoji + AI hint trong ván | 🟡 | Chat text done + **chip preset/emoji done 2026-06-11**; **AI hint done cho ván bot/local 2026-06-11** (EngineRouter, fallback minimax); hint trong ván online ranked cân nhắc sau (fair-play) |
 | A6 | Spectate | 🟡 | Phase 2 — cơ bản done với `spectate-room`/`stop-spectating`, read-only board, active room list, backend read-only tests; **share link/QR done 2026-06-07** (link/QR + deep-link in-app + landing page); còn moderation public |
-| A7 | Đấu Bot AI | ✅ | 5 |
+| A7 | Đấu Bot AI | ✅ | 5 — **nâng cấp 2026-06-26**: thang ELO liên tục 1000–2900 (`configForElo`), matchmaking ±100 ẩn ELO/lộ-ở-kết-quả, ELO bất đối xứng, ElephantEye native + Zobrist/TT; **còn calibrate thủ công** (doc [13](13_KE_HOACH_ELO_BOT_LADDER.md)) |
 | B1 | Khóa học vỡ lòng | 🟡 | UI placeholder, content chưa có |
 | B2 | Khóa học video | ⬜ | sau S15 |
 | B3 | AI Coach | 🟢 | 15 — **engine + lớp diễn giải `CoachAnalyzer` + màn `AiCoachScreen` done 2026-06-23** (phân tích theo giai đoạn + gợi ý luyện tập, remote→fallback); còn tinh chỉnh chất lượng theo Pikafish thật |
@@ -323,11 +327,14 @@
 | B6 | Khai cuộc Đại sư | 🟢 | 11 (chờ CMS) |
 | B7 | OCR thế cờ | ⬜ | 18 |
 | B8 | Học thuộc kỳ phổ | ⬜ | 18 |
-| C1–C4 | Bạn bè, Leaderboard, CLB, Giải đấu | 🔒 | 14 |
+| C1 | Bạn bè | 🟢 | 14 — **nối Firestore thật** (request/accept/decline/remove ghi `friendships` 2 chiều + rules); còn presence realtime |
+| C2 | Leaderboard | 🟢 | 14 — **server-side done**: Cloud Function `syncCommunityProfile` mirror `users`→`leaderboards/{chess,cup}/{national,khu vực}` + rules chỉ-server-ghi |
+| C3–C4 | CLB, Giải đấu | 🟡 | 14 — UI + đọc Firestore (seed fallback); **chưa có** tạo/tham gia/engine giải |
 | C5 | Livestream | ⬜ | 18 |
-| C6 | Tin tức + Tàn cục hàng ngày | 🔒 | 14 |
+| C6 | Tin tức + Tàn cục hàng ngày | 🟡 | 14 — Tàn cục hàng ngày có ở B4; chưa gắn hub cộng đồng |
 | C7 | Diễn đàn | ⬜ | 18 |
-| D1–D7 | Khám Phá (Shop, Inventory, ...) | ⬜ | 16 |
+| D1–D2 | Shop, Inventory | 🟢 | 16 — **end-to-end**: backend `src/shop/` (catalog/purchase/wallet/equip) + Firestore rules + ví hiển thị thật ở shop/explore/profile |
+| D3–D7 | Avatar frame, Mail, Event, Welfare, Crafting | ⬜ | 16 — Explore để **placeholder "coming soon"** cho Sự Kiện/Phúc Lợi/Hộp Thư |
 | E1 | Hồ sơ + cấp bậc | ✅ | 7 |
 | E2 | Thống kê chi tiết | 🟡 | UI có, cần thêm chart |
 | E3 | Huy chương | 🟢 | 10 |
@@ -338,18 +345,18 @@
 
 ---
 
-## 6. Số liệu tổng (cập nhật 2026-06-25)
+## 6. Số liệu tổng (cập nhật 2026-06-26)
 
-- **Tổng file Dart `lib/`:** ~95 file (thêm `core/chess_engine/` lớp engine lai: move_engine / engine_router / local_minimax_engine / remote_pikafish_engine + transports / engine_providers).
-- **Backend TypeScript:** realtime server + lab + engine-service (server, UCI wrapper, pool, analysis, cache, quota, FEN) đã có CI riêng.
-- **Test tự động:** Backend `npm test` **142/142** (21 file) + `lab` 22/22 + `backend-ci` chạy `lab`, `lab:load`, `lab:fuzz`; Flutter `flutter test` **324/324** (33 file) + `flutter analyze` sạch. (2026-06-25 đợt 4: +A2 casual controller/widget test (6) + bot cup expectiminimax test (2). 2026-06-25 đợt 3: +client online Cờ Úp `cup_client_game_test.dart` (8); cùng ngày +backend foundation Cờ Úp online — `cupGame.test.ts`, `match.cup.test.ts`, matchmaking variant, persistence eloCup — và Bot Cờ Úp `cup_bot_engine_test.dart`; trước đó +nhóm "revealed Sĩ/Tượng roam freely".) Phân loại nguồn test: xem bảng cuối [`10_KE_HOACH_TEST.md`](10_KE_HOACH_TEST.md).
+- **Tổng file Dart `lib/`:** ~100+ file (thêm `core/chess_engine/` engine lai + ELO ladder: move_engine / engine_router / local_minimax_engine / local_elephanteye_engine + `ffi/` / remote_pikafish_engine / `ai/engine_config` / `matchmaking/{bot_matchmaker,elo_scoring}` / `presentation/calibration/`).
+- **Backend TypeScript:** realtime server + lab + engine-service (server, UCI wrapper, pool, analysis, cache, quota in-memory **+ FirestoreQuotaStore bền vững**, FEN) đã có CI riêng.
+- **Test tự động (xác minh lại 2026-06-26):** Backend `npm test` **146/146** (19 file `src/`) + `lab` 22/22 + `backend-ci` chạy `lab`, `lab:load`, `lab:fuzz`; Flutter `flutter test` **350/350** (37 file) + `flutter analyze` sạch. (2026-06-25 đợt 4: +A2 casual controller/widget test (6) + bot cup expectiminimax test (2). 2026-06-25 đợt 3: +client online Cờ Úp `cup_client_game_test.dart` (8); cùng ngày +backend foundation Cờ Úp online — `cupGame.test.ts`, `match.cup.test.ts`, matchmaking variant, persistence eloCup — và Bot Cờ Úp `cup_bot_engine_test.dart`; trước đó +nhóm "revealed Sĩ/Tượng roam freely".) Phân loại nguồn test: xem bảng cuối [`10_KE_HOACH_TEST.md`](10_KE_HOACH_TEST.md).
 - **Test tay:** R **ĐÓNG 12/12**; S **ĐÓNG 15/15**; C8 + H1–H3 PASS. Còn lại chủ yếu là vòng thật/visual: D4 OS lifecycle, M5 Firebase thật, H4 chất lượng gợi ý, C2/D/G4 nhìn-mắt.
 - **Sprint hoàn thành (1 chiều):** 10/18 (1–7 + 8a + 8b + 8c).
 - **Sprint code xong, sync một phần:** 3/18 (S9, S10, S11).
 - **Sprint MVP done phase 1:** 1/18 (S12 — A1 Ranked production).
-- **Sprint đang dở:** S12 phase 2 (chỉ còn test tay cuối + Render upgrade khi có user thật), S13 (A3 Cờ Úp **DONE end-to-end**: local + backend online + Bot + **client online** — chỉ còn A2 casual), S15 (engine lai — smoke thật xong, chờ quota/VIP bền vững, license, plan production và AI Coach B3), S16 (Shop/Inventory/Explore UI + backend đã có — còn Mail/Event/economy thật).
+- **Sprint đang dở:** S12 phase 2 (chỉ còn test tay cuối + Render upgrade khi có user thật), S13 (**🟢 code xong** A3 Cờ Úp + A2 Casual end-to-end — chỉ còn test tay đa thiết bị), S15 (engine lai + **AI Coach B3 + quota/VIP bền vững (Firestore) đã xong**; còn NNUE license, Render Standard, **calibrate ELO ladder thủ công**), S16 (Shop/Inventory/Explore UI + backend + **ví đồng bộ** đã có — còn Mail/Event/Welfare/Crafting + kinh tế mua-bán thật).
 - **Sprint locked/chưa làm:** S14 (Community — cần S12), S17-18 (giai đoạn sau).
-- **Tỷ lệ hoàn thành code (ước lượng theo spec MVP+G2):** ~82% (tăng sau automation gates, engine smoke thật và quota gate).
+- **Tỷ lệ hoàn thành code (ước lượng theo spec MVP+G2):** ~84% (tăng sau ELO ladder bot, ElephantEye native, AI Coach B3, quota Firestore bền vững).
 - **Tỷ lệ tính năng end-to-end dùng được production:** ~60–65% (ranked online thật đã chạy; engine Pikafish đã smoke thật trên Render nhưng chưa harden quota/VIP/license/plan cho traffic thật).
 - **Production endpoint**: backend `https://cchess-backend.onrender.com` / `wss://cchess-backend.onrender.com`; engine `https://cchess-engine.onrender.com`. Cả hai đang ở Render free tier cho prototype/smoke; cần Starter/Standard trước khi mở user thật.
 - **Repo GitHub**: Mieteo/CChess, branch `main`.
@@ -406,3 +413,11 @@
 *Cập nhật 2026-06-25 (đợt 3) — **A3 Cờ Úp: client online (A3 DONE end-to-end)**: nối phía Flutter vào backend cup đã có. (1) Engine cup phía client `CupClientGame implements ChessGameSession` ([cup_client_game.dart](cchess/lib/core/chess_engine/cup_client_game.dart)) — view **cover-only** giống đúng người chơi, KHÔNG bao giờ biết danh tính ẩn; áp `reveal` từ `move-ack` (lật quân mình — đi nước úp trượt như đĩa trống rồi mới lật) và `opponent-move` (lật quân đối thủ), dựng lại bàn từ `cup` snapshot khi reconnect/spectate (`fromSnapshot`). Validate + áp lạc quan nước của chính mình hợp lệ vì **tính hợp lệ chỉ phụ thuộc mặt phủ + quân đã lộ** (không phụ thuộc danh tính ẩn). (2) Tách luật sinh nước/chiếu cờ úp ra [cup_rules.dart](cchess/lib/core/chess_engine/cup_rules.dart) dùng chung `XiangqiCupGame` ↔ `CupClientGame` (1 nguồn sự thật, giữ nguyên hành vi engine local). (3) Nối luồng online: `OnlineMatchState.game` → `ChessGameSession?`, `find-match`/`create-room` mang `variant`, render mặt úp (`hiddenPositions`) trong ván online; backend bổ sung `cup` snapshot vào `spectate-started`. Vào từ Đối Đầu → **"Cờ Úp Online"** (`?variant=cup`). Test: Flutter `flutter test` **316/316** (33 file, +`cup_client_game_test.dart` 8), backend `npm test` **142/142**, `flutter analyze` + `tsc` sạch. **A3 còn lại: chỉ test tay đa thiết bị**; còn A2 Cờ Casual invite-by-link.*
 
 *Cập nhật 2026-06-25 (đợt 4) — **Sprint 13 đóng phần code: A2 Cờ Casual + Bot Cờ Úp expectiminimax**. (1) **A2 Cờ Casual** hoàn thiện end-to-end: khung casual (entry "Mời Bạn Đấu" `?casual=1`, lobby `initialCasual`, backend `RoomMode='casual'` bỏ persist/ELO, test S13) đã có sẵn từ commit cup; bổ sung **UX còn thiếu** — dialog kết quả ghi rõ "Cờ giao hữu — không tính ELO" (thay vì lặng lẽ ẩn hàng ELO), hint casual ở phòng chờ — và **test Flutter** (controller nhóm A2 + widget dialog casual). Mời bạn dùng lại hạ tầng A6 (link/QR/mã phòng). (2) **Bot Cờ Úp v2 = expectiminimax đầy đủ**: nước lật thành **chance node** (phân nhánh theo loại quân còn trong túi ẩn, trọng số theo số lượng, lấy kỳ vọng); quân úp định giá theo **trung bình túi ẩn động** (M0 trừ quân đã lộ) thay cho 320cp phẳng; không gian lận; iterative deepening + ngân sách thời gian (300–2000ms) chống treo ở thế đầy quân úp. Flutter `flutter test` **324/324** (+6 A2 casual, +2 bot expectiminimax), backend `npm test` **142/142**, `flutter analyze` sạch. **Sprint 13 → 🟢** (chỉ còn test tay đa thiết bị).*
+
+*Cập nhật 2026-06-26 — **Hệ Bot ELO liên tục (doc 13, Phase 0–6) + ElephantEye native + quota TTL + ví đồng bộ**. Năm việc lớn trong ngày:*
+- ***(1) Refactor bot sang thang ELO liên tục** ([13](13_KE_HOACH_ELO_BOT_LADDER.md) Phase 0–6 code DONE): thay 5–6 tier danh xưng bằng **một hàm** `configForElo(targetElo)` → `EngineConfig` ([engine_config.dart](cchess/lib/core/chess_engine/ai/engine_config.dart), thang 1000–2900, đơn điệu, clamp sàn/trần). Matchmaking ván-vs-bot ([bot_matchmaker.dart](cchess/lib/core/matchmaking/bot_matchmaker.dart) `pickBot`: ngẫu nhiên −100/=/+100) + chấm điểm bất đối xứng ([elo_scoring.dart](cchess/lib/core/matchmaking/elo_scoring.dart): equal +10/−10, higher +15/−5, lower +5/−10, draw 0). `game_screen` lưu bracket → `eloDelta` → `applyGameResult` + `GameRecord.eloDelta`; **màn kết quả lộ ELO bot + bracket** (trong ván chỉ hiện "Bot"). Backend Pikafish nhận `elo`/`skill` (`EngineLimit.skillLevel/uciElo`, clamp, **cache key kèm skill/elo** chống cache-poisoning, set `UCI_Elo`/`Skill Level` trước search + **reset** sau). **Bỏ `RankTier`/`rankForElo`** → `EloConstants.colorForElo`, badge hiện **số ELO** (giữ `BotDifficulty`/`EngineLevel` cho Cờ Úp + hint/analysis). Test mới: `engine_config_test`, `bot_matchmaker_test`, `elo_scoring_test`, `engine_router_test`, backend ELO/skill + cache.*
+- ***(2) ElephantEye (EleEye) native** — port C++ engine vào `android/app/src/main/cpp/` (NDK+CMake) + cầu FFI `eleeye_ffi*.dart` → [local_elephanteye_engine.dart](cchess/lib/core/chess_engine/local_elephanteye_engine.dart), **fallback an toàn** về minimax khi lib vắng/không phải Android. Đã **wire vào ELO ladder** (dải 1500–1900, `EngineSource.localElephantEye`). Test `local_elephanteye_engine_test.dart`.*
+- ***(3) Zobrist hashing + Transposition Table** cho minimax ([minimax.dart](cchess/lib/core/chess_engine/ai/minimax.dart)) — tăng tốc/độ sâu tìm kiếm.*
+- ***(4) Calibration UI** (gated `--dart-define=CALIBRATION=true`): Settings → Bot Calibration → [calibration_screen.dart](cchess/lib/presentation/calibration/calibration_screen.dart) + [calibration_runner.dart](cchess/lib/presentation/calibration/calibration_runner.dart) cho bot-đấu-bot giữa các band, bảng win% màu (🟢<35% / 🟠35–50% / 🔴>50%) để **calibrate `configForElo` thủ công** (Phase 6 còn lại, không tự động hoá được).*
+- ***(5) S15 quota TTL + S16 ví**: [firestore.indexes.json](cchess/firestore.indexes.json) thêm `fieldOverride` TTL cho `engine_usage.expireAt` + [firestore.rules](cchess/firestore.rules) deny client trên `engine_usage` (backend ghi qua Admin SDK) — `FirestoreQuotaStore` đã commit từ trước, nay chỉ **chờ `firebase deploy --only firestore:rules,firestore:indexes`**. `profile_screen` đọc **`walletProvider`** (GET /wallet) cho coins/gems thay số Hive cũ → khớp với `explore`/`shop`.*
+- *Test: Flutter `flutter test` **350/350** (37 file), `flutter analyze` sạch. **Còn lại lớn:** calibrate ELO thủ công (đấu thử); Sprint 14 **C3/C4 CLB-Giải đấu** (tạo/tham gia/engine giải) + C6 (C1 Bạn bè & C2 Leaderboard **đã nối backend thật**); Sprint 16 **D3–D7** Mail/Event/Welfare/Crafting + kinh tế mua-bán (D1/D2 Shop/Inventory/ví **đã end-to-end**); Sprint 17 VIP/IAP; content B1/B4; và vòng test tay/production-hardening Render.*
