@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/chess_engine/chess_engine.dart';
+import '../../../core/matchmaking/bot_matchmaker.dart';
 import '../../../theme/app_colors.dart';
 import '../../../theme/app_spacing.dart';
 import '../../../theme/app_text_styles.dart';
@@ -13,6 +14,14 @@ class GameResultOverlay extends StatelessWidget {
   final PieceColor? humanColor;
   final int eloDelta;
   final Duration duration;
+
+  /// Matchmade bot's ELO, revealed here (hidden during the game). Null for
+  /// local / Cờ Úp / legacy games, which show no reveal row.
+  final int? botElo;
+
+  /// Where the bot sat relative to the player — drives the reveal caption.
+  final EloBracket? bracket;
+
   final VoidCallback onPlayAgain;
   final VoidCallback onClose;
 
@@ -23,9 +32,23 @@ class GameResultOverlay extends StatelessWidget {
     this.humanColor,
     this.eloDelta = 0,
     this.duration = Duration.zero,
+    this.botElo,
+    this.bracket,
     required this.onPlayAgain,
     required this.onClose,
   });
+
+  /// One-line reveal: bot ELO + how it sat relative to the player.
+  String? get _botRevealText {
+    if (botElo == null) return null;
+    final relation = switch (bracket) {
+      EloBracket.higher => ' • mạnh hơn bạn (+$kBracketSpread)',
+      EloBracket.lower => ' • yếu hơn bạn (−$kBracketSpread)',
+      EloBracket.equal => ' • ngang sức',
+      null => '',
+    };
+    return 'Đối thủ: Bot ELO $botElo$relation';
+  }
 
   String get _title {
     if (status == GameStatus.draw) return 'Hòa cờ';
@@ -122,6 +145,30 @@ class GameResultOverlay extends StatelessWidget {
                     ),
                     textAlign: TextAlign.center,
                   ),
+                if (_botRevealText != null) ...[
+                  AppSpacing.vGapSm,
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.md,
+                      vertical: AppSpacing.xs,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppColors.accentGold.withValues(alpha: 0.12),
+                      borderRadius: AppRadius.chip,
+                      border: Border.all(
+                        color: AppColors.accentGold.withValues(alpha: 0.5),
+                      ),
+                    ),
+                    child: Text(
+                      _botRevealText!,
+                      style: AppTextStyles.captionSm.copyWith(
+                        color: AppColors.accentGold,
+                        fontWeight: FontWeight.w700,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                ],
                 AppSpacing.vGapLg,
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,

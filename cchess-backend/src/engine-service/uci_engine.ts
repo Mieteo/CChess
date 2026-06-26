@@ -30,6 +30,10 @@ export class UciEngine {
   private subscribers = new Set<(line: string) => void>();
   private busy = false;
   private disposed = false;
+  /** True while a non-default strength is set, so we know to reset it. The
+   * pool reuses one process across requests, so leaked strength would weaken
+   * every later (full-strength) search. */
+  private strengthDirty = false;
   private readonly stderrTail: string[] = [];
 
   constructor(private readonly options: UciEngineOptions) {}
@@ -63,6 +67,7 @@ export class UciEngine {
 
     try {
       this.writeLine(`position fen ${normalizeFen(fen)}`);
+      this.applyStrength(limit);
       const goLimit = limit.depth !== undefined
         ? `depth ${limit.depth}`
         : `movetime ${limit.movetimeMs ?? this.options.defaultMovetimeMs}`;
@@ -79,8 +84,38 @@ export class UciEngine {
         pv,
       };
     } finally {
+      this.resetStrength();
       unsubscribe();
       this.busy = false;
+    }
+  }
+
+  /// Apply a strength-limiting option before searching. Prefers UCI_Elo (a
+  /// direct ELO target); set PIKAFISH_STRENGTH_MODE=skill to force Skill Level
+  /// (e.g. if the build lacks UCI_LimitStrength).
+  private applyStrength(limit: EngineLimit): void {
+    const preferSkill = process.env.PIKAFISH_STRENGTH_MODE === 'skill';
+    if (!preferSkill && limit.uciElo !== undefined) {
+      this.writeLine('setoption name UCI_LimitStrength value true');
+      this.writeLine(`setoption name UCI_Elo value ${limit.uciElo}`);
+      this.strengthDirty = true;
+    } else if (limit.skillLevel !== undefined) {
+      this.writeLine(`setoption name Skill Level value ${limit.skillLevel}`);
+      this.strengthDirty = true;
+    }
+  }
+
+  /// Restore full strength after a limited search so the shared process doesn't
+  /// leak weakness into the next request. No-op if nothing was changed.
+  private resetStrength(): void {
+    if (!this.strengthDirty) return;
+    this.strengthDirty = false;
+    if (!this.proc || this.disposed) return;
+    try {
+      this.writeLine('setoption name UCI_LimitStrength value false');
+      this.writeLine('setoption name Skill Level value 20');
+    } catch {
+      // Engine already gone — nothing to reset.
     }
   }
 

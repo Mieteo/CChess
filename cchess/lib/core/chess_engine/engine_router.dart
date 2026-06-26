@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'ai/engine_config.dart';
 import 'ai/game_analyzer.dart';
 import 'engine_quota.dart';
 import 'local_minimax_engine.dart';
@@ -26,15 +27,17 @@ class EngineRouter implements MoveEngine {
     String fen, {
     required EngineLevel level,
     EngineUseCase useCase = EngineUseCase.bot,
+    EngineConfig? config,
   }) async {
     String? fallbackReason;
     EngineFallbackKind? fallbackKind;
-    if (await _shouldTryRemote(level, useCase)) {
+    if (await _shouldTryRemote(level, useCase, config)) {
       try {
         final result = await remote!.bestMove(
           fen,
           level: level,
           useCase: useCase,
+          config: config,
         );
         if (result != null) return result;
       } on EngineQuotaExceededException catch (error) {
@@ -46,7 +49,12 @@ class EngineRouter implements MoveEngine {
       }
     }
 
-    final fallback = await local.bestMove(fen, level: level, useCase: useCase);
+    final fallback = await local.bestMove(
+      fen,
+      level: level,
+      useCase: useCase,
+      config: config,
+    );
     if (fallback == null || fallbackReason == null) return fallback;
     return fallback.copyWith(
       usedFallback: true,
@@ -76,11 +84,15 @@ class EngineRouter implements MoveEngine {
   Future<bool> _shouldTryRemote(
     EngineLevel level,
     EngineUseCase useCase,
+    EngineConfig? config,
   ) async {
     if (!await _remoteAvailable()) return false;
     if (useCase == EngineUseCase.hint || useCase == EngineUseCase.analysis) {
       return true;
     }
+    // ELO ladder: the config decides which engine plays. Legacy callers
+    // (config == null) keep the old "grandmaster tier → remote" behaviour.
+    if (config != null) return config.engine == EngineSource.remotePikafish;
     return level == EngineLevel.grandmaster;
   }
 

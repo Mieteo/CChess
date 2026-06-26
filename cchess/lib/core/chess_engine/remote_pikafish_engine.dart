@@ -1,4 +1,5 @@
 import '../constants/piece_constants.dart';
+import 'ai/engine_config.dart';
 import 'ai/game_analyzer.dart';
 import 'engine_quota.dart';
 import 'move.dart';
@@ -28,10 +29,20 @@ class RemotePikafishEngine implements MoveEngine {
     String fen, {
     required EngineLevel level,
     EngineUseCase useCase = EngineUseCase.bot,
+    EngineConfig? config,
   }) async {
+    // `level` is always sent for backward-compat with the current backend.
+    // The ELO-ladder strength fields are additive — a backend that doesn't yet
+    // understand them (pre Phase 5) simply ignores them and uses `level`.
+    final body = <String, dynamic>{'fen': fen, 'level': level.apiName};
+    if (config != null) {
+      if (config.uciElo != null) body['elo'] = config.uciElo;
+      if (config.skillLevel != null) body['skill'] = config.skillLevel;
+      if (config.movetimeMs != null) body['movetimeMs'] = config.movetimeMs;
+    }
     final json = await _postJson(
       useCase == EngineUseCase.hint ? '/engine/hint' : '/engine/best-move',
-      {'fen': fen, 'level': level.apiName},
+      body,
     );
     final uci = json['uci'] as String?;
     if (uci == null) return null;

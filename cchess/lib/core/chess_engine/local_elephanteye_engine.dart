@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 
+import 'ai/engine_config.dart';
 import 'ai/game_analyzer.dart';
 import 'ffi/eleeye_ffi.dart';
 import 'local_minimax_engine.dart';
@@ -31,22 +32,40 @@ class LocalElephantEye implements MoveEngine {
     String fen, {
     required EngineLevel level,
     EngineUseCase useCase = EngineUseCase.bot,
+    EngineConfig? config,
   }) async {
-    final depth = _nativeDepthFor(level, useCase);
+    final depth = config != null
+        ? _nativeDepthForConfig(config, useCase)
+        : _nativeDepthFor(level, useCase);
     if (depth == null || !EleeyeFfi.isSupported) {
-      return _fallback.bestMove(fen, level: level, useCase: useCase);
+      return _fallback.bestMove(
+        fen,
+        level: level,
+        useCase: useCase,
+        config: config,
+      );
     }
 
     // Run the (blocking) native search off the UI isolate.
     final uci = await compute(_runNativeSearch, _EleeyeInput(fen, depth));
     if (uci == null) {
       // Native unavailable at runtime or no legal move — defer to the fallback.
-      return _fallback.bestMove(fen, level: level, useCase: useCase);
+      return _fallback.bestMove(
+        fen,
+        level: level,
+        useCase: useCase,
+        config: config,
+      );
     }
 
     final move = _moveFromUci(fen, uci);
     if (move == null) {
-      return _fallback.bestMove(fen, level: level, useCase: useCase);
+      return _fallback.bestMove(
+        fen,
+        level: level,
+        useCase: useCase,
+        config: config,
+      );
     }
     return EngineMove(
       move: move,
@@ -63,6 +82,25 @@ class LocalElephantEye implements MoveEngine {
   }) {
     // The native engine exposes no analyze entrypoint; use the Dart analyzer.
     return _fallback.analyze(startingFen: startingFen, moveUcis: moveUcis);
+  }
+
+  /// Native search depth for an ELO-ladder [config], or null to defer to the
+  /// minimax fallback.
+  ///
+  /// * minimax configs (the low/beatable band) keep the pure-Dart engine;
+  /// * ElephantEye configs use their tuned native depth;
+  /// * Pikafish configs only reach here when the remote call fell back to the
+  ///   local engine, so play as strong as the native search reasonably allows.
+  static int? _nativeDepthForConfig(EngineConfig config, EngineUseCase useCase) {
+    if (useCase != EngineUseCase.bot) return 8; // strong offline hint/analysis
+    switch (config.engine) {
+      case EngineSource.localMinimax:
+        return null;
+      case EngineSource.localElephantEye:
+        return config.depth;
+      case EngineSource.remotePikafish:
+        return config.depth.clamp(6, 12);
+    }
   }
 
   /// Native search depth for the given request, or null to defer to the

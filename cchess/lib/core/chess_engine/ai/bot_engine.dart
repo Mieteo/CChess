@@ -26,19 +26,28 @@ class BotEngine {
   /// a fixed depth — light positions search DEEPER than the bot would
   /// (up to [bestEffortMaxDepth]), heavy midgames return the depth they
   /// completed in time instead of hanging.
+  /// [depthOverride] / [blunderRate] come from an ELO-ladder [EngineConfig]:
+  /// when supplied they replace the [difficulty]-derived search depth and
+  /// randomness so a single minimax maps onto a continuous strength curve.
+  /// [difficulty] still supplies the minimum think time either way.
   Future<Move?> chooseMove(
     XiangqiGame game,
     BotDifficulty difficulty, {
     bool bestEffort = false,
     Duration timeBudget = const Duration(seconds: 2),
+    int? depthOverride,
+    double? blunderRate,
   }) async {
     if (game.status.isOver) return null;
     final settings = difficulty.settings;
     final input = _BotSearchInput(
       fen: game.toFen(),
-      depth: settings.depth,
-      randomChance: bestEffort ? 0 : settings.randomMoveChance,
-      suboptimalChance: bestEffort ? 0 : settings.suboptimalChance,
+      depth: depthOverride ?? settings.depth,
+      // An ELO config expresses weakness purely as a blunder (random-move)
+      // rate, so it overrides the difficulty's random/suboptimal knobs.
+      randomChance: bestEffort ? 0 : (blunderRate ?? settings.randomMoveChance),
+      suboptimalChance:
+          bestEffort || blunderRate != null ? 0 : settings.suboptimalChance,
       // Seeded so deterministic in tests, but the seed itself includes time
       // so production play feels non-repeating.
       seed: DateTime.now().microsecondsSinceEpoch,

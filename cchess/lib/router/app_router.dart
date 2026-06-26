@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../core/chess_engine/chess_engine.dart';
 import '../core/constants/app_constants.dart';
+import '../core/matchmaking/bot_matchmaker.dart';
 import '../presentation/achievements/achievements_screen.dart';
 import '../presentation/bot_game/bot_select_screen.dart';
 import '../presentation/coach/ai_coach_screen.dart';
@@ -181,18 +182,23 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppConstants.routeGame,
         builder: (context, state) {
-          final mode = state.uri.queryParameters['mode'] ?? 'local';
-          final levelRaw = state.uri.queryParameters['level'];
+          final q = state.uri.queryParameters;
+          final mode = q['mode'] ?? 'local';
+          final levelRaw = q['level'];
           final engineLevel = engineLevelFromString(levelRaw);
           final level =
               BotDifficultyX.fromString(levelRaw) ??
               (engineLevel == EngineLevel.grandmaster
                   ? BotDifficulty.veryHard
                   : null);
+          // ELO-ladder standard play: `?mode=bot&botElo=1600&bracket=higher`.
+          final botElo = int.tryParse(q['botElo'] ?? '');
           return GameScreen(
             mode: mode,
             botDifficulty: level,
             engineLevel: engineLevel,
+            botElo: botElo,
+            bracket: _bracketFromString(q['bracket']),
           );
         },
       ),
@@ -266,6 +272,14 @@ CustomTransitionPage<T> _fade<T>(GoRouterState state, Widget child) {
     child: child,
     transitionsBuilder: (_, _, _, c) => c,
   );
+}
+
+EloBracket? _bracketFromString(String? value) {
+  if (value == null) return null;
+  for (final b in EloBracket.values) {
+    if (b.name == value) return b;
+  }
+  return null;
 }
 
 int _tabIndexForLocation(String location) {

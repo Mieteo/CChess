@@ -12,6 +12,10 @@ export interface EngineLimit {
   movetimeMs?: number;
   depth?: number;
   timeoutMs?: number;
+  /** Pikafish `Skill Level` (0–20). Weakens play below full strength. */
+  skillLevel?: number;
+  /** Pikafish `UCI_Elo` (with `UCI_LimitStrength`). Targets a specific ELO. */
+  uciElo?: number;
 }
 
 export interface EngineBestMove {
@@ -27,6 +31,10 @@ export interface EngineBestMoveRequest {
   level?: string;
   movetimeMs?: number;
   depth?: number;
+  /** ELO-ladder strength target (maps to Pikafish `UCI_Elo`). */
+  elo?: number;
+  /** ELO-ladder skill level (maps to Pikafish `Skill Level`, 0–20). */
+  skill?: number;
 }
 
 export interface EngineAnalyzeRequest {

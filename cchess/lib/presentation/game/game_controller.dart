@@ -14,10 +14,16 @@ class GameControllerArgs {
   final PieceColor? cpuColor;
   final BotDifficulty? botDifficulty;
 
+  /// Target ELO of the matched bot (ELO-ladder standard play). Null for Cờ Úp
+  /// and legacy difficulty-tier games. Part of the family key so each match
+  /// gets its own controller.
+  final int? botElo;
+
   const GameControllerArgs({
     required this.mode,
     this.cpuColor,
     this.botDifficulty,
+    this.botElo,
   });
 
   @override
@@ -25,10 +31,11 @@ class GameControllerArgs {
       other is GameControllerArgs &&
       other.mode == mode &&
       other.cpuColor == cpuColor &&
-      other.botDifficulty == botDifficulty;
+      other.botDifficulty == botDifficulty &&
+      other.botElo == botElo;
 
   @override
-  int get hashCode => Object.hash(mode, cpuColor, botDifficulty);
+  int get hashCode => Object.hash(mode, cpuColor, botDifficulty, botElo);
 }
 
 /// Snapshot of game state observed by the UI.

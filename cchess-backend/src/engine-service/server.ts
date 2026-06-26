@@ -172,8 +172,26 @@ function limitForRequest(
   request: EngineBestMoveRequest | EngineAnalyzeRequest,
   feature: EngineFeature,
 ): EngineLimit {
+  // ELO-ladder strength dials only apply to bot play; hints + analysis stay
+  // at full strength.
+  const strength: Pick<EngineLimit, 'skillLevel' | 'uciElo'> =
+    feature === 'best-move'
+      ? {
+          skillLevel: clampOptionalInt(
+            'skill' in request ? request.skill : undefined,
+            0,
+            20,
+          ),
+          uciElo: clampOptionalInt(
+            'elo' in request ? request.elo : undefined,
+            envInt('MIN_UCI_ELO', 1280),
+            envInt('MAX_UCI_ELO', 3000),
+          ),
+        }
+      : {};
+
   const depth = clampOptionalInt(request.depth, 1, envInt('MAX_DEPTH', 20));
-  if (depth !== undefined) return { depth };
+  if (depth !== undefined) return { depth, ...strength };
   const level = 'level' in request ? request.level : undefined;
   const defaultMovetime = defaultMovetimeFor(level, feature);
   return {
@@ -182,6 +200,7 @@ function limitForRequest(
       50,
       envInt('MAX_MOVETIME_MS', 3000),
     ) ?? defaultMovetime,
+    ...strength,
   };
 }
 

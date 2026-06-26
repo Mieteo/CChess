@@ -17,6 +17,10 @@ class PlayerInfoPanel extends StatelessWidget {
   final int capturedCount;
   final bool topAlign;
 
+  /// When false the ELO is hidden entirely (no rank badge, neutral avatar ring).
+  /// Used for matchmade bots, whose ELO stays secret until the result screen.
+  final bool showElo;
+
   /// Per-move countdown for the side to move (null disables the feature). Shown
   /// as a [MoveClockChip] on the same row, only while [isMyTurn].
   final Duration? moveTimeLeft;
@@ -30,6 +34,7 @@ class PlayerInfoPanel extends StatelessWidget {
     required this.timeLeft,
     this.capturedCount = 0,
     this.topAlign = false,
+    this.showElo = true,
     this.moveTimeLeft,
   });
 
@@ -45,7 +50,11 @@ class PlayerInfoPanel extends StatelessWidget {
     final timerColor = isLowTime ? AppColors.error : AppColors.onSurface;
 
     final children = <Widget>[
-      CChessAvatar(initials: displayName[0], size: 36, elo: elo),
+      CChessAvatar(
+        initials: displayName[0],
+        size: 36,
+        elo: showElo ? elo : null,
+      ),
       AppSpacing.hGapSm,
       Expanded(
         child: Column(
@@ -78,7 +87,8 @@ class PlayerInfoPanel extends StatelessWidget {
             AppSpacing.vGapXs,
             Row(
               children: [
-                CChessRankBadge(elo: elo, compact: true, showStars: false),
+                if (showElo)
+                  CChessRankBadge(elo: elo, compact: true, showStars: false),
                 if (capturedCount > 0) ...[
                   AppSpacing.hGapSm,
                   const Icon(Icons.close, size: 12, color: AppColors.parchmentTan),

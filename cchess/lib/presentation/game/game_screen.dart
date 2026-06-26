@@ -6,6 +6,9 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/chess_engine/chess_engine.dart';
 import '../../core/constants/app_constants.dart';
+import '../../core/constants/elo_constants.dart';
+import '../../core/matchmaking/bot_matchmaker.dart';
+import '../../core/matchmaking/elo_scoring.dart';
 import '../../data/models/achievement.dart';
 import '../../data/models/game_record.dart';
 import '../../data/repositories/achievement_repository.dart';
@@ -29,6 +32,12 @@ class GameScreen extends ConsumerStatefulWidget {
   final BotDifficulty? botDifficulty;
   final EngineLevel? engineLevel;
 
+  /// ELO-ladder standard play: the matched bot's hidden ELO and the bracket it
+  /// landed in (used for asymmetric scoring + the end-of-game reveal). Null for
+  /// Cờ Úp and legacy difficulty-tier games.
+  final int? botElo;
+  final EloBracket? bracket;
+
   /// Color the bot plays. Defaults to Black so the human starts.
   final PieceColor cpuColor;
 
@@ -37,6 +46,8 @@ class GameScreen extends ConsumerStatefulWidget {
     this.mode = 'local',
     this.botDifficulty,
     this.engineLevel,
+    this.botElo,
+    this.bracket,
     this.cpuColor = PieceColor.black,
   });
 
@@ -81,6 +92,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
       cpuColor: isBot ? widget.cpuColor : null,
       botDifficulty:
           isBot ? (widget.botDifficulty ?? BotDifficulty.medium) : null,
+      botElo: widget.botElo,
     );
     _redTime = _gameClock;
     _blackTime = _gameClock;
@@ -105,6 +117,11 @@ class _GameScreenState extends ConsumerState<GameScreen> {
       ref.read(gameControllerProvider(_args).notifier);
 
   GameUiState get _state => ref.read(gameControllerProvider(_args));
+
+  /// ELO-ladder standard bot game (a botElo was matched). Cờ Úp and legacy
+  /// difficulty-tier games are not matchmaking and keep eloDelta 0.
+  bool get _isStandardMatchmaking =>
+      widget.mode == 'bot' && widget.botElo != null;
 
   /// Remaining total-game time for [color].
   Duration _totalTimeFor(PieceColor color) =>
@@ -182,10 +199,18 @@ class _GameScreenState extends ConsumerState<GameScreen> {
       }
     } else {
       final engine = ref.read(engineRouterProvider);
+      // ELO ladder: derive the strength config from the matched bot ELO. Legacy
+      // difficulty-tier games (config == null) keep the level-based behaviour.
+      final config = _isStandardMatchmaking
+          ? configForElo(widget.botElo!)
+          : null;
       final result = await engine.bestMove(
         game.toFen(),
-        level: widget.engineLevel ?? _engineLevelForDifficulty(difficulty),
+        level: config != null
+            ? _engineLevelForElo(widget.botElo!)
+            : (widget.engineLevel ?? _engineLevelForDifficulty(difficulty)),
         useCase: EngineUseCase.bot,
+        config: config,
       );
       if (result != null) {
         from = result.move.from;
@@ -307,11 +332,16 @@ class _GameScreenState extends ConsumerState<GameScreen> {
                 humanColor == PieceColor.black));
     final drew = game.status == GameStatus.draw;
 
-    // 1. Save a kỳ phổ record.
+    // ELO-ladder reward (0 for local / Cờ Úp / legacy games).
+    final delta = _eloDeltaFor(humanColor, game.status);
+
+    // 1. Save a kỳ phổ record. The bot ELO is only revealed post-game.
     final repo = ref.read(gameHistoryRepositoryProvider);
-    final opponentLabel = state.isVsBot
-        ? _botOpponentLabel(state.botDifficulty ?? BotDifficulty.medium)
-        : 'Người Chơi 2';
+    final opponentLabel = _isStandardMatchmaking
+        ? 'Bot ELO ${widget.botElo}'
+        : state.isVsBot
+            ? _botOpponentLabel(state.botDifficulty ?? BotDifficulty.medium)
+            : 'Người Chơi 2';
     final duration = _gameStartedAt == null
         ? Duration.zero
         : DateTime.now().difference(_gameStartedAt!);
@@ -325,19 +355,20 @@ class _GameScreenState extends ConsumerState<GameScreen> {
         moves: game.history.map((m) => m.toUci()).toList(),
         result: game.status,
         endReason: game.endReason,
-        eloDelta: 0,
+        eloDelta: delta,
         duration: duration,
         endedAt: DateTime.now(),
       ),
     );
 
-    // 2. Apply to profile stats (no ELO change for local / bot games yet).
+    // 2. Apply to profile stats. Standard matchmaking moves ELO; local / Cờ Úp
+    // / legacy bot games leave it unchanged (delta == 0).
     if (humanColor != null || state.isLocalHotseat) {
       // For local 2-player we still bump totalGames but no win/loss credit.
       if (humanColor != null) {
         await ref
             .read(profileControllerProvider.notifier)
-            .applyGameResult(eloDelta: 0, won: won, drew: drew);
+            .applyGameResult(eloDelta: delta, won: won, drew: drew);
       } else {
         await ref
             .read(profileControllerProvider.notifier)
@@ -506,10 +537,17 @@ class _GameScreenState extends ConsumerState<GameScreen> {
         ? (state.cpuColor == PieceColor.red ? PieceColor.black : PieceColor.red)
         : null;
 
-    final opponentLabel = state.isVsBot
-        ? _botOpponentLabel(state.botDifficulty ?? BotDifficulty.medium)
-        : 'Người Chơi 2';
+    // Matchmade bots show only "Bot" with their ELO hidden until the result.
+    final opponentLabel = _isStandardMatchmaking
+        ? 'Bot'
+        : state.isVsBot
+            ? _botOpponentLabel(state.botDifficulty ?? BotDifficulty.medium)
+            : 'Người Chơi 2';
     final opponentElo = state.botDifficulty?.estimatedElo ?? 1500;
+    final showOpponentElo = !_isStandardMatchmaking;
+    final playerElo =
+        ref.watch(profileControllerProvider).valueOrNull?.eloChess ??
+        EloConstants.initialElo;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -537,6 +575,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
                   PlayerInfoPanel(
                     displayName: opponentLabel,
                     elo: opponentElo,
+                    showElo: showOpponentElo,
                     color: state.boardFlipped
                         ? PieceColor.red
                         : PieceColor.black,
@@ -572,7 +611,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
                   AppSpacing.vGapSm,
                   PlayerInfoPanel(
                     displayName: 'Bạn',
-                    elo: 1820,
+                    elo: playerElo,
                     color: state.boardFlipped
                         ? PieceColor.black
                         : PieceColor.red,
@@ -640,6 +679,9 @@ class _GameScreenState extends ConsumerState<GameScreen> {
                 status: game.status,
                 reason: game.endReason,
                 humanColor: humanColor,
+                eloDelta: _eloDeltaFor(humanColor, game.status),
+                botElo: _isStandardMatchmaking ? widget.botElo : null,
+                bracket: widget.bracket,
                 duration: _gameStartedAt == null
                     ? Duration.zero
                     : DateTime.now().difference(_gameStartedAt!),
@@ -664,6 +706,32 @@ class _GameScreenState extends ConsumerState<GameScreen> {
       }
     }
     return _CaptureCount(byRed: byRed, byBlack: byBlack);
+  }
+
+  /// ELO delta for a finished standard-matchmaking game; 0 otherwise (local /
+  /// Cờ Úp / legacy). Pure — safe to call from both build() and persist.
+  int _eloDeltaFor(PieceColor? humanColor, GameStatus status) {
+    final bracket = widget.bracket;
+    if (!_isStandardMatchmaking || bracket == null || humanColor == null) {
+      return 0;
+    }
+    final won =
+        (status == GameStatus.redWin && humanColor == PieceColor.red) ||
+        (status == GameStatus.blackWin && humanColor == PieceColor.black);
+    final drew = status == GameStatus.draw;
+    return eloDelta(bracket: bracket, won: won, drew: drew);
+  }
+
+  /// Coarse ELO → [EngineLevel] map. Only affects cosmetic minimum think time
+  /// and the minimax fallback difficulty; the real strength comes from
+  /// [configForElo].
+  EngineLevel _engineLevelForElo(int elo) {
+    if (elo < 1300) return EngineLevel.veryEasy;
+    if (elo < 1500) return EngineLevel.easy;
+    if (elo < 1700) return EngineLevel.medium;
+    if (elo < 2000) return EngineLevel.hard;
+    if (elo < 2400) return EngineLevel.veryHard;
+    return EngineLevel.grandmaster;
   }
 
   EngineLevel _engineLevelForDifficulty(BotDifficulty difficulty) {

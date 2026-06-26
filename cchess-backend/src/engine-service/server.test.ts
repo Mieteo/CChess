@@ -10,9 +10,11 @@ import type { EngineBestMove, EngineLimit } from './types';
 
 class FakePool {
   calls = 0;
+  lastLimit: EngineLimit | undefined;
 
-  async bestMove(_fen: string, _limit?: EngineLimit): Promise<EngineBestMove> {
+  async bestMove(_fen: string, limit?: EngineLimit): Promise<EngineBestMove> {
     this.calls++;
+    this.lastLimit = limit;
     return { uci: 'h2e2', scoreCp: 20, depth: 5, pv: ['h2e2'] };
   }
 
@@ -49,6 +51,56 @@ test('engine HTTP server requires auth then returns a cached best move', async (
     assert.equal(first.cached, false);
     assert.equal(second.cached, true);
     assert.equal(pool.calls, 1);
+  } finally {
+    await service.close();
+  }
+});
+
+test('best-move forwards ELO/skill to the engine and keys the cache by them', async () => {
+  const { createEngineHttpServer } = await import('./server');
+  const pool = new FakePool();
+  const service = createEngineHttpServer({
+    pool,
+    authenticate: async (token) => ({ uid: token }),
+    isVip: async () => false,
+    requireAuth: true,
+    quota: new DailyQuotaStore({
+      bestMovePerDay: 100,
+      hintPerDay: 100,
+      analyzePerDay: 100,
+    }),
+  });
+
+  try {
+    const baseUrl = await listen(service.httpServer);
+
+    // ELO/skill reach the pool as a strength-limited EngineLimit.
+    await postBestMoveBody(baseUrl, 'elo-user', {
+      fen: '4k4/9/9/9/9/9/9/9/9/4K4 w - - 0 1',
+      elo: 2050,
+      skill: 6,
+    });
+    assert.equal(pool.lastLimit?.uciElo, 2050);
+    assert.equal(pool.lastLimit?.skillLevel, 6);
+    assert.equal(pool.calls, 1);
+
+    // A different ELO on the SAME fen must NOT hit the cache — distinct key.
+    await postBestMoveBody(baseUrl, 'elo-user', {
+      fen: '4k4/9/9/9/9/9/9/9/9/4K4 w - - 0 1',
+      elo: 2650,
+      skill: 18,
+    });
+    assert.equal(pool.calls, 2);
+    assert.equal(pool.lastLimit?.uciElo, 2650);
+
+    // Repeating the first ELO serves the cached move (no new engine call).
+    const cached = await postBestMoveBody(baseUrl, 'elo-user', {
+      fen: '4k4/9/9/9/9/9/9/9/9/4K4 w - - 0 1',
+      elo: 2050,
+      skill: 6,
+    });
+    assert.equal(cached.cached, true);
+    assert.equal(pool.calls, 2);
   } finally {
     await service.close();
   }
@@ -162,6 +214,23 @@ async function postBestMove(baseUrl: string, token: string): Promise<Record<stri
       'content-type': 'application/json',
     },
     body: JSON.stringify({ fen: '4k4/9/9/9/9/9/9/9/9/4K4 w - - 0 1' }),
+  });
+  assert.equal(res.status, 200);
+  return res.json() as Promise<Record<string, unknown>>;
+}
+
+async function postBestMoveBody(
+  baseUrl: string,
+  token: string,
+  body: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
+  const res = await fetch(`${baseUrl}/engine/best-move`, {
+    method: 'POST',
+    headers: {
+      authorization: `Bearer ${token}`,
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify(body),
   });
   assert.equal(res.status, 200);
   return res.json() as Promise<Record<string, unknown>>;

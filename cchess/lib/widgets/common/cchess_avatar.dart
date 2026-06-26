@@ -28,7 +28,7 @@ class CChessAvatar extends StatelessWidget {
   Widget build(BuildContext context) {
     final Color border = ringColor ??
         (elo != null
-            ? EloConstants.rankForElo(elo!).color
+            ? EloConstants.colorForElo(elo!)
             : AppColors.accentGold);
 
     Widget inner;

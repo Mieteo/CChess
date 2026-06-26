@@ -1,18 +1,24 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/chess_engine/chess_engine.dart';
 import '../../core/constants/app_constants.dart';
+import '../../core/constants/elo_constants.dart';
+import '../../core/matchmaking/bot_matchmaker.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_spacing.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/common/common.dart';
+import '../profile/profile_controller.dart';
 
-/// Screen where the user picks a bot difficulty before starting a CPU game.
-/// [variant] selects the rule set: 'standard' Xiangqi or 'cup' (Cờ Úp). The cup
-/// variant uses the offline cup-aware bot, so the Pikafish "Đại Sư+" tier (which
-/// can't read hidden pieces) is hidden.
-class BotSelectScreen extends StatelessWidget {
+/// Entry screen for CPU games.
+///
+/// * `standard` Xiangqi → ELO matchmaking ("Tìm trận"): the player is paired
+///   with a hidden-strength bot around their ELO; no difficulty tiers.
+/// * `cup` (Cờ Úp) → keeps the offline difficulty cards, because the cup-aware
+///   bot can't read hidden pieces (Pikafish / ELO matchmaking don't apply).
+class BotSelectScreen extends ConsumerWidget {
   final String variant;
 
   const BotSelectScreen({super.key, this.variant = 'standard'});
@@ -20,53 +26,132 @@ class BotSelectScreen extends StatelessWidget {
   bool get _isCup => variant == 'cup';
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
         backgroundColor: AppColors.woodDark,
-        title: Text(_isCup ? 'Cờ Úp với Máy' : 'Chọn cấp độ Bot'),
+        title: Text(_isCup ? 'Cờ Úp với Máy' : 'Luyện tập với Bot'),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () => context.go(AppConstants.routeHome),
         ),
       ),
       body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.all(AppSpacing.base),
-          children: [
-            Text(
-              _isCup ? 'Bot Cờ Úp offline' : 'Bot AI offline',
-              style: AppTextStyles.titleLg,
-            ),
-            AppSpacing.vGapXs,
-            Text(
-              _isCup
-                  ? 'Máy chỉ thấy mặt phủ và quân đã lộ như bạn — định giá quân úp theo kỳ vọng. Cấp càng cao tính càng sâu.'
-                  : 'Mỗi cấp độ tính trước số nước khác nhau. Càng cao càng chậm và khó.',
-              style: AppTextStyles.bodyMd.copyWith(
-                color: AppColors.onSurfaceVariant,
-              ),
-            ),
-            AppSpacing.vGapLg,
-            for (final difficulty in BotDifficulty.values) ...[
-              _BotCard(difficulty: difficulty, variant: variant),
-              AppSpacing.vGapMd,
-            ],
-            // Pikafish can't reason about hidden pieces — only standard chess.
-            if (!_isCup) const _GrandmasterCard(),
-          ],
-        ),
+        child: _isCup ? const _CupDifficultyList() : _Matchmaking(ref: ref),
       ),
+    );
+  }
+}
+
+/// Standard ELO matchmaking: shows the player's current ELO + a "Tìm trận"
+/// button that pairs them with a hidden bot around their level.
+class _Matchmaking extends StatelessWidget {
+  const _Matchmaking({required this.ref});
+
+  final WidgetRef ref;
+
+  void _findMatch(BuildContext context, int playerElo) {
+    final match = pickBot(playerElo);
+    context.go(
+      '${AppConstants.routeGame}?mode=bot'
+      '&botElo=${match.botElo}&bracket=${match.bracket.name}',
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final playerElo =
+        ref.watch(profileControllerProvider).valueOrNull?.eloChess ??
+        EloConstants.initialElo;
+
+    return Padding(
+      padding: const EdgeInsets.all(AppSpacing.base),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          CChessCard(
+            child: Column(
+              children: [
+                Text(
+                  'ELO của bạn',
+                  style: AppTextStyles.bodyMd.copyWith(
+                    color: AppColors.onSurfaceVariant,
+                  ),
+                ),
+                AppSpacing.vGapXs,
+                Text(
+                  '$playerElo',
+                  style: AppTextStyles.displayCalligraphy.copyWith(
+                    fontSize: 48,
+                    color: AppColors.accentGold,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          AppSpacing.vGapLg,
+          Text(
+            'Ghép trận theo trình độ',
+            style: AppTextStyles.titleLg,
+          ),
+          AppSpacing.vGapXs,
+          Text(
+            'Hệ thống sẽ ghép bạn với một Bot quanh ELO của bạn — có thể ngang '
+            'sức, mạnh hơn hoặc yếu hơn một chút. Trình độ của Bot được giữ kín '
+            'trong ván và chỉ lộ ở màn kết quả. Thắng Bot mạnh hơn được nhiều '
+            'điểm hơn; thắng Bot yếu hơn được ít điểm hơn.',
+            style: AppTextStyles.bodyMd.copyWith(
+              color: AppColors.onSurfaceVariant,
+            ),
+          ),
+          const Spacer(),
+          CChessButton(
+            label: 'Tìm trận',
+            icon: Icons.search,
+            fullWidth: true,
+            onPressed: () => _findMatch(context, playerElo),
+          ),
+          AppSpacing.vGapMd,
+        ],
+      ),
+    );
+  }
+}
+
+/// Cờ Úp keeps the offline difficulty tiers (the cup bot is depth-based and
+/// can't use Pikafish / ELO matchmaking).
+class _CupDifficultyList extends StatelessWidget {
+  const _CupDifficultyList();
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.all(AppSpacing.base),
+      children: [
+        Text('Bot Cờ Úp offline', style: AppTextStyles.titleLg),
+        AppSpacing.vGapXs,
+        Text(
+          'Máy chỉ thấy mặt phủ và quân đã lộ như bạn — định giá quân úp theo '
+          'kỳ vọng. Cấp càng cao tính càng sâu.',
+          style: AppTextStyles.bodyMd.copyWith(
+            color: AppColors.onSurfaceVariant,
+          ),
+        ),
+        AppSpacing.vGapLg,
+        for (final difficulty in BotDifficulty.values) ...[
+          _BotCard(difficulty: difficulty),
+          AppSpacing.vGapMd,
+        ],
+      ],
     );
   }
 }
 
 class _BotCard extends StatelessWidget {
   final BotDifficulty difficulty;
-  final String variant;
 
-  const _BotCard({required this.difficulty, this.variant = 'standard'});
+  const _BotCard({required this.difficulty});
 
   Color get _accent {
     switch (difficulty) {
@@ -100,10 +185,9 @@ class _BotCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final mode = variant == 'cup' ? 'cupbot' : 'bot';
     return CChessCard(
       onTap: () => context.go(
-        '${AppConstants.routeGame}?mode=$mode&level=${difficulty.name}',
+        '${AppConstants.routeGame}?mode=cupbot&level=${difficulty.name}',
       ),
       borderColor: _accent.withValues(alpha: 0.5),
       child: Row(
@@ -124,108 +208,10 @@ class _BotCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: [
-                    Text(difficulty.nameVi, style: AppTextStyles.headingMd),
-                    AppSpacing.hGapSm,
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 6,
-                        vertical: 1,
-                      ),
-                      decoration: BoxDecoration(
-                        color: _accent.withValues(alpha: 0.18),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: Text(
-                        '~ELO ${difficulty.estimatedElo}',
-                        style: AppTextStyles.captionSm.copyWith(
-                          color: _accent,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 10,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
+                Text(difficulty.nameVi, style: AppTextStyles.headingMd),
                 AppSpacing.vGapXs,
                 Text(
                   difficulty.descriptionVi,
-                  style: AppTextStyles.captionSm.copyWith(
-                    color: AppColors.onSurfaceVariant,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const Icon(Icons.chevron_right, color: AppColors.parchmentTan),
-        ],
-      ),
-    );
-  }
-}
-
-class _GrandmasterCard extends StatelessWidget {
-  const _GrandmasterCard();
-
-  @override
-  Widget build(BuildContext context) {
-    return CChessCard(
-      onTap: () => context.go(
-        '${AppConstants.routeGame}?mode=bot&level=${EngineLevel.grandmaster.apiName}',
-      ),
-      borderColor: AppColors.accentGold.withValues(alpha: 0.65),
-      child: Row(
-        children: [
-          Container(
-            width: 56,
-            height: 56,
-            decoration: BoxDecoration(
-              color: AppColors.accentGold.withValues(alpha: 0.16),
-              shape: BoxShape.circle,
-              border: Border.all(
-                color: AppColors.accentGold.withValues(alpha: 0.5),
-              ),
-            ),
-            alignment: Alignment.center,
-            child: const Icon(
-              Icons.workspace_premium,
-              color: AppColors.accentGold,
-              size: 26,
-            ),
-          ),
-          AppSpacing.hGapMd,
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Text('Đại Sư+', style: AppTextStyles.headingMd),
-                    AppSpacing.hGapSm,
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 6,
-                        vertical: 1,
-                      ),
-                      decoration: BoxDecoration(
-                        color: AppColors.accentGold.withValues(alpha: 0.18),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: Text(
-                        'Pikafish',
-                        style: AppTextStyles.captionSm.copyWith(
-                          color: AppColors.accentGold,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 10,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                AppSpacing.vGapXs,
-                Text(
-                  'Dùng Pikafish server-side khi online; mất mạng sẽ tự hạ về Đại Sư offline.',
                   style: AppTextStyles.captionSm.copyWith(
                     color: AppColors.onSurfaceVariant,
                   ),

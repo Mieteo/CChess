@@ -79,6 +79,7 @@ class _RecordingEngine implements MoveEngine {
     String fen, {
     required EngineLevel level,
     EngineUseCase useCase = EngineUseCase.bot,
+    EngineConfig? config,
   }) async {
     bestMoveCalls++;
     final game = XiangqiGame.fromFen(fen);

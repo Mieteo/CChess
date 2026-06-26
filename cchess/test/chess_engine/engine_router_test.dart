@@ -33,6 +33,42 @@ void main() {
       expect(remote.bestMoveCalls, 1);
     });
 
+    test('routes to remote when the ELO config selects Pikafish', () async {
+      final local = _FakeEngine(EngineSource.localMinimax);
+      final remote = _FakeEngine(EngineSource.remotePikafish);
+      final router = EngineRouter(local: local, remote: remote);
+
+      // A mid level normally stays local, but a Pikafish config overrides it.
+      final result = await router.bestMove(
+        kInitialFen,
+        level: EngineLevel.medium,
+        config: configForElo(2300),
+      );
+
+      expect(result?.source, EngineSource.remotePikafish);
+      expect(remote.bestMoveCalls, 1);
+      expect(local.bestMoveCalls, 0);
+      expect(remote.lastConfig, configForElo(2300));
+    });
+
+    test('stays local when the ELO config selects a local engine', () async {
+      final local = _FakeEngine(EngineSource.localMinimax);
+      final remote = _FakeEngine(EngineSource.remotePikafish);
+      final router = EngineRouter(local: local, remote: remote);
+
+      // grandmaster level would normally go remote — the config wins.
+      final result = await router.bestMove(
+        kInitialFen,
+        level: EngineLevel.grandmaster,
+        config: configForElo(1200),
+      );
+
+      expect(result?.source, EngineSource.localMinimax);
+      expect(local.bestMoveCalls, 1);
+      expect(remote.bestMoveCalls, 0);
+      expect(local.lastConfig, configForElo(1200));
+    });
+
     test('falls back to local minimax when remote throws', () async {
       final local = _FakeEngine(EngineSource.localMinimax);
       final remote = _FakeEngine(EngineSource.remotePikafish, fail: true);
@@ -79,14 +115,17 @@ class _FakeEngine implements MoveEngine {
   final bool fail;
   final Object? throwError;
   int bestMoveCalls = 0;
+  EngineConfig? lastConfig;
 
   @override
   Future<EngineMove?> bestMove(
     String fen, {
     required EngineLevel level,
     EngineUseCase useCase = EngineUseCase.bot,
+    EngineConfig? config,
   }) async {
     bestMoveCalls++;
+    lastConfig = config;
     if (throwError != null) throw throwError!;
     if (fail) throw StateError('remote down');
     final game = XiangqiGame.fromFen(fen);

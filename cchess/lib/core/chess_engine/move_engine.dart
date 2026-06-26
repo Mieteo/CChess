@@ -1,4 +1,5 @@
 import 'ai/bot_difficulty.dart';
+import 'ai/engine_config.dart';
 import 'ai/game_analyzer.dart';
 import 'move.dart';
 
@@ -103,10 +104,15 @@ class EngineMove {
 }
 
 abstract class MoveEngine {
+  /// [config] is the ELO-ladder strength dial. When non-null it takes
+  /// precedence over [level] for bot play (depth / blunder rate / which engine
+  /// to use); [level] is retained for hint/analysis and as the legacy fallback
+  /// for callers that haven't migrated to ELO matchmaking yet.
   Future<EngineMove?> bestMove(
     String fen, {
     required EngineLevel level,
     EngineUseCase useCase = EngineUseCase.bot,
+    EngineConfig? config,
   });
 
   Future<GameAnalysis> analyze({
