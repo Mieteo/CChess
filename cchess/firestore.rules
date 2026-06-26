@@ -194,6 +194,13 @@ service cloud.firestore {
         allow read: if isOwner(uid);
         allow write: if false;
       }
+
+      // --- SUBCOLLECTION: ENGINE_USAGE (S15 — quota tracking) ---
+      // Ghi bởi engine-service qua Admin SDK (bypass rules). Client không bao giờ
+      // đọc trực tiếp — dùng GET /engine/quota. Explicitly deny để tránh leak.
+      match /engine_usage/{day} {
+        allow read, write: if false;
+      }
     }
 
     // --- FRIENDSHIPS COLLECTION ---
