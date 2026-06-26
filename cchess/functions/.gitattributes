@@ -1,0 +1,6 @@
+# Cloud Functions source is linted with eslint `linebreak-style: LF`.
+# Force LF on checkout regardless of core.autocrlf so the Firebase predeploy
+# lint doesn't fail on Windows working trees.
+*.ts text eol=lf
+*.js text eol=lf
+*.json text eol=lf
