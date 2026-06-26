@@ -117,4 +117,45 @@ void main() {
       expect(p.shortId.length, 10);
     });
   });
+
+  group('UserProfile bot pool', () {
+    test('fresh profile seeds bot pool at the initial ELO / zero counters', () {
+      final p = UserProfile.fresh(id: 'abc');
+      expect(p.eloBot, p.eloChess, reason: 'both pools start at initial ELO');
+      expect(p.botGames, 0);
+      expect(p.botWins, 0);
+      expect(p.botLosses, 0);
+      expect(p.botDraws, 0);
+    });
+
+    test('toJson/fromJson round-trips the bot pool', () {
+      final p = UserProfile.fresh(id: 'abc').copyWith(
+        eloBot: 1480,
+        botGames: 12,
+        botWins: 7,
+        botLosses: 4,
+        botDraws: 1,
+        eloChess: 1100, // ranked stays independent
+      );
+      final back = UserProfile.fromJson(p.toJson());
+      expect(back.eloBot, 1480);
+      expect(back.botGames, 12);
+      expect(back.botWins, 7);
+      expect(back.botLosses, 4);
+      expect(back.botDraws, 1);
+      expect(back.eloChess, 1100);
+    });
+
+    test('old cloud/Hive docs without bot fields fall back to defaults', () {
+      final legacy = UserProfile.fresh(id: 'abc').toJson()
+        ..remove('eloBot')
+        ..remove('botGames')
+        ..remove('botWins')
+        ..remove('botLosses')
+        ..remove('botDraws');
+      final back = UserProfile.fromJson(legacy);
+      expect(back.eloBot, 1000);
+      expect(back.botGames, 0);
+    });
+  });
 }

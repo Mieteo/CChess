@@ -20,7 +20,7 @@ Tech stack:
 - Navigation: GoRouter
 - Backend: Firebase (Auth, Firestore, Realtime Database, Cloud Functions, Storage)
 - Real-time game: WebSocket (dart:io WebSocket hoặc socket_io_client)
-- Chess engine: Pikafish (engine cờ tướng riêng, phái sinh Stockfish — **KHÔNG phải** Fairy-Stockfish) — chạy **server-side** (xem [11_KE_HOACH_TICH_HOP_ENGINE.md](11_KE_HOACH_TICH_HOP_ENGINE.md)); bot offline dùng minimax Dart on-device
+- Chess engine: **3 engine theo thang ELO** (xem [11_KE_HOACH_TICH_HOP_ENGINE.md](11_KE_HOACH_TICH_HOP_ENGINE.md) + [13_KE_HOACH_ELO_BOT_LADDER.md](13_KE_HOACH_ELO_BOT_LADDER.md)): **minimax Dart on-device** (dải ~1000–1400), **ElephantEye native FFI Android** (dải ~1500–1900, fallback minimax khi vắng lib), **Pikafish** server-side (dải ~2000–2900, phái sinh Stockfish — **KHÔNG phải** Fairy-Stockfish)
 - Local DB: Hive
 - HTTP: Dio + Retrofit
 

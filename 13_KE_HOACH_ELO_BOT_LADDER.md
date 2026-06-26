@@ -33,7 +33,9 @@ Mục tiêu mới:
 
 ---
 
-## 2. Hiện trạng code (đã xác minh)
+## 2. Hiện trạng code — **ảnh chụp TRƯỚC refactor** (baseline lịch sử)
+
+> ⚠️ Bảng dưới mô tả code **trước khi** triển khai Phase 0–6 (giữ lại làm mốc đối chiếu). **Đã lỗi thời** so với code hiện tại: `RankTier`/`rankForElo` đã **xoá** (→ `EloConstants.colorForElo`, badge hiện số ELO); ELO ván-vs-bot đã nối thật (`eloDelta` ≠ 0); ElephantEye **đã wire** vào dải 1500–1900; `bot_select_screen` (standard) đã **bỏ 5 thẻ + Đại Sư+**, dùng "Tìm trận" theo ELO; backend đã nhận `elo`/`skill`. Trạng thái hiện hành xem hộp "Trạng thái triển khai" ở đầu doc + §9.
 
 | Thành phần | File | Ghi chú |
 |---|---|---|
@@ -156,7 +158,7 @@ int eloDelta({required EloBracket bracket, required bool won, required bool drew
 - **Backend Pikafish strength**: bắt buộc cho dải 2000–2900. Nếu `UCI_Elo` không hỗ trợ → fallback `Skill Level` (thô hơn, cần calibrate kỹ).
 - **Cache poisoning**: quên thêm strength vào cache key → bot mọi cấp đánh giống nhau. (Đã đưa vào Phase 5.)
 - **Trạng thái UCI dùng chung**: quên reset → rò sức cờ giữa các request. (Đã đưa vào Phase 5.)
-- **Di trú dữ liệu**: người dùng cũ có `eloChess` sẵn; thang mới dùng chung trường này nên không cần migrate, nhưng cần xử lý ELO < 1000 (clamp sàn).
+- **Di trú dữ liệu**: ~~thang mới dùng chung `eloChess`~~ → **đã đổi (2026-06-26):** đấu bot dùng **pool riêng `eloBot`** (+ `botGames`/`botWins`/`botLosses`/`botDraws`), client-owned + persist cloud, tách khỏi `eloChess` ranked (server-authoritative). Lý do: ván bot chạy on-device không có server xác minh → không được ghi vào `eloChess` (chống gian lận + tránh bị splash sync ghi đè). Doc cũ mới có `eloChess` sẵn vẫn không cần migrate (field mới mặc định 1000); vẫn cần clamp sàn ELO < 1000. Chi tiết bug + fix: [09](09_BACKEND_SERVER_HOAT_DONG.md) §8.
 - **Bỏ RankTier** đụng nhiều widget hiển thị — Phase 6 cần quét kỹ (`grep RankTier|rankForElo`).
 
 ---
@@ -167,12 +169,14 @@ Phase 0 → 1 → 2 → 3 (lõi FE, có thể test ngay với engine hiện có)
 
 ## 8. Công cụ Calibration (đã dựng — Phase 6)
 
-> **Trạng thái:** UI calibration **đã code 2026-06-26** (commit `f281e87`). Việc còn lại là **chạy đấu thử thực tế** rồi chỉnh bảng số `configForElo` ([engine_config.dart](cchess/lib/core/chess_engine/ai/engine_config.dart)) + env backend Pikafish. Đây là bước **thủ công**, không tự động hoá được vì cần đánh giá chất lượng nước cờ.
+> **Trạng thái:** UI calibration **đã code 2026-06-26** (commit `f281e87`); **đợt 2026-06-26 (sau)** chuyển từ 1 nút "Bắt đầu/Dừng" (chạy tuần tự cả 7 cặp ~45–70 phút) sang **7 nút — mỗi cặp ELO một nút, chạy từng cặp một**. Việc còn lại là **chạy đấu thử thực tế** rồi chỉnh bảng số `configForElo` ([engine_config.dart](cchess/lib/core/chess_engine/ai/engine_config.dart)) + env backend Pikafish. Đây là bước **thủ công**, không tự động hoá được vì cần đánh giá chất lượng nước cờ.
 
 **Cách chạy:**
 1. `flutter run --release --dart-define=CALIBRATION=true` (cờ `CALIBRATION` mở entry trong Settings).
-2. Vào **Settings → cuộn xuống → Bot Calibration → ELO Calibration**.
-3. Runner ([calibration_runner.dart](cchess/lib/presentation/calibration/calibration_runner.dart)) cho các band trong thang đấu lẫn nhau N ván; màn ([calibration_screen.dart](cchess/lib/presentation/calibration/calibration_screen.dart)) hiện bảng win% theo màu.
+2. Vào **Settings → cuộn xuống → Bot Calibration → ELO Calibration (Zone A)**.
+3. Màn ([calibration_screen.dart](cchess/lib/presentation/calibration/calibration_screen.dart)) hiện **lưới 7 nút**, mỗi nút một cặp band liền kề trong Zone A (1000→1100, …, 1700→1900 — xem `kCalibrationPairs` trong [calibration_runner.dart](cchess/lib/presentation/calibration/calibration_runner.dart)). Bấm **từng nút** để chạy cặp đó 6 ván (3 đỏ + 3 đen, ~7–10 phút/cặp).
+   - **Chạy từng cặp một**: trong lúc một cặp đang chạy, mọi nút khác bị **vô hiệu hoá** (chống chạy song song — CPU điện thoại không gánh nổi). Nút đang chạy chuyển thành nút **đỏ "dừng"** + spinner; bấm lại để huỷ cặp đó.
+   - Cặp đã xong hiện **✔ + win%** (màu theo bảng dưới); kết quả **tích luỹ** qua nhiều lần bấm nên có thể chạy rời rạc rồi copy gộp.
 
 **Đọc kết quả** (win% của band trên so với band dưới):
 

@@ -32,6 +32,11 @@ class UserRemoteRepository {
       'wins': 0,
       'losses': 0,
       'draws': 0,
+      'eloBot': 1000,
+      'botGames': 0,
+      'botWins': 0,
+      'botLosses': 0,
+      'botDraws': 0,
       'coins': 100,
       'gems': 10,
       'creditScore': 100,
@@ -49,13 +54,23 @@ class UserRemoteRepository {
     });
   }
 
-  /// Update whitelist fields only — rules enforce this.
+  /// Update client-owned fields only — rules enforce this.
+  ///
+  /// The bot pool ([eloBot] + bot W/L/D) is client-owned (bot games run
+  /// on-device, no server to verify) so the client writes it here directly.
+  /// Ranked stats (eloChess/eloCup/totalGames/wins/losses/draws) stay
+  /// server-authoritative and are rejected by rules if sent here.
   Future<void> updateProfileFields(
     String uid, {
     String? displayName,
     String? region,
     String? avatarUrl,
     bool? onboardingCompleted,
+    int? eloBot,
+    int? botGames,
+    int? botWins,
+    int? botLosses,
+    int? botDraws,
   }) async {
     final updates = <String, dynamic>{};
     if (displayName != null) updates['displayName'] = displayName;
@@ -64,6 +79,11 @@ class UserRemoteRepository {
     if (onboardingCompleted != null) {
       updates['onboardingCompleted'] = onboardingCompleted;
     }
+    if (eloBot != null) updates['eloBot'] = eloBot;
+    if (botGames != null) updates['botGames'] = botGames;
+    if (botWins != null) updates['botWins'] = botWins;
+    if (botLosses != null) updates['botLosses'] = botLosses;
+    if (botDraws != null) updates['botDraws'] = botDraws;
     updates['lastActiveAt'] = FieldValue.serverTimestamp();
     await _doc(uid).update(updates);
   }

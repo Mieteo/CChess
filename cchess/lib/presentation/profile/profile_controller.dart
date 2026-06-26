@@ -45,6 +45,11 @@ class ProfileController extends StateNotifier<AsyncValue<UserProfile>> {
     String? region;
     String? avatarUrl;
     bool? onboardingCompleted;
+    int? eloBot;
+    int? botGames;
+    int? botWins;
+    int? botLosses;
+    int? botDraws;
     var anyChange = false;
 
     if (before.displayName != after.displayName) {
@@ -63,6 +68,27 @@ class ProfileController extends StateNotifier<AsyncValue<UserProfile>> {
       onboardingCompleted = after.onboardingCompleted;
       anyChange = true;
     }
+    // Bot pool is client-owned — push it so it survives splash sync.
+    if (before.eloBot != after.eloBot) {
+      eloBot = after.eloBot;
+      anyChange = true;
+    }
+    if (before.botGames != after.botGames) {
+      botGames = after.botGames;
+      anyChange = true;
+    }
+    if (before.botWins != after.botWins) {
+      botWins = after.botWins;
+      anyChange = true;
+    }
+    if (before.botLosses != after.botLosses) {
+      botLosses = after.botLosses;
+      anyChange = true;
+    }
+    if (before.botDraws != after.botDraws) {
+      botDraws = after.botDraws;
+      anyChange = true;
+    }
 
     if (!anyChange) return;
 
@@ -73,6 +99,11 @@ class ProfileController extends StateNotifier<AsyncValue<UserProfile>> {
           region: region,
           avatarUrl: avatarUrl,
           onboardingCompleted: onboardingCompleted,
+          eloBot: eloBot,
+          botGames: botGames,
+          botWins: botWins,
+          botLosses: botLosses,
+          botDraws: botDraws,
         )
         .ignore();
   }
@@ -93,19 +124,24 @@ class ProfileController extends StateNotifier<AsyncValue<UserProfile>> {
             onboardingCompleted: true,
           ));
 
-  /// Apply the result of a finished game to the user's stats + ELO.
-  /// These fields are server-only on cloud; only local updates for now.
+  /// Apply the result of a finished **vs-bot** game to the practice pool.
+  ///
+  /// Bot games update the client-owned bot pool ([eloBot] + bot W/L/D), NOT the
+  /// server-authoritative ranked stats (eloChess/totalGames/wins/losses/draws).
+  /// `update()` pushes these to cloud so they survive splash sync — fixing the
+  /// bug where bot ELO was written into eloChess and then clobbered by the
+  /// cloud merge (09_BACKEND §8). [eloDelta] is 0 for legacy/Cờ Úp bot games.
   Future<void> applyGameResult({
     required int eloDelta,
     required bool won,
     required bool drew,
   }) =>
       update((p) => p.copyWith(
-            eloChess: p.eloChess + eloDelta,
-            totalGames: p.totalGames + 1,
-            wins: p.wins + (won ? 1 : 0),
-            losses: p.losses + (!won && !drew ? 1 : 0),
-            draws: p.draws + (drew ? 1 : 0),
+            eloBot: p.eloBot + eloDelta,
+            botGames: p.botGames + 1,
+            botWins: p.botWins + (won ? 1 : 0),
+            botLosses: p.botLosses + (!won && !drew ? 1 : 0),
+            botDraws: p.botDraws + (drew ? 1 : 0),
             lastActiveAt: DateTime.now(),
           ));
 }

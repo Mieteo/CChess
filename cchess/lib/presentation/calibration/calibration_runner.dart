@@ -6,25 +6,28 @@ import '../../core/constants/piece_constants.dart';
 import '../../core/chess_engine/xiangqi_game.dart';
 
 /// One (lower ELO, higher ELO) matchup to benchmark.
-class _Pair {
+class CalibrationPair {
   final int lower;
   final int higher;
-  const _Pair(this.lower, this.higher);
+  const CalibrationPair(this.lower, this.higher);
+
+  /// Short label for a button, e.g. "1000 → 1100".
+  String get label => '$lower → $higher';
 }
 
 // 7 adjacent-band pairs covering Zone A (local engines only).
 // ELO 2000+ (remotePikafish) is excluded — each move would be a server call.
-const List<_Pair> _kPairs = [
-  _Pair(1000, 1100), // minimax d1 vs minimax d2
-  _Pair(1100, 1200), // minimax d2 blunder 35% vs 22%
-  _Pair(1200, 1300), // minimax d2 vs minimax d3
-  _Pair(1300, 1400), // minimax d3 blunder 12% vs 5%
-  _Pair(1400, 1500), // minimax d3 vs ElephantEye d4  ← junction
-  _Pair(1500, 1700), // ElephantEye d4 vs d5
-  _Pair(1700, 1900), // ElephantEye d5 vs d6
+const List<CalibrationPair> kCalibrationPairs = [
+  CalibrationPair(1000, 1100), // minimax d1 vs minimax d2
+  CalibrationPair(1100, 1200), // minimax d2 blunder 35% vs 22%
+  CalibrationPair(1200, 1300), // minimax d2 vs minimax d3
+  CalibrationPair(1300, 1400), // minimax d3 blunder 12% vs 5%
+  CalibrationPair(1400, 1500), // minimax d3 vs ElephantEye d4  ← junction
+  CalibrationPair(1500, 1700), // ElephantEye d4 vs d5
+  CalibrationPair(1700, 1900), // ElephantEye d5 vs d6
 ];
 
-const int _kGamesPerPair = 6; // 3 as red + 3 as black (color-balanced)
+const int kGamesPerPair = 6; // 3 as red + 3 as black (color-balanced)
 const int _kMaxHalfMoves = 300; // 150 full moves → forced draw
 
 /// Accumulated result for one ELO pair.
@@ -43,31 +46,28 @@ class PairResult {
   double get drawRate => total == 0 ? 0 : draws / total;
 }
 
-/// A single progress event streamed to the UI.
+/// A single progress event streamed to the UI for one pair run.
 class CalibrationEvent {
   final String log;
+
+  /// Index into [kCalibrationPairs] of the pair being run.
   final int pairIndex;
-  final int gameIndex;
-  final List<PairResult> results;
+
+  /// Accumulated result for the pair being run.
+  final PairResult result;
+
+  /// Completion of the current pair, 0.0 → 1.0.
+  final double progress;
+
   final bool done;
 
   const CalibrationEvent({
     required this.log,
     required this.pairIndex,
-    required this.gameIndex,
-    required this.results,
+    required this.result,
+    required this.progress,
     this.done = false,
   });
-
-  static const int totalPairs = 7;
-  static const int gamesPerPair = _kGamesPerPair;
-
-  double get progress {
-    final completed = pairIndex.clamp(0, totalPairs);
-    final gameFraction =
-        gamesPerPair > 0 ? (gameIndex / gamesPerPair).clamp(0.0, 1.0) : 0.0;
-    return (completed + gameFraction) / totalPairs;
-  }
 }
 
 /// Runs bot-vs-bot calibration games across Zone A bands.
@@ -78,96 +78,96 @@ class CalibrationRunner {
 
   void cancel() => _cancelled = true;
 
-  Stream<CalibrationEvent> run() async* {
+  /// Runs the single ELO pair at [pairIndex] in [kCalibrationPairs].
+  ///
+  /// The UI runs these one at a time (one button per pair) so the phone's
+  /// CPU never has two calibration matches competing for it.
+  Stream<CalibrationEvent> runPair(int pairIndex) async* {
     _cancelled = false;
     final engine = LocalElephantEye();
-    final results = <PairResult>[];
+    final pair = kCalibrationPairs[pairIndex];
+    final result = PairResult(pair.lower, pair.higher);
 
-    for (int pi = 0; pi < _kPairs.length; pi++) {
+    yield CalibrationEvent(
+      log:
+          '── Cặp ${pairIndex + 1}/${kCalibrationPairs.length}: '
+          '${pair.lower} vs ${pair.higher} ──',
+      pairIndex: pairIndex,
+      result: result,
+      progress: 0,
+    );
+
+    for (int g = 0; g < kGamesPerPair; g++) {
       if (_cancelled) break;
-      final pair = _kPairs[pi];
-      final result = PairResult(pair.lower, pair.higher);
-      results.add(result);
+
+      // First half: lower plays red. Second half: lower plays black.
+      final lowerIsRed = g < kGamesPerPair ~/ 2;
+      final redConfig = configForElo(lowerIsRed ? pair.lower : pair.higher);
+      final blackConfig = configForElo(lowerIsRed ? pair.higher : pair.lower);
 
       yield CalibrationEvent(
-        log: '── Cặp ${pi + 1}/${_kPairs.length}: ${pair.lower} vs ${pair.higher} ──',
-        pairIndex: pi,
-        gameIndex: 0,
-        results: List.of(results),
+        log:
+            '  Ván ${g + 1}/$kGamesPerPair  '
+            '${pair.lower}(${lowerIsRed ? "đỏ" : "đen"}) '
+            'vs ${pair.higher}(${lowerIsRed ? "đen" : "đỏ"})  đang chạy…',
+        pairIndex: pairIndex,
+        result: result,
+        progress: g / kGamesPerPair,
       );
 
-      for (int g = 0; g < _kGamesPerPair; g++) {
-        if (_cancelled) break;
+      final winner = await _playGame(
+        engine: engine,
+        redConfig: redConfig,
+        blackConfig: blackConfig,
+      );
 
-        // First half: lower plays red. Second half: lower plays black.
-        final lowerIsRed = g < _kGamesPerPair ~/ 2;
-        final redConfig = configForElo(lowerIsRed ? pair.lower : pair.higher);
-        final blackConfig = configForElo(lowerIsRed ? pair.higher : pair.lower);
-
-        yield CalibrationEvent(
-          log:
-              '  Ván ${g + 1}/$_kGamesPerPair  '
-              '${pair.lower}(${lowerIsRed ? "đỏ" : "đen"}) '
-              'vs ${pair.higher}(${lowerIsRed ? "đen" : "đỏ"})  đang chạy…',
-          pairIndex: pi,
-          gameIndex: g,
-          results: List.of(results),
-        );
-
-        final winner = await _playGame(
-          engine: engine,
-          redConfig: redConfig,
-          blackConfig: blackConfig,
-        );
-
-        // Map game winner back to which ELO band won.
-        final bool? lowerWon;
-        switch (winner) {
-          case _Side.red:
-            lowerWon = lowerIsRed;
-          case _Side.black:
-            lowerWon = !lowerIsRed;
-          case _Side.draw:
-            lowerWon = null;
-        }
-
-        if (lowerWon == null) {
-          result.draws++;
-        } else if (lowerWon) {
-          result.lowerWins++;
-        } else {
-          result.higherWins++;
-        }
-
-        final outcomeLabel = lowerWon == null
-            ? 'Hòa'
-            : lowerWon
-            ? '${pair.lower} thắng'
-            : '${pair.higher} thắng';
-
-        final pct = result.total > 0
-            ? '${(result.lowerWinRate * 100).toStringAsFixed(0)}%'
-            : '-';
-
-        yield CalibrationEvent(
-          log:
-              '    → $outcomeLabel  '
-              '[${pair.lower}: ${result.lowerWins}W/'
-              '${result.higherWins}L/${result.draws}D  win=$pct]',
-          pairIndex: pi,
-          gameIndex: g + 1,
-          results: List.of(results),
-        );
+      // Map game winner back to which ELO band won.
+      final bool? lowerWon;
+      switch (winner) {
+        case _Side.red:
+          lowerWon = lowerIsRed;
+        case _Side.black:
+          lowerWon = !lowerIsRed;
+        case _Side.draw:
+          lowerWon = null;
       }
+
+      if (lowerWon == null) {
+        result.draws++;
+      } else if (lowerWon) {
+        result.lowerWins++;
+      } else {
+        result.higherWins++;
+      }
+
+      final outcomeLabel = lowerWon == null
+          ? 'Hòa'
+          : lowerWon
+          ? '${pair.lower} thắng'
+          : '${pair.higher} thắng';
+
+      final pct = result.total > 0
+          ? '${(result.lowerWinRate * 100).toStringAsFixed(0)}%'
+          : '-';
+
+      yield CalibrationEvent(
+        log:
+            '    → $outcomeLabel  '
+            '[${pair.lower}: ${result.lowerWins}W/'
+            '${result.higherWins}L/${result.draws}D  win=$pct]',
+        pairIndex: pairIndex,
+        result: result,
+        progress: (g + 1) / kGamesPerPair,
+      );
     }
 
     yield CalibrationEvent(
       log: _cancelled
-          ? '\n⛔ Đã huỷ sau ${results.length} cặp.'
-          : '\n✅ Hoàn thành ${_kPairs.length} cặp!',
-      pairIndex: _kPairs.length,
-      gameIndex: _kGamesPerPair,
-      results: List.of(results),
+          ? '⛔ Đã huỷ cặp ${pair.lower} vs ${pair.higher}.'
+          : '✅ Hoàn thành cặp ${pair.lower} vs ${pair.higher}!',
+      pairIndex: pairIndex,
+      result: result,
+      progress: 1,
       done: true,
     );
   }

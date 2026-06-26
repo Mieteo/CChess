@@ -61,8 +61,9 @@ class _Matchmaking extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Bot matchmaking uses the practice/bot ELO pool, not ranked eloChess.
     final playerElo =
-        ref.watch(profileControllerProvider).valueOrNull?.eloChess ??
+        ref.watch(profileControllerProvider).valueOrNull?.eloBot ??
         EloConstants.initialElo;
 
     return Padding(
@@ -74,7 +75,7 @@ class _Matchmaking extends StatelessWidget {
             child: Column(
               children: [
                 Text(
-                  'ELO của bạn',
+                  'ELO đấu Bot của bạn',
                   style: AppTextStyles.bodyMd.copyWith(
                     color: AppColors.onSurfaceVariant,
                   ),

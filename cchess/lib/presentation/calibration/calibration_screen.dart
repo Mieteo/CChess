@@ -18,34 +18,43 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
   CalibrationRunner? _runner;
   StreamSubscription<CalibrationEvent>? _sub;
   final List<String> _log = [];
-  List<PairResult> _results = [];
+
+  /// Accumulated result per pair index, so the table keeps every pair that
+  /// has been run so far across separate button taps.
+  final Map<int, PairResult> _results = {};
   double _progress = 0;
-  bool _running = false;
-  bool _done = false;
+
+  /// Index of the pair currently running, or null when idle.
+  int? _runningIndex;
   final ScrollController _scroll = ScrollController();
 
-  void _start() {
+  bool get _running => _runningIndex != null;
+
+  /// Results ordered by pair index for display / copy.
+  List<PairResult> get _sortedResults {
+    final keys = _results.keys.toList()..sort();
+    return [for (final k in keys) _results[k]!];
+  }
+
+  void _startPair(int index) {
+    // Guard against parallel runs — only one match at a time on a phone CPU.
+    if (_running) return;
+
     setState(() {
-      _log.clear();
-      _results = [];
+      _runningIndex = index;
       _progress = 0;
-      _running = true;
-      _done = false;
     });
 
     final runner = CalibrationRunner();
     _runner = runner;
-    _sub = runner.run().listen(
+    _sub = runner.runPair(index).listen(
       (event) {
         if (!mounted) return;
         setState(() {
           _log.add(event.log);
-          _results = event.results;
+          _results[index] = event.result;
           _progress = event.progress;
-          if (event.done) {
-            _running = false;
-            _done = true;
-          }
+          if (event.done) _runningIndex = null;
         });
         // Auto-scroll log to bottom.
         WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -62,7 +71,7 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
         if (!mounted) return;
         setState(() {
           _log.add('❌ Lỗi: $e');
-          _running = false;
+          _runningIndex = null;
         });
       },
     );
@@ -71,7 +80,7 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
   void _stop() {
     _runner?.cancel();
     _sub?.cancel();
-    setState(() => _running = false);
+    setState(() => _runningIndex = null);
   }
 
   void _copyResults() {
@@ -79,7 +88,7 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
     buf.writeln('Zone A · 6 ván/cặp · local engine only\n');
     buf.writeln('ELO thấp | ELO cao | Thắng | Thua | Hòa | Win%');
     buf.writeln('─' * 55);
-    for (final r in _results) {
+    for (final r in _sortedResults) {
       final pct = r.total == 0
           ? '–'
           : '${(r.lowerWinRate * 100).toStringAsFixed(1)}%';
@@ -116,7 +125,7 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
         backgroundColor: AppColors.woodDark,
         title: const Text('Bot ELO Calibration'),
         actions: [
-          if (_done)
+          if (_results.isNotEmpty && !_running)
             IconButton(
               icon: const Icon(Icons.copy_outlined),
               onPressed: _copyResults,
@@ -131,7 +140,7 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
           children: [
             _InfoCard(),
             const SizedBox(height: 12),
-            if (_running || _done) ...[
+            if (_running) ...[
               LinearProgressIndicator(
                 value: _progress,
                 backgroundColor: const Color(0xFF333333),
@@ -140,29 +149,23 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
               ),
               const SizedBox(height: 4),
               Text(
-                '${(_progress * 100).toStringAsFixed(0)}% hoàn thành',
+                'Đang chạy cặp ${kCalibrationPairs[_runningIndex!].label}'
+                ' · ${(_progress * 100).toStringAsFixed(0)}%',
                 style: AppTextStyles.captionSm
                     .copyWith(color: const Color(0xFF888888)),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 10),
             ],
-            FilledButton.icon(
-              onPressed: _running ? _stop : _start,
-              icon: Icon(_running ? Icons.stop : Icons.play_arrow),
-              label: Text(
-                _running ? 'Dừng lại' : 'Bắt đầu Calibration',
-              ),
-              style: FilledButton.styleFrom(
-                backgroundColor:
-                    _running ? Colors.red[700] : const Color(0xFF5C3A1E),
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 14),
-              ),
+            _PairButtonsGrid(
+              runningIndex: _runningIndex,
+              results: _results,
+              onStart: _startPair,
+              onStop: _stop,
             ),
             if (_results.isNotEmpty) ...[
               const SizedBox(height: 12),
-              _ResultsTable(results: _results),
+              _ResultsTable(results: _sortedResults),
             ],
             const SizedBox(height: 12),
             Expanded(child: _LogView(scroll: _scroll, log: _log)),
@@ -170,6 +173,135 @@ class _CalibrationScreenState extends State<CalibrationScreen> {
         ),
       ),
     );
+  }
+}
+
+/// A 2-column grid of one button per ELO pair.
+///
+/// While any pair is running, every other button is disabled so two matches
+/// never compete for the phone's CPU. The running button turns into a stop
+/// button; finished pairs show a check + win%.
+class _PairButtonsGrid extends StatelessWidget {
+  final int? runningIndex;
+  final Map<int, PairResult> results;
+  final void Function(int index) onStart;
+  final VoidCallback onStop;
+
+  const _PairButtonsGrid({
+    required this.runningIndex,
+    required this.results,
+    required this.onStart,
+    required this.onStop,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    const spacing = 8.0;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final tileWidth = (constraints.maxWidth - spacing) / 2;
+        return Wrap(
+          spacing: spacing,
+          runSpacing: spacing,
+          children: [
+            for (int i = 0; i < kCalibrationPairs.length; i++)
+              SizedBox(
+                width: tileWidth,
+                child: _pairButton(i),
+              ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _pairButton(int index) {
+    final pair = kCalibrationPairs[index];
+    final result = results[index];
+    final hasResult = result != null && result.total > 0;
+    final isThisRunning = runningIndex == index;
+    final otherRunning = runningIndex != null && !isThisRunning;
+
+    // Leading icon reflects state.
+    Widget leading;
+    Color accent;
+    if (isThisRunning) {
+      accent = Colors.red[300]!;
+      leading = const SizedBox(
+        width: 14,
+        height: 14,
+        child: CircularProgressIndicator(
+          strokeWidth: 2,
+          valueColor: AlwaysStoppedAnimation(Colors.white),
+        ),
+      );
+    } else if (hasResult) {
+      accent = _winRateColor(result.lowerWinRate);
+      leading = Icon(Icons.check_circle, size: 16, color: accent);
+    } else {
+      accent = const Color(0xFFEFBC97);
+      leading = Icon(Icons.play_arrow, size: 16, color: accent);
+    }
+
+    final trailing = isThisRunning
+        ? 'dừng'
+        : hasResult
+        ? '${(result.lowerWinRate * 100).toStringAsFixed(0)}%'
+        : null;
+
+    return FilledButton(
+      onPressed: isThisRunning
+          ? onStop
+          : otherRunning
+          ? null
+          : () => onStart(index),
+      style: FilledButton.styleFrom(
+        backgroundColor: isThisRunning
+            ? Colors.red[700]
+            : const Color(0xFF3A2A1A),
+        disabledBackgroundColor: const Color(0xFF262626),
+        foregroundColor: Colors.white,
+        disabledForegroundColor: const Color(0xFF666666),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+        alignment: Alignment.centerLeft,
+        side: hasResult && !isThisRunning
+            ? BorderSide(color: accent.withValues(alpha: 0.5))
+            : BorderSide.none,
+      ),
+      child: Row(
+        children: [
+          leading,
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              pair.label,
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          if (trailing != null) ...[
+            const SizedBox(width: 4),
+            Text(
+              trailing,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.bold,
+                color: isThisRunning ? Colors.white : accent,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Color _winRateColor(double rate) {
+    if (rate > 0.50) return Colors.red[300]!;
+    if (rate > 0.35) return Colors.orange[300]!;
+    return Colors.green[400]!;
   }
 }
 
@@ -195,7 +327,7 @@ class _InfoCard extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           Text(
-            '6 ván/cặp (3 đỏ + 3 đen) · tối đa 42 ván · ~45–70 phút',
+            '6 ván/cặp (3 đỏ + 3 đen) · ~7–10 phút/cặp · chạy từng cặp một',
             style: AppTextStyles.captionSm.copyWith(color: const Color(0xFF888888)),
           ),
           const SizedBox(height: 4),
@@ -247,7 +379,7 @@ class _LogView extends StatelessWidget {
       child: log.isEmpty
           ? Center(
               child: Text(
-                'Nhấn "Bắt đầu Calibration" để chạy…',
+                'Chọn một cặp ELO để bắt đầu chạy…',
                 style: AppTextStyles.captionSm
                     .copyWith(color: const Color(0xFF555555)),
               ),

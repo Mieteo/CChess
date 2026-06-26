@@ -78,6 +78,11 @@ service cloud.firestore {
              && request.resource.data.wins == 0
              && request.resource.data.losses == 0
              && request.resource.data.draws == 0
+             && request.resource.data.eloBot == 1000
+             && request.resource.data.botGames == 0
+             && request.resource.data.botWins == 0
+             && request.resource.data.botLosses == 0
+             && request.resource.data.botDraws == 0
              && request.resource.data.coins == 100
              && request.resource.data.gems == 10
              && request.resource.data.creditScore == 100
@@ -98,17 +103,20 @@ service cloud.firestore {
       //   Ở đây chỉ cần đảm bảo client không tự set giá trị sai cho các trường này.
       allow create: if isOwner(uid)
                       && hasDefaultSensitiveFields()
-                      && (request.resource.data.keys().hasAll(['displayName', 'eloChess', 'eloCup', 'totalGames', 'wins', 'losses', 'draws', 'coins', 'gems', 'creditScore', 'isVip', 'onboardingCompleted'])
-                          && request.resource.data.keys().hasOnly(['displayName', 'region', 'avatarUrl', 'eloChess', 'eloCup', 'totalGames', 'wins', 'losses', 'draws', 'coins', 'gems', 'creditScore', 'isVip', 'vipExpiresAt', 'createdAt', 'lastActiveAt', 'onboardingCompleted']))
+                      && (request.resource.data.keys().hasAll(['displayName', 'eloChess', 'eloCup', 'totalGames', 'wins', 'losses', 'draws', 'eloBot', 'botGames', 'botWins', 'botLosses', 'botDraws', 'coins', 'gems', 'creditScore', 'isVip', 'onboardingCompleted'])
+                          && request.resource.data.keys().hasOnly(['displayName', 'region', 'avatarUrl', 'eloChess', 'eloCup', 'totalGames', 'wins', 'losses', 'draws', 'eloBot', 'botGames', 'botWins', 'botLosses', 'botDraws', 'coins', 'gems', 'creditScore', 'isVip', 'vipExpiresAt', 'createdAt', 'lastActiveAt', 'onboardingCompleted']))
                       && (!("createdAt" in request.resource.data) || request.resource.data.createdAt is timestamp) // Đảm bảo createdAt nếu có thì là timestamp
                       && (!("lastActiveAt" in request.resource.data) || request.resource.data.lastActiveAt is timestamp); // Đảm bảo lastActiveAt nếu có thì là timestamp
 
       // Khi update user:
       // - Phải là user đã đăng nhập và là chủ sở hữu
-      // - Chỉ được sửa các trường trong whitelist: displayName, region, avatarUrl, lastActiveAt, onboardingCompleted
-      // - Các trường còn lại phải giữ nguyên giá trị
+      // - Client được sửa: displayName, region, avatarUrl, lastActiveAt,
+      //   onboardingCompleted + bot pool (eloBot, botGames/Wins/Losses/Draws).
+      //   Bot pool là client-owned vì ván đấu bot chạy trên máy, không có server
+      //   xác minh (khác eloChess/eloCup/totalGames/wins/losses/draws — server-only).
+      // - Các trường ranked + nhạy cảm còn lại phải giữ nguyên giá trị.
       allow update: if isOwner(uid)
-                      && hasOnlyAffected(['displayName', 'region', 'avatarUrl', 'lastActiveAt', 'onboardingCompleted'])
+                      && hasOnlyAffected(['displayName', 'region', 'avatarUrl', 'lastActiveAt', 'onboardingCompleted', 'eloBot', 'botGames', 'botWins', 'botLosses', 'botDraws'])
                       && unchanged('eloChess')
                       && unchanged('eloCup')
                       && unchanged('totalGames')

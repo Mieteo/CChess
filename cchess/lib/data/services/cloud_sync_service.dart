@@ -134,6 +134,11 @@ class CloudSyncService {
       wins: local.wins,
       losses: local.losses,
       draws: local.draws,
+      eloBot: local.eloBot,
+      botGames: local.botGames,
+      botWins: local.botWins,
+      botLosses: local.botLosses,
+      botDraws: local.botDraws,
       coins: local.coins,
       gems: local.gems,
       creditScore: local.creditScore,
@@ -156,7 +161,12 @@ class CloudSyncService {
     // - Ranked stats (eloChess, eloCup, totalGames, wins, losses, draws):
     //   cloud is source of truth — server backend updates these via Admin SDK
     //   after every ranked game ends (see cchess-backend/src/persistence.ts).
-    //   Bot/local games keep eloDelta=0 so they never write here.
+    //   Bot/local games never touch these — they use the bot pool below.
+    // - Bot pool (eloBot, botGames, botWins, botLosses, botDraws):
+    //   CLIENT-owned (bot games run on-device). The client both writes these to
+    //   its own cloud doc (UserRemoteRepository) and reads them back here, so
+    //   cloud stays the synced source of truth. This is the fix for the bug
+    //   where bot ELO lived only in local eloChess and got clobbered here.
     // - Currency + VIP (coins, gems, creditScore, isVip, vipExpiresAt):
     //   keep local for now. Will become cloud-driven when Shop launches
     //   (Sprint 16) + IAP (Sprint 17).
@@ -184,6 +194,11 @@ class CloudSyncService {
       wins: asInt('wins', fallback.wins),
       losses: asInt('losses', fallback.losses),
       draws: asInt('draws', fallback.draws),
+      eloBot: asInt('eloBot', fallback.eloBot),
+      botGames: asInt('botGames', fallback.botGames),
+      botWins: asInt('botWins', fallback.botWins),
+      botLosses: asInt('botLosses', fallback.botLosses),
+      botDraws: asInt('botDraws', fallback.botDraws),
       coins: fallback.coins,
       gems: fallback.gems,
       creditScore: fallback.creditScore,

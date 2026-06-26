@@ -173,6 +173,12 @@ class _StatsGrid extends StatelessWidget {
           icon: Icons.show_chart,
           color: AppColors.accentGold,
         ),
+        _StatTile(
+          label: 'ELO đấu Bot',
+          value: '${profile.eloBot}',
+          icon: Icons.smart_toy_outlined,
+          color: AppColors.parchmentTan,
+        ),
         const _StatTile(
           label: 'ELO Cờ Úp',
           value: '—',
@@ -190,6 +196,12 @@ class _StatsGrid extends StatelessWidget {
           value: winPercent,
           icon: Icons.flag_outlined,
           color: AppColors.vermilionRed,
+        ),
+        _StatTile(
+          label: 'Ván đấu Bot',
+          value: '${profile.botGames}',
+          icon: Icons.sports_esports_outlined,
+          color: AppColors.tealSuccess,
         ),
       ],
     );

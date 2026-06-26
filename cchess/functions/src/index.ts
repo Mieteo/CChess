@@ -25,6 +25,12 @@ export const createFirestoreUser = auth.user().onCreate(async (user) => {
     wins: 0,
     losses: 0,
     draws: 0,
+    // Practice-vs-bot pool (client-owned; bot games run on-device).
+    eloBot: 1000,
+    botGames: 0,
+    botWins: 0,
+    botLosses: 0,
+    botDraws: 0,
     coins: 100,
     gems: 10,
     creditScore: 100,

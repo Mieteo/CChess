@@ -167,6 +167,7 @@
 > **Feedback test tay 2026-06-21:** nhánh **online/Pikafish PASS về chất lượng** — nước đi rất tốt, rất mạnh. Nhánh **offline/minimax FAIL về chất lượng** — nước đi quá yếu, giống random-hợp-lệ theo luật; hiện tượng tương tự ở chế độ **Luyện tập — đấu với AI** tại 5 cấp đầu dùng minimax, trong khi cấp Pikafish rất mạnh.
 
 - [ ] **H4 — Đánh giá lại tốc độ/chất lượng gợi ý sau tuning.** ❌ BUG 2026-06-21: **Pikafish online đạt kỳ vọng** (nước tốt/mạnh), nhưng **offline minimax quá yếu** và có cảm giác như chọn nước random-hợp-lệ; cần nâng cấp bot offline/minimax hoặc tách rõ kỳ vọng chất lượng giữa fallback offline và engine Pikafish.
+  - 🔧 **Đã xử lý hướng 2026-06-26 (chờ retest):** refactor sang **thang ELO liên tục** + thêm **ElephantEye native (FFI)** cho dải 1500–1900 + **Zobrist/Transposition Table** cho minimax (doc [13](13_KE_HOACH_ELO_BOT_LADDER.md) Phase 0–6). Sức cờ offline đáng lẽ mạnh hơn nhiều ở dải giữa/cao; **còn lại: calibrate bảng `configForElo` bằng đấu thử** (Calibration UI 7 nút, doc 13 §8) + build `.so` ElephantEye cho mọi ABI Android, rồi **test tay lại H4** trên thiết bị thật.
 
 ---
 

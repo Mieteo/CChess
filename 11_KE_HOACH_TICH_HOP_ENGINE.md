@@ -302,6 +302,7 @@ COPY --from=build /pf/src/*.nnue   /app/engine/pikafish.nnue
   - [`game_screen.dart`](cchess/lib/presentation/game/game_screen.dart): bot move gọi `EngineRouter.bestMove(...)`; các bot cũ vẫn dùng minimax, lựa chọn **Đại Sư+** dùng Pikafish server-side và fallback minimax.
   - [`bot_select_screen.dart`](cchess/lib/presentation/bot_game/bot_select_screen.dart): thêm card **Đại Sư+ / Pikafish**.
   - [`app_router.dart`](cchess/lib/router/app_router.dart): parse `level=grandmaster` thành `EngineLevel.grandmaster`.
+  - ⚠️ **Đã thay (2026-06-26):** luồng "card Đại Sư+ / `level=grandmaster` → remote" mô tả ở 3 dòng trên **không còn dùng cho Cờ Tướng standard** — đã chuyển sang thang ELO liên tục `configForElo` + matchmaking "Tìm trận" (xem §10.2 mục "Định tuyến engine chuyển sang thang ELO liên tục" + doc [13](13_KE_HOACH_ELO_BOT_LADDER.md)). `bot_select_screen` standard nay là màn "Tìm trận"; `EngineRouter` chọn remote khi `config.engine == remotePikafish`. `EngineLevel.grandmaster` vẫn còn cho Cờ Úp + hint/analysis.
   - [`replay_controller.dart`](cchess/lib/presentation/replay/replay_controller.dart): AI Coach/phân tích replay gọi `EngineRouter.analyze(...)`, remote lỗi thì fallback local.
 - ✅ **Test/verification đã chạy**:
   - Backend: `npm run build`, `npm test`.

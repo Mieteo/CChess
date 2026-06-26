@@ -15,6 +15,17 @@ class UserProfile extends Equatable {
   final int wins;
   final int losses;
   final int draws;
+
+  /// Practice-vs-bot pool (the ELO ladder). Separate from ranked [eloChess]
+  /// because bot games run on-device with no server to verify them — they are
+  /// client-owned and pushed to cloud directly, unlike server-authoritative
+  /// ranked stats. See 13_KE_HOACH_ELO_BOT_LADDER.md + 09_BACKEND §8.
+  final int eloBot;
+  final int botGames;
+  final int botWins;
+  final int botLosses;
+  final int botDraws;
+
   final int coins;
   final int gems;
   final int creditScore;
@@ -35,6 +46,11 @@ class UserProfile extends Equatable {
     this.wins = 0,
     this.losses = 0,
     this.draws = 0,
+    this.eloBot = EloConstants.initialElo,
+    this.botGames = 0,
+    this.botWins = 0,
+    this.botLosses = 0,
+    this.botDraws = 0,
     this.coins = 100,
     this.gems = 10,
     this.creditScore = 100,
@@ -75,6 +91,11 @@ class UserProfile extends Equatable {
     int? wins,
     int? losses,
     int? draws,
+    int? eloBot,
+    int? botGames,
+    int? botWins,
+    int? botLosses,
+    int? botDraws,
     int? coins,
     int? gems,
     int? creditScore,
@@ -95,6 +116,11 @@ class UserProfile extends Equatable {
       wins: wins ?? this.wins,
       losses: losses ?? this.losses,
       draws: draws ?? this.draws,
+      eloBot: eloBot ?? this.eloBot,
+      botGames: botGames ?? this.botGames,
+      botWins: botWins ?? this.botWins,
+      botLosses: botLosses ?? this.botLosses,
+      botDraws: botDraws ?? this.botDraws,
       coins: coins ?? this.coins,
       gems: gems ?? this.gems,
       creditScore: creditScore ?? this.creditScore,
@@ -118,6 +144,11 @@ class UserProfile extends Equatable {
         'wins': wins,
         'losses': losses,
         'draws': draws,
+        'eloBot': eloBot,
+        'botGames': botGames,
+        'botWins': botWins,
+        'botLosses': botLosses,
+        'botDraws': botDraws,
         'coins': coins,
         'gems': gems,
         'creditScore': creditScore,
@@ -140,6 +171,11 @@ class UserProfile extends Equatable {
       wins: json['wins'] as int? ?? 0,
       losses: json['losses'] as int? ?? 0,
       draws: json['draws'] as int? ?? 0,
+      eloBot: json['eloBot'] as int? ?? EloConstants.initialElo,
+      botGames: json['botGames'] as int? ?? 0,
+      botWins: json['botWins'] as int? ?? 0,
+      botLosses: json['botLosses'] as int? ?? 0,
+      botDraws: json['botDraws'] as int? ?? 0,
       coins: json['coins'] as int? ?? 0,
       gems: json['gems'] as int? ?? 0,
       creditScore: json['creditScore'] as int? ?? 100,
@@ -165,6 +201,11 @@ class UserProfile extends Equatable {
         wins,
         losses,
         draws,
+        eloBot,
+        botGames,
+        botWins,
+        botLosses,
+        botDraws,
         coins,
         gems,
         creditScore,

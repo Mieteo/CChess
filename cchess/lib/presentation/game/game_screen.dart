@@ -361,20 +361,21 @@ class _GameScreenState extends ConsumerState<GameScreen> {
       ),
     );
 
-    // 2. Apply to profile stats. Standard matchmaking moves ELO; local / Cờ Úp
-    // / legacy bot games leave it unchanged (delta == 0).
+    // 2. Apply to the practice/bot pool (never ranked — ranked stats are
+    // server-authoritative). Standard matchmaking moves eloBot; local / Cờ Úp
+    // / legacy bot games keep eloBot unchanged (delta == 0) but still count.
     if (humanColor != null || state.isLocalHotseat) {
-      // For local 2-player we still bump totalGames but no win/loss credit.
       if (humanColor != null) {
         await ref
             .read(profileControllerProvider.notifier)
             .applyGameResult(eloDelta: delta, won: won, drew: drew);
       } else {
+        // Local 2-player: bump the offline game count only (no win/loss credit).
         await ref
             .read(profileControllerProvider.notifier)
             .update(
               (p) => p.copyWith(
-                totalGames: p.totalGames + 1,
+                botGames: p.botGames + 1,
                 lastActiveAt: DateTime.now(),
               ),
             );
@@ -406,13 +407,18 @@ class _GameScreenState extends ConsumerState<GameScreen> {
         .where((p) => p.solved)
         .length;
 
+    // Achievements count ranked + bot play together so offline players still
+    // progress; ELO milestones use whichever pool is higher.
+    final totalGames = profile.totalGames + profile.botGames;
+    final totalWins = profile.wins + profile.botWins;
     final stats = AchievementStats(
-      totalGames: profile.totalGames,
-      wins: profile.wins,
+      totalGames: totalGames,
+      wins: totalWins,
       // Win streak not tracked yet — derive a crude approximation from
       // total wins / games ratio. Refine in Sprint 10.
-      winStreak: profile.wins > 0 ? 1 : 0,
-      eloChess: profile.eloChess,
+      winStreak: totalWins > 0 ? 1 : 0,
+      eloChess:
+          profile.eloChess > profile.eloBot ? profile.eloChess : profile.eloBot,
       puzzlesSolved: puzzlesSolved,
       loginStreak: 1,
     );
@@ -545,8 +551,9 @@ class _GameScreenState extends ConsumerState<GameScreen> {
             : 'Người Chơi 2';
     final opponentElo = state.botDifficulty?.estimatedElo ?? 1500;
     final showOpponentElo = !_isStandardMatchmaking;
-    final playerElo =
-        ref.watch(profileControllerProvider).valueOrNull?.eloChess ??
+    // Bot matches show the player's bot-pool ELO (the ladder they're climbing).
+    final profile = ref.watch(profileControllerProvider).valueOrNull;
+    final playerElo = (_isStandardMatchmaking ? profile?.eloBot : profile?.eloChess) ??
         EloConstants.initialElo;
 
     return Scaffold(

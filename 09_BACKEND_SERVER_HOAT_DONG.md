@@ -397,9 +397,11 @@ Schema mirror với local `GameRecord` model (Hive) — sau này có thể sync 
 
 ELO delta được gửi kèm trong `game-ended` payload (`elo: { red: {old,new,delta}, black: {old,new,delta} }`) — client hiển thị trong result dialog với mũi tên + màu (tealSuccess nếu lên, vermilionRed nếu xuống).
 
-Client splash sync (`cloud_sync_service._mergeCloudIntoLocal`) đã update để pull `eloChess`/`eloCup`/`totalGames`/`wins`/`losses`/`draws` từ cloud (server-authoritative). Bot/local games có `eloDelta=0` không ghi cloud nên không có conflict.
+Client splash sync (`cloud_sync_service._mergeCloudIntoLocal`) pull `eloChess`/`eloCup`/`totalGames`/`wins`/`losses`/`draws` từ cloud (server-authoritative).
 
-**Chưa làm**: separate "casual ELO" (bot games) vs "ranked ELO". Hiện cả 2 dùng chung field `eloChess` nhưng bot không write → safe. Sprint 13+ khi có Cờ Úp variant sẽ tách rõ.
+> ✅ **ĐÃ FIX 2026-06-26 (hướng b — pool ELO bot riêng, persist lên cloud):** từng có bug — sau refactor ELO ladder, ván-vs-bot cộng `eloDelta` vào `eloChess`/W-L-D **local** nhưng không đẩy được lên cloud (server-authoritative, rules khoá), nên bị `_mergeCloudIntoLocal` ghi đè ở splash kế tiếp. **Cách sửa:** tách **pool đấu bot riêng, client-owned**: `eloBot` + `botGames`/`botWins`/`botLosses`/`botDraws` ([user_profile.dart](cchess/lib/data/models/user_profile.dart)). Ván bot nay **chỉ** đụng pool này ([profile_controller.applyGameResult](cchess/lib/presentation/profile/profile_controller.dart)); `eloChess`/`totalGames`/`wins`/`losses`/`draws` giữ nguyên server-authoritative cho ván ranked online. Pool bot được **đẩy lên cloud** qua `updateProfileFields` (rules `users/{uid}` cho owner sửa 5 field này, vẫn khoá các field ranked), và `_mergeCloudIntoLocal` đọc lại từ cloud → vòng tròn khép kín, không còn bị xoá. Matchmaking đấu bot (`pickBot`) + màn chọn bot + ELO hiển thị in-game dùng `eloBot`; bảng xếp hạng vẫn chỉ dùng `eloChess`/`eloCup` (đấu bot **không** lên bảng). Backend **không đổi** (ván bot không chạm server). Test: `settings_profile_test.dart` nhóm "UserProfile bot pool". **Ops còn lại:** `firebase deploy --only firestore:rules` để đẩy rules cho phép client ghi pool bot (gộp cùng lần deploy TTL đang chờ).
+
+**Đã làm**: tách "bot/practice ELO" (`eloBot` + bot W/L/D, client-owned) vs "ranked ELO" (`eloChess`/`eloCup` + ranked W/L/D, server-authoritative). Cờ Úp online vẫn dùng `eloCup`.
 
 ---
 

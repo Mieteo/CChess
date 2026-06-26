@@ -97,7 +97,9 @@ Khi ván kết thúc, hệ thống:
 
 #### b. Đấu với bot AI
 
-Người dùng có thể chơi với bot offline theo 5 cấp độ:
+> **Cập nhật 2026-06-26:** Cờ Tướng **standard** đã bỏ 5 cấp danh xưng, chuyển sang **thang ELO liên tục** (xem [`13_KE_HOACH_ELO_BOT_LADDER.md`](13_KE_HOACH_ELO_BOT_LADDER.md)): bấm **"Tìm trận"**, hệ thống ghép một bot **ẩn sức** quanh ELO người chơi (bằng / +100 / −100), **lộ ELO bot ở màn kết quả**. Riêng **Cờ Úp với Máy** vẫn giữ các cấp độ chọn tay (bot cờ úp không dùng được Pikafish/ghép-ELO). Mô tả "5 cấp" bên dưới giữ làm lịch sử.
+
+Người dùng có thể chơi với bot offline theo 5 cấp độ (mô hình cũ — nay chỉ còn cho Cờ Úp):
 
 - Tập Sự
 - Sơ Cấp
@@ -389,7 +391,7 @@ Tuy nhiên ở bản hiện tại, đây chủ yếu là **màn hình giới thi
 - **Đăng nhập ẩn danh tự động + liên kết Google (giữ uid)** — Sprint 8a
 - **Đồng bộ hồ sơ và kỳ phổ lên cloud Firestore** — Sprint 8b
 - Đấu tại chỗ
-- Đấu với bot AI 5 cấp
+- Đấu với bot AI: Cờ Tướng standard theo **thang ELO liên tục** ("Tìm trận"), Cờ Úp theo cấp độ chọn tay
 - Danh sách bài tập tàn cục và màn hình giải bài
 - Danh sách khai cuộc và màn hình học khai cuộc
 - Lưu kỳ phổ, xem lịch sử và phục bàn
