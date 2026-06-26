@@ -34,6 +34,7 @@ import '../presentation/puzzle/puzzle_list_screen.dart';
 import '../presentation/puzzle/puzzle_screen.dart';
 import '../presentation/quests/daily_quests_screen.dart';
 import '../presentation/replay/game_replay_screen.dart';
+import '../presentation/calibration/calibration_screen.dart';
 import '../presentation/settings/settings_screen.dart';
 import '../presentation/shop/explore_screen.dart';
 import '../presentation/shop/inventory_screen.dart';
@@ -66,6 +67,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: AppConstants.routeBackendTest,
         builder: (context, state) => const BackendTestScreen(),
       ),
+      if (AppConstants.calibrationEnabled)
+        GoRoute(
+          path: AppConstants.routeCalibration,
+          builder: (context, state) => const CalibrationScreen(),
+        ),
       GoRoute(
         path: AppConstants.routeOnlineLobby,
         builder: (context, state) {

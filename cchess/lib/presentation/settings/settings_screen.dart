@@ -149,6 +149,20 @@ class SettingsScreen extends ConsumerWidget {
                     ],
                   ),
                 ],
+                if (AppConstants.calibrationEnabled) ...[
+                  AppSpacing.vGapLg,
+                  _SectionLabel('Bot Calibration'),
+                  _SettingsCard(
+                    children: [
+                      _RowItem(
+                        icon: Icons.tune,
+                        label: 'ELO Calibration (Zone A)',
+                        onTap: () =>
+                            context.push(AppConstants.routeCalibration),
+                      ),
+                    ],
+                  ),
+                ],
                 AppSpacing.vGapLg,
                 _SectionLabel('Giới thiệu'),
                 _SettingsCard(

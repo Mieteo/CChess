@@ -163,3 +163,20 @@ int eloDelta({required EloBracket bracket, required bool won, required bool drew
 
 ## 7. Thứ tự đề xuất triển khai
 Phase 0 → 1 → 2 → 3 (lõi FE, có thể test ngay với engine hiện có) → 5 (backend, mở khoá dải cao) → 4 (UI) → 6 (calibrate + dọn). Mỗi phase là một commit/PR độc lập, chạy test xanh trước khi sang phase sau.
+
+
+## 8.test
+flutter run --release --dart-define=CALIBRATION=true
+Vào Settings → cuộn xuống → Bot Calibration → ELO Calibration (Zone A).
+Cách đọc kết quả
+Sau khi chạy xong, bảng kết quả hiện màu:
+
+Màu	Ý nghĩa
+🟢 Xanh (win% < 35%)	Gap ổn — bot yếu hơn đang thua đúng mức
+🟠 Cam (35–50%)	Gap quá nhỏ — tăng depth hoặc giảm blunder cho band trên
+🔴 Đỏ (> 50%)	Đảo ngược — band trên thực ra yếu hơn band dưới
+Nhấn icon Copy ở AppBar để lấy bảng số liệu dán vào tài liệu.
+
+---
+
+##

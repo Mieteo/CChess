@@ -44,6 +44,10 @@ class AppConstants {
   static const String routeOnlineLobby = '/online-lobby';
   static const String routeOnlineGame = '/online-game';
 
+  // Development-only route — only reachable when built with
+  // `--dart-define=CALIBRATION=true` (see CalibrationScreen).
+  static const String routeCalibration = '/calibration';
+
   // Storage keys.
   static const String boxSettings = 'cchess_settings';
   static const String boxGameHistory = 'cchess_game_history';
@@ -66,6 +70,10 @@ class AppConstants {
   //     flutter build apk --release \
   //       --dart-define=CCHESS_BACKEND_URL=wss://cchess-backend-XXXX.onrender.com
   //   (lưu ý: WSS không phải WS — Render serve HTTPS)
+  /// True when the app was built with `--dart-define=CALIBRATION=true`.
+  /// Gates the bot ELO calibration screen in settings + the /calibration route.
+  static const bool calibrationEnabled = bool.fromEnvironment('CALIBRATION');
+
   static const String defaultBackendWsUrl = String.fromEnvironment(
     'CCHESS_BACKEND_URL',
     defaultValue: 'wss://cchess-backend.onrender.com',
