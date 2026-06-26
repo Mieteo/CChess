@@ -9,6 +9,7 @@ import '../../theme/app_colors.dart';
 import '../../theme/app_spacing.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/common/common.dart';
+import '../shop/shop_controller.dart';
 import 'profile_controller.dart';
 
 /// Hồ Sơ — user profile backed by [profileControllerProvider].
@@ -23,6 +24,7 @@ class ProfileScreen extends ConsumerWidget {
       loading: () => const Center(child: BrushStrokeSpinner()),
       error: (e, _) => Center(child: Text('Lỗi: $e', style: AppTextStyles.bodyMd)),
       data: (profile) {
+        final wallet = ref.watch(walletProvider).valueOrNull;
         return ListView(
           padding: const EdgeInsets.fromLTRB(
             AppSpacing.base,
@@ -31,7 +33,11 @@ class ProfileScreen extends ConsumerWidget {
             96,
           ),
           children: [
-            _ProfileHeader(profile: profile),
+            _ProfileHeader(
+              profile: profile,
+              coins: wallet?.coins ?? profile.coins,
+              gems: wallet?.gems ?? profile.gems,
+            ),
             AppSpacing.vGapLg,
             _StatsGrid(profile: profile),
             AppSpacing.vGapLg,
@@ -59,7 +65,13 @@ class ProfileScreen extends ConsumerWidget {
 
 class _ProfileHeader extends StatelessWidget {
   final UserProfile profile;
-  const _ProfileHeader({required this.profile});
+  final int coins;
+  final int gems;
+  const _ProfileHeader({
+    required this.profile,
+    required this.coins,
+    required this.gems,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -117,14 +129,14 @@ class _ProfileHeader extends StatelessWidget {
             children: [
               Expanded(
                 child: CChessCurrencyDisplay(
-                  amount: profile.coins,
+                  amount: coins,
                   large: true,
                 ),
               ),
               AppSpacing.hGapSm,
               Expanded(
                 child: CChessCurrencyDisplay(
-                  amount: profile.gems,
+                  amount: gems,
                   currency: CChessCurrency.gem,
                   large: true,
                 ),
