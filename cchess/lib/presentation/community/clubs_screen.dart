@@ -1,37 +1,150 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
+import '../../core/constants/app_constants.dart';
+import '../../data/datasources/remote/clubs_api_source.dart';
 import '../../data/models/community_models.dart';
-import '../../data/repositories/community_repository.dart';
+import '../../data/repositories/club_repository.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_spacing.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/common/common.dart';
 import 'community_widgets.dart';
 
-class ClubsScreen extends ConsumerWidget {
+class ClubsScreen extends ConsumerStatefulWidget {
   const ClubsScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final future = ref.watch(communityRepositoryProvider).loadClubs(limit: 20);
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(
-        AppSpacing.base,
-        AppSpacing.base,
-        AppSpacing.base,
-        96,
+  ConsumerState<ClubsScreen> createState() => _ClubsScreenState();
+}
+
+class _ClubsScreenState extends ConsumerState<ClubsScreen> {
+  late Future<List<CommunityClub>> _future;
+  bool _busy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = ref.read(clubRepositoryProvider).listClubs();
+  }
+
+  void _reload() {
+    setState(() => _future = ref.read(clubRepositoryProvider).listClubs());
+  }
+
+  Future<void> _createClub() async {
+    final nameCtrl = TextEditingController();
+    final regionCtrl = TextEditingController();
+    final descCtrl = TextEditingController();
+    final created = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => CChessDialog(
+        title: 'Tạo Kỳ Xã mới',
+        leadingIcon: Icons.workspace_premium_outlined,
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: nameCtrl,
+              maxLength: 60,
+              decoration: const InputDecoration(labelText: 'Tên Kỳ Xã'),
+            ),
+            TextField(
+              controller: regionCtrl,
+              decoration: const InputDecoration(labelText: 'Khu vực'),
+            ),
+            TextField(
+              controller: descCtrl,
+              maxLength: 280,
+              maxLines: 2,
+              decoration: const InputDecoration(labelText: 'Mô tả (không bắt buộc)'),
+            ),
+          ],
+        ),
+        actions: [
+          CChessButton(
+            label: 'Hủy',
+            variant: CChessButtonVariant.outline,
+            onPressed: () => Navigator.of(ctx).pop(false),
+          ),
+          AppSpacing.hGapMd,
+          CChessButton(label: 'Tạo', onPressed: () => Navigator.of(ctx).pop(true)),
+        ],
       ),
+    );
+    if (created != true || !mounted) return;
+    final name = nameCtrl.text.trim();
+    final region = regionCtrl.text.trim();
+    if (name.isEmpty || region.isEmpty) {
+      _showSnack('Vui lòng nhập tên và khu vực');
+      return;
+    }
+    await _run(() async {
+      final club = await ref
+          .read(clubRepositoryProvider)
+          .create(name: name, region: region, description: descCtrl.text.trim());
+      _reload();
+      if (mounted) context.push('${AppConstants.routeCommunityClubs}/${club.id}');
+    });
+  }
+
+  Future<void> _join(CommunityClub club) async {
+    await _run(() async {
+      await ref.read(clubRepositoryProvider).join(club.id);
+      _reload();
+      _showSnack('Đã tham gia ${club.name}');
+    });
+  }
+
+  Future<void> _run(Future<void> Function() action) async {
+    setState(() => _busy = true);
+    try {
+      await action();
+    } on ClubApiException catch (e) {
+      _showSnack(_messageFor(e));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  String _messageFor(ClubApiException e) {
+    switch (e.code) {
+      case 'club-limit-reached':
+        return 'Bạn đã tham gia tối đa 3 Kỳ Xã';
+      case 'already-member':
+        return 'Bạn đã là thành viên của Kỳ Xã này';
+      case 'missing-token':
+        return 'Cần đăng nhập để dùng tính năng Kỳ Xã';
+      default:
+        return e.isNetworkError ? 'Không có kết nối mạng' : e.message;
+    }
+  }
+
+  void _showSnack(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(AppSpacing.base, AppSpacing.base, AppSpacing.base, 96),
       children: [
-        const CommunityPageHeader(
+        CommunityPageHeader(
           title: 'Kỳ Xã',
           subtitle: 'Câu lạc bộ theo địa phương, nhóm bạn và lối chơi',
           icon: Icons.workspace_premium_outlined,
           showBack: true,
+          trailing: IconButton(
+            tooltip: 'Tạo Kỳ Xã',
+            onPressed: _busy ? null : _createClub,
+            icon: const Icon(Icons.add_circle_outline, color: AppColors.accentGold),
+          ),
         ),
         AppSpacing.vGapLg,
         FutureBuilder<List<CommunityClub>>(
-          future: future,
+          future: _future,
           builder: (context, snapshot) {
             if (!snapshot.hasData) {
               return const Center(child: BrushStrokeSpinner());
@@ -41,13 +154,18 @@ class ClubsScreen extends ConsumerWidget {
               return const CommunityEmptyState(
                 icon: Icons.workspace_premium_outlined,
                 title: 'Chưa có Kỳ Xã',
-                message: 'Các câu lạc bộ công khai sẽ xuất hiện tại đây.',
+                message: 'Hãy là người đầu tiên tạo một Kỳ Xã!',
               );
             }
             return Column(
               children: [
                 for (final club in clubs) ...[
-                  _ClubCard(club: club),
+                  _ClubCard(
+                    club: club,
+                    busy: _busy,
+                    onJoin: () => _join(club),
+                    onTap: () => context.push('${AppConstants.routeCommunityClubs}/${club.id}'),
+                  ),
                   if (club != clubs.last) AppSpacing.vGapMd,
                 ],
               ],
@@ -60,14 +178,18 @@ class ClubsScreen extends ConsumerWidget {
 }
 
 class _ClubCard extends StatelessWidget {
-  const _ClubCard({required this.club});
+  const _ClubCard({required this.club, required this.busy, required this.onJoin, required this.onTap});
 
   final CommunityClub club;
+  final bool busy;
+  final VoidCallback onJoin;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     return CChessCard(
-      borderColor: club.isJoined
+      onTap: onTap,
+      borderColor: club.isMember
           ? AppColors.accentGold.withValues(alpha: 0.5)
           : AppColors.outlineVariant,
       child: Column(
@@ -104,7 +226,7 @@ class _ClubCard extends StatelessWidget {
                   ],
                 ),
               ),
-              if (club.isJoined)
+              if (club.isMember)
                 Container(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 8,
@@ -158,19 +280,11 @@ class _ClubCard extends StatelessWidget {
             children: [
               Expanded(
                 child: CChessButton(
-                  label: club.isJoined ? 'Phòng CLB' : 'Tham gia',
-                  icon: club.isJoined
+                  label: club.isMember ? 'Xem Kỳ Xã' : 'Tham gia',
+                  icon: club.isMember
                       ? Icons.meeting_room_outlined
                       : Icons.group_add_outlined,
-                  onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        club.isJoined
-                            ? 'Phòng riêng CLB sẽ nối vào online lobby.'
-                            : 'Yêu cầu tham gia Kỳ Xã đã được ghi nhận.',
-                      ),
-                    ),
-                  ),
+                  onPressed: busy ? null : (club.isMember ? onTap : onJoin),
                 ),
               ),
               AppSpacing.hGapSm,
@@ -178,9 +292,7 @@ class _ClubCard extends StatelessWidget {
                 label: 'Bảng điểm',
                 icon: Icons.leaderboard_outlined,
                 variant: CChessButtonVariant.outline,
-                onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Bảng điểm CLB đang chuẩn bị.')),
-                ),
+                onPressed: onTap,
               ),
             ],
           ),

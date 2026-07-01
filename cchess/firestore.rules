@@ -262,11 +262,30 @@ service cloud.firestore {
     match /clubs/{clubId} {
       allow read: if true;
       allow write: if false;
+
+      // Membership roster (S14 C3): backend writes via Admin SDK inside a
+      // transaction that also keeps clubs/{clubId}.memberCount consistent.
+      match /members/{uid} {
+        allow read: if true;
+        allow write: if false;
+      }
     }
 
     match /tournaments/{tournamentId} {
       allow read: if true;
       allow write: if false;
+
+      // Registrations + bracket (S14 C4): backend writes via Admin SDK inside
+      // transactions that keep tournaments/{tournamentId}.participantCount and
+      // the precomputed bracket pointers (nextMatchId/nextMatchSlot) consistent.
+      match /participants/{uid} {
+        allow read: if true;
+        allow write: if false;
+      }
+      match /matches/{matchId} {
+        allow read: if true;
+        allow write: if false;
+      }
     }
 
     match /community_feed/{itemId} {

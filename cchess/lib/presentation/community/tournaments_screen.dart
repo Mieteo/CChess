@@ -1,23 +1,77 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
+import '../../core/constants/app_constants.dart';
+import '../../data/datasources/remote/tournaments_api_source.dart';
 import '../../data/models/community_models.dart';
-import '../../data/repositories/community_repository.dart';
+import '../../data/repositories/tournament_repository.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_spacing.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/common/common.dart';
 import 'community_widgets.dart';
 
-class TournamentsScreen extends ConsumerWidget {
+class TournamentsScreen extends ConsumerStatefulWidget {
   const TournamentsScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final future = ref
-        .watch(communityRepositoryProvider)
-        .loadTournaments(limit: 20);
+  ConsumerState<TournamentsScreen> createState() => _TournamentsScreenState();
+}
+
+class _TournamentsScreenState extends ConsumerState<TournamentsScreen> {
+  late Future<List<CommunityTournament>> _future;
+  bool _busy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = ref.read(tournamentRepositoryProvider).listTournaments();
+  }
+
+  void _reload() {
+    setState(() => _future = ref.read(tournamentRepositoryProvider).listTournaments());
+  }
+
+  Future<void> _register(CommunityTournament t) async {
+    setState(() => _busy = true);
+    try {
+      await ref.read(tournamentRepositoryProvider).register(t.id);
+      _reload();
+      _showSnack('Đã đăng ký ${t.name}');
+    } on TournamentApiException catch (e) {
+      _showSnack(_messageFor(e));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  String _messageFor(TournamentApiException e) {
+    switch (e.code) {
+      case 'registration-closed':
+        return 'Giải đấu đã đóng đăng ký';
+      case 'tournament-full':
+        return 'Giải đấu đã đủ người';
+      case 'already-registered':
+        return 'Bạn đã đăng ký giải này';
+      case 'elo-too-low':
+      case 'elo-too-high':
+        return 'ELO của bạn không nằm trong khoảng cho phép';
+      case 'missing-token':
+        return 'Cần đăng nhập để đăng ký giải đấu';
+      default:
+        return e.isNetworkError ? 'Không có kết nối mạng' : e.message;
+    }
+  }
+
+  void _showSnack(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return ListView(
       padding: const EdgeInsets.fromLTRB(
         AppSpacing.base,
@@ -34,7 +88,7 @@ class TournamentsScreen extends ConsumerWidget {
         ),
         AppSpacing.vGapLg,
         FutureBuilder<List<CommunityTournament>>(
-          future: future,
+          future: _future,
           builder: (context, snapshot) {
             if (!snapshot.hasData) {
               return const Center(child: BrushStrokeSpinner());
@@ -50,7 +104,12 @@ class TournamentsScreen extends ConsumerWidget {
             return Column(
               children: [
                 for (final tournament in tournaments) ...[
-                  _TournamentCard(tournament: tournament),
+                  _TournamentCard(
+                    tournament: tournament,
+                    busy: _busy,
+                    onRegister: () => _register(tournament),
+                    onTap: () => context.push('${AppConstants.routeCommunityTournaments}/${tournament.id}'),
+                  ),
                   if (tournament != tournaments.last) AppSpacing.vGapMd,
                 ],
               ],
@@ -63,14 +122,23 @@ class TournamentsScreen extends ConsumerWidget {
 }
 
 class _TournamentCard extends StatelessWidget {
-  const _TournamentCard({required this.tournament});
+  const _TournamentCard({
+    required this.tournament,
+    required this.busy,
+    required this.onRegister,
+    required this.onTap,
+  });
 
   final CommunityTournament tournament;
+  final bool busy;
+  final VoidCallback onRegister;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final date = DateFormat('dd/MM HH:mm').format(tournament.startsAt);
     return CChessCard(
+      onTap: onTap,
       borderColor: AppColors.accentGold.withValues(alpha: 0.35),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -137,13 +205,11 @@ class _TournamentCard extends StatelessWidget {
             children: [
               Expanded(
                 child: CChessButton(
-                  label: 'Đăng ký',
+                  label: tournament.status == TournamentStatus.registering ? 'Đăng ký' : 'Xem giải',
                   icon: Icons.app_registration,
-                  onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Đã ghi nhận đăng ký giải đấu.'),
-                    ),
-                  ),
+                  onPressed: busy
+                      ? null
+                      : (tournament.status == TournamentStatus.registering ? onRegister : onTap),
                 ),
               ),
               AppSpacing.hGapSm,
@@ -151,11 +217,7 @@ class _TournamentCard extends StatelessWidget {
                 label: 'Bracket',
                 icon: Icons.account_tree_outlined,
                 variant: CChessButtonVariant.outline,
-                onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Bracket sẽ mở khi giải bắt đầu.'),
-                  ),
-                ),
+                onPressed: onTap,
               ),
             ],
           ),

@@ -11,6 +11,8 @@ import '../presentation/coach/ai_coach_screen.dart';
 import '../presentation/cloud/backend_test_screen.dart';
 import '../presentation/cloud/cloud_test_screen.dart';
 import '../presentation/community/clubs_screen.dart';
+import '../presentation/community/club_detail_screen.dart';
+import '../presentation/community/tournament_detail_screen.dart';
 import '../presentation/online/online_game_screen.dart';
 import '../presentation/online/online_lobby_screen.dart';
 import '../presentation/community/community_screen.dart';
@@ -87,6 +89,9 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             deepLinkSpectate: joinId == null,
             initialCasual: casual,
             variant: variant,
+            // S14 C4 "Vào trận": `/online-lobby?tournamentId=X&matchId=Y`.
+            tournamentId: q['tournamentId'],
+            matchId: q['matchId'],
           );
         },
       ),
@@ -252,11 +257,31 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                 path: 'clubs',
                 pageBuilder: (context, state) =>
                     _fade(state, const ClubsScreen()),
+                routes: [
+                  GoRoute(
+                    path: ':clubId',
+                    pageBuilder: (context, state) => _fade(
+                      state,
+                      ClubDetailScreen(clubId: state.pathParameters['clubId']!),
+                    ),
+                  ),
+                ],
               ),
               GoRoute(
                 path: 'tournaments',
                 pageBuilder: (context, state) =>
                     _fade(state, const TournamentsScreen()),
+                routes: [
+                  GoRoute(
+                    path: ':tournamentId',
+                    pageBuilder: (context, state) => _fade(
+                      state,
+                      TournamentDetailScreen(
+                        tournamentId: state.pathParameters['tournamentId']!,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),

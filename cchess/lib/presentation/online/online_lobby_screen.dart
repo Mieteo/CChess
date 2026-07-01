@@ -1,9 +1,11 @@
+import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/chess_engine/chess_engine.dart';
 import '../../core/constants/app_constants.dart';
+import '../../data/datasources/remote/tournaments_api_source.dart';
 import '../../data/services/reconnect_store.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_spacing.dart';
@@ -19,6 +21,8 @@ class OnlineLobbyScreen extends ConsumerStatefulWidget {
     this.deepLinkSpectate = true,
     this.initialCasual = false,
     this.variant = 'standard',
+    this.tournamentId,
+    this.matchId,
   });
 
   /// A6 share link: when arriving via a shared link the room id is passed here;
@@ -30,6 +34,14 @@ class OnlineLobbyScreen extends ConsumerStatefulWidget {
   /// Game variant for matchmaking / private rooms created here. `cup` queues in
   /// the Cờ Úp pool (own ELO bucket, never paired against standard players).
   final String variant;
+
+  /// S14 C4 "Vào trận": when both are set, the lobby auto-connects then either
+  /// creates a tournament-tagged room (first player) or joins the room the
+  /// other player already created (discovered via GET /tournaments/:id/matches
+  /// — see tournament_detail_screen.dart), instead of the normal manual
+  /// create/find-match UI.
+  final String? tournamentId;
+  final String? matchId;
 
   @override
   ConsumerState<OnlineLobbyScreen> createState() => _OnlineLobbyScreenState();
@@ -72,6 +84,31 @@ class _OnlineLobbyScreenState extends ConsumerState<OnlineLobbyScreen> {
             _ctrl.spectateRoom(roomId);
           } else {
             _ctrl.joinRoom(roomId);
+          }
+        });
+        return;
+      }
+
+      // S14 C4 "Vào trận": create the tagged room (first player) or join the
+      // one the other player already created.
+      final tournamentId = widget.tournamentId;
+      final matchId = widget.matchId;
+      if (tournamentId != null && matchId != null) {
+        await _run(() async {
+          if (!await _connectAndWaitAuthed() || !mounted) return;
+          final matches = await ref.read(tournamentsApiSourceProvider).listMatches(tournamentId);
+          final match = matches.where((m) => m.id == matchId).firstOrNull;
+          if (!mounted) return;
+          if (match == null) {
+            throw const TournamentApiException(code: 'not-found', message: 'Không tìm thấy trận đấu');
+          }
+          if (match.roomId != null) {
+            _ctrl.joinRoom(match.roomId!);
+          } else {
+            _ctrl.createRoom(
+              clockMs: 15 * 60 * 1000,
+              tournamentTag: {'tournamentId': tournamentId, 'matchId': matchId},
+            );
           }
         });
         return;

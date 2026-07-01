@@ -363,12 +363,22 @@ class OnlineMatchController extends StateNotifier<OnlineMatchState> {
     }
   }
 
-  void createRoom({int? clockMs, bool casual = false, String? variant}) {
+  void createRoom({
+    int? clockMs,
+    bool casual = false,
+    String? variant,
+    Map<String, String>? tournamentTag,
+  }) {
     if (state.phase != OnlineMatchPhase.authed) {
       _setError('Chưa sẵn sàng (phase=${state.phase.name})');
       return;
     }
-    _socket.createRoom(clockMs: clockMs, casual: casual, variant: variant);
+    _socket.createRoom(
+      clockMs: clockMs,
+      casual: casual,
+      variant: variant,
+      tournamentTag: tournamentTag,
+    );
   }
 
   void joinRoom(String roomId) {

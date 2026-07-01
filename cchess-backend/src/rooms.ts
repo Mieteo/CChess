@@ -81,6 +81,14 @@ export interface Room {
   // game finished. When both players have offered, a fresh game starts in
   // the same room with colors swapped. Cleared on game start / leave.
   rematchOfferedBy?: Set<string>;
+
+  // Sprint 14 C4: set when this room was created for a specific tournament
+  // bracket match (reuses the casual private-room flow instead of new
+  // matchmaking surface — see server.ts finishGame + the create-room
+  // handler). Tournament rooms always use mode:'casual' so ladder ELO is
+  // untouched; tournament standings/rewards are tracked separately via
+  // TournamentStore.
+  tournamentTag?: { tournamentId: string; matchId: string };
 }
 
 const rooms = new Map<string, Room>();
@@ -186,6 +194,7 @@ export function createRoom(
     initialClockMs?: number;
     mode?: RoomMode;
     variant?: GameVariant;
+    tournamentTag?: { tournamentId: string; matchId: string };
   },
 ): Room {
   const room: Room = {
@@ -200,6 +209,7 @@ export function createRoom(
     initialClockMs: options?.initialClockMs,
     chatMessages: [],
     lastChatAtByUid: {},
+    tournamentTag: options?.tournamentTag,
   };
   rooms.set(room.id, room);
   socketToRoom.set(socket, room.id);

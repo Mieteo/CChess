@@ -59,6 +59,12 @@ class AppConstants {
   // wallet, inventory and equipped loadout, so the shop renders and the equipped
   // board theme keeps applying when offline.
   static const String boxShop = 'cchess_shop';
+  // Offline cache of clubs (S14 C3 — Kỳ Xã): last-fetched club list + the
+  // caller's own memberships, so Cộng Đồng → Kỳ Xã still renders offline.
+  static const String boxClubs = 'cchess_clubs';
+  // Offline cache of tournaments (S14 C4 — Giải Đấu): last-fetched list, so
+  // Cộng Đồng → Giải Đấu still renders offline.
+  static const String boxTournaments = 'cchess_tournaments';
 
   // Hint usage caps.
   static const int dailyHintLimitFree = 3;

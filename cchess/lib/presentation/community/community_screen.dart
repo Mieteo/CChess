@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -8,6 +9,7 @@ import '../../theme/app_colors.dart';
 import '../../theme/app_spacing.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/common/common.dart';
+import '../puzzle/puzzle_list_controller.dart';
 import 'community_controller.dart';
 import 'community_widgets.dart';
 
@@ -383,13 +385,13 @@ class _FeedSection extends StatelessWidget {
   }
 }
 
-class _FeedCard extends StatelessWidget {
+class _FeedCard extends ConsumerWidget {
   const _FeedCard({required this.item});
 
   final CommunityFeedItem item;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final (icon, color, action) = switch (item.type) {
       CommunityFeedType.puzzle => (
         Icons.extension_outlined,
@@ -408,7 +410,7 @@ class _FeedCard extends StatelessWidget {
       ),
     };
     return CChessCard(
-      onTap: () => _handleFeedTap(context, item.type),
+      onTap: () => _handleFeedTap(context, ref),
       child: Row(
         children: [
           Container(
@@ -459,8 +461,22 @@ class _FeedCard extends StatelessWidget {
     );
   }
 
-  void _handleFeedTap(BuildContext context, CommunityFeedType type) {
-    switch (type) {
+  Future<void> _handleFeedTap(BuildContext context, WidgetRef ref) async {
+    if (item.route == 'daily_puzzle') {
+      final puzzle = await ref.read(dailyPuzzleProvider.future);
+      if (!context.mounted) return;
+      if (puzzle != null) {
+        context.push('${AppConstants.routePuzzle}/${puzzle.id}');
+      } else {
+        context.go(AppConstants.routePuzzle);
+      }
+      return;
+    }
+    if (item.linkUrl != null) {
+      _showLinkDialog(context, item.linkUrl!);
+      return;
+    }
+    switch (item.type) {
       case CommunityFeedType.puzzle:
         context.go(AppConstants.routePuzzle);
       case CommunityFeedType.match:
@@ -470,6 +486,35 @@ class _FeedCard extends StatelessWidget {
           const SnackBar(content: Text('Tin cộng đồng sẽ mở ở bản kế tiếp.')),
         );
     }
+  }
+
+  void _showLinkDialog(BuildContext context, String url) {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => CChessDialog(
+        title: item.title,
+        leadingIcon: Icons.article_outlined,
+        content: Text(url, style: AppTextStyles.bodyMd),
+        actions: [
+          CChessButton(
+            label: 'Đóng',
+            variant: CChessButtonVariant.outline,
+            onPressed: () => Navigator.of(ctx).pop(),
+          ),
+          AppSpacing.hGapMd,
+          CChessButton(
+            label: 'Sao chép liên kết',
+            onPressed: () {
+              Clipboard.setData(ClipboardData(text: url));
+              Navigator.of(ctx).pop();
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Đã sao chép liên kết')),
+              );
+            },
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -492,7 +537,7 @@ class _ClubPreview extends StatelessWidget {
             width: 224,
             child: CChessCard(
               onTap: () => context.go(AppConstants.routeCommunityClubs),
-              borderColor: club.isJoined
+              borderColor: club.isMember
                   ? AppColors.accentGold.withValues(alpha: 0.45)
                   : AppColors.outlineVariant,
               child: Column(

@@ -316,7 +316,9 @@ class CommunityClub extends Equatable {
     required this.description,
     required this.memberCount,
     required this.weeklyScore,
-    this.isJoined = false,
+    this.founderId = '',
+    this.createdAt,
+    this.isMember = false,
   });
 
   final String id;
@@ -325,7 +327,23 @@ class CommunityClub extends Equatable {
   final String description;
   final int memberCount;
   final int weeklyScore;
-  final bool isJoined;
+  final String founderId;
+  final DateTime? createdAt;
+  final bool isMember;
+
+  CommunityClub copyWith({bool? isMember}) {
+    return CommunityClub(
+      id: id,
+      name: name,
+      region: region,
+      description: description,
+      memberCount: memberCount,
+      weeklyScore: weeklyScore,
+      founderId: founderId,
+      createdAt: createdAt,
+      isMember: isMember ?? this.isMember,
+    );
+  }
 
   factory CommunityClub.fromMap(String id, Map<String, dynamic> data) {
     return CommunityClub(
@@ -338,7 +356,9 @@ class CommunityClub extends Equatable {
       ),
       memberCount: communityIntFromValue(data['memberCount'], 0),
       weeklyScore: communityIntFromValue(data['weeklyScore'], 0),
-      isJoined: data['isJoined'] == true,
+      founderId: communityStringFromValue(data['founderId'], ''),
+      createdAt: communityDateFromValue(data['createdAtMs'] ?? data['createdAt']),
+      isMember: data['isMember'] == true || data['isJoined'] == true,
     );
   }
 
@@ -350,8 +370,73 @@ class CommunityClub extends Equatable {
     description,
     memberCount,
     weeklyScore,
-    isJoined,
+    founderId,
+    createdAt,
+    isMember,
   ];
+}
+
+enum ClubRole {
+  owner,
+  member;
+
+  static ClubRole fromValue(Object? value) {
+    return value == 'owner' ? ClubRole.owner : ClubRole.member;
+  }
+
+  String get label => switch (this) {
+    ClubRole.owner => 'Sáng lập',
+    ClubRole.member => 'Thành viên',
+  };
+}
+
+class ClubMember extends Equatable {
+  const ClubMember({
+    required this.uid,
+    required this.role,
+    required this.displayName,
+    required this.eloChess,
+    this.joinedAt,
+  });
+
+  final String uid;
+  final ClubRole role;
+  final String displayName;
+  final int eloChess;
+  final DateTime? joinedAt;
+
+  factory ClubMember.fromMap(Map<String, dynamic> data) {
+    return ClubMember(
+      uid: communityStringFromValue(data['uid'], ''),
+      role: ClubRole.fromValue(data['role']),
+      displayName: communityStringFromValue(data['displayName'], 'Kỳ thủ'),
+      eloChess: communityIntFromValue(data['eloChess'], 1000),
+      joinedAt: communityDateFromValue(data['joinedAtMs'] ?? data['joinedAt']),
+    );
+  }
+
+  @override
+  List<Object?> get props => [uid, role, displayName, eloChess, joinedAt];
+}
+
+enum TournamentStatus {
+  registering,
+  inProgress,
+  finished;
+
+  static TournamentStatus fromValue(Object? value) {
+    return switch (value) {
+      'in_progress' => TournamentStatus.inProgress,
+      'finished' => TournamentStatus.finished,
+      _ => TournamentStatus.registering,
+    };
+  }
+
+  String get label => switch (this) {
+    TournamentStatus.registering => 'Đang đăng ký',
+    TournamentStatus.inProgress => 'Đang diễn ra',
+    TournamentStatus.finished => 'Đã kết thúc',
+  };
 }
 
 class CommunityTournament extends Equatable {
@@ -364,6 +449,12 @@ class CommunityTournament extends Equatable {
     required this.registeredPlayers,
     required this.capacity,
     required this.prize,
+    this.status = TournamentStatus.registering,
+    this.createdBy = 'system',
+    this.registrationDeadline,
+    this.minElo,
+    this.maxElo,
+    this.winnerUid,
   });
 
   final String id;
@@ -374,6 +465,12 @@ class CommunityTournament extends Equatable {
   final int registeredPlayers;
   final int capacity;
   final String prize;
+  final TournamentStatus status;
+  final String createdBy;
+  final DateTime? registrationDeadline;
+  final int? minElo;
+  final int? maxElo;
+  final String? winnerUid;
 
   double get fillRatio {
     if (capacity <= 0) return 0;
@@ -381,17 +478,30 @@ class CommunityTournament extends Equatable {
   }
 
   factory CommunityTournament.fromMap(String id, Map<String, dynamic> data) {
+    final status = TournamentStatus.fromValue(data['status']);
     return CommunityTournament(
       id: id,
       name: communityStringFromValue(data['name'], 'Giải đấu CChess'),
-      mode: communityStringFromValue(data['mode'], 'Swiss'),
-      statusLabel: communityStringFromValue(data['statusLabel'], 'Sắp mở'),
+      // 'mode'/'statusLabel' are the legacy free-text display fields used by
+      // the seed fallback; the backend-authoritative shape only sends
+      // 'format'/'status', so derive matching Vietnamese labels from those.
+      mode: communityStringFromValue(data['mode'], 'Loại trực tiếp'),
+      statusLabel: communityStringFromValue(data['statusLabel'], status.label),
       startsAt:
-          communityDateFromValue(data['startsAt']) ??
+          communityDateFromValue(data['startsAtMs'] ?? data['startsAt']) ??
           DateTime.now().add(const Duration(days: 1)),
-      registeredPlayers: communityIntFromValue(data['registeredPlayers'], 0),
+      registeredPlayers: communityIntFromValue(
+        data['participantCount'] ?? data['registeredPlayers'],
+        0,
+      ),
       capacity: communityIntFromValue(data['capacity'], 32),
       prize: communityStringFromValue(data['prize'], 'Huy chương Kỳ Xã'),
+      status: status,
+      createdBy: communityStringFromValue(data['createdBy'], 'system'),
+      registrationDeadline: communityDateFromValue(data['registrationDeadlineMs']),
+      minElo: data['minElo'] is num ? (data['minElo'] as num).toInt() : null,
+      maxElo: data['maxElo'] is num ? (data['maxElo'] as num).toInt() : null,
+      winnerUid: data['winnerUid'] as String?,
     );
   }
 
@@ -405,10 +515,145 @@ class CommunityTournament extends Equatable {
     registeredPlayers,
     capacity,
     prize,
+    status,
+    createdBy,
+    registrationDeadline,
+    minElo,
+    maxElo,
+    winnerUid,
   ];
 }
 
-enum CommunityFeedType { puzzle, match, news }
+enum TournamentParticipantStatus {
+  registered,
+  active,
+  eliminated,
+  champion;
+
+  static TournamentParticipantStatus fromValue(Object? value) {
+    return switch (value) {
+      'active' => TournamentParticipantStatus.active,
+      'eliminated' => TournamentParticipantStatus.eliminated,
+      'champion' => TournamentParticipantStatus.champion,
+      _ => TournamentParticipantStatus.registered,
+    };
+  }
+}
+
+class TournamentParticipant extends Equatable {
+  const TournamentParticipant({
+    required this.uid,
+    required this.displayName,
+    required this.eloAtRegistration,
+    required this.status,
+  });
+
+  final String uid;
+  final String displayName;
+  final int eloAtRegistration;
+  final TournamentParticipantStatus status;
+
+  factory TournamentParticipant.fromMap(Map<String, dynamic> data) {
+    return TournamentParticipant(
+      uid: communityStringFromValue(data['uid'], ''),
+      displayName: communityStringFromValue(data['displayName'], 'Kỳ thủ'),
+      eloAtRegistration: communityIntFromValue(data['eloAtRegistration'], 1000),
+      status: TournamentParticipantStatus.fromValue(data['status']),
+    );
+  }
+
+  @override
+  List<Object?> get props => [uid, displayName, eloAtRegistration, status];
+}
+
+enum TournamentMatchStatus {
+  pending,
+  ready,
+  inProgress,
+  finished;
+
+  static TournamentMatchStatus fromValue(Object? value) {
+    return switch (value) {
+      'ready' => TournamentMatchStatus.ready,
+      'in_progress' => TournamentMatchStatus.inProgress,
+      'finished' => TournamentMatchStatus.finished,
+      _ => TournamentMatchStatus.pending,
+    };
+  }
+}
+
+class TournamentMatch extends Equatable {
+  const TournamentMatch({
+    required this.id,
+    required this.round,
+    required this.slotIndex,
+    required this.player1Id,
+    required this.player2Id,
+    required this.result,
+    required this.roomId,
+    required this.status,
+  });
+
+  final String id;
+  final int round;
+  final int slotIndex;
+  final String? player1Id;
+  final String? player2Id;
+  final String? result; // 'player1' | 'player2' | 'bye' | null
+  final String? roomId;
+  final TournamentMatchStatus status;
+
+  /// The uid of the winner, if this match has a decided result. A 'bye'
+  /// result has exactly one real player present — they're the winner.
+  String? get winnerUid {
+    if (result == 'player1') return player1Id;
+    if (result == 'player2') return player2Id;
+    if (result == 'bye') return player1Id ?? player2Id;
+    return null;
+  }
+
+  bool isPlayer(String? uid) =>
+      uid != null && (player1Id == uid || player2Id == uid);
+
+  factory TournamentMatch.fromMap(Map<String, dynamic> data) {
+    return TournamentMatch(
+      id: communityStringFromValue(data['id'], ''),
+      round: communityIntFromValue(data['round'], 1),
+      slotIndex: communityIntFromValue(data['slotIndex'], 0),
+      player1Id: data['player1Id'] as String?,
+      player2Id: data['player2Id'] as String?,
+      result: data['result'] as String?,
+      roomId: data['roomId'] as String?,
+      status: TournamentMatchStatus.fromValue(data['status']),
+    );
+  }
+
+  @override
+  List<Object?> get props => [
+    id,
+    round,
+    slotIndex,
+    player1Id,
+    player2Id,
+    result,
+    roomId,
+    status,
+  ];
+}
+
+enum CommunityFeedType {
+  puzzle,
+  match,
+  news;
+
+  static CommunityFeedType fromValue(Object? value) {
+    return switch (value) {
+      'puzzle' => CommunityFeedType.puzzle,
+      'match' => CommunityFeedType.match,
+      _ => CommunityFeedType.news,
+    };
+  }
+}
 
 class CommunityFeedItem extends Equatable {
   const CommunityFeedItem({
@@ -417,6 +662,8 @@ class CommunityFeedItem extends Equatable {
     required this.title,
     required this.subtitle,
     required this.meta,
+    this.route,
+    this.linkUrl,
   });
 
   final String id;
@@ -424,7 +671,24 @@ class CommunityFeedItem extends Equatable {
   final String title;
   final String subtitle;
   final String meta;
+  /// Stable marker deciding what tapping the card does (e.g. 'daily_puzzle').
+  /// Null means the card has no special tap action beyond its [type].
+  final String? route;
+  /// External article URL for plain news items. Null for puzzle/match cards.
+  final String? linkUrl;
+
+  factory CommunityFeedItem.fromMap(Map<String, dynamic> data) {
+    return CommunityFeedItem(
+      id: communityStringFromValue(data['id'], ''),
+      type: CommunityFeedType.fromValue(data['type']),
+      title: communityStringFromValue(data['title'], ''),
+      subtitle: communityStringFromValue(data['subtitle'], ''),
+      meta: communityStringFromValue(data['meta'], ''),
+      route: (data['route'] as String?)?.trim().isEmpty ?? true ? null : data['route'] as String?,
+      linkUrl: (data['linkUrl'] as String?)?.trim().isEmpty ?? true ? null : data['linkUrl'] as String?,
+    );
+  }
 
   @override
-  List<Object?> get props => [id, type, title, subtitle, meta];
+  List<Object?> get props => [id, type, title, subtitle, meta, route, linkUrl];
 }

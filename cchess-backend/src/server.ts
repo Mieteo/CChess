@@ -38,6 +38,9 @@ import {
 } from './matchmaking';
 import { createPuzzleApi, type PuzzleApi } from './puzzles/puzzle_routes';
 import { createShopApi, type ShopApi } from './shop/shop_routes';
+import { createClubsApi, type ClubsApi } from './clubs/clubs_routes';
+import { createCommunityFeedApi, type CommunityFeedApi } from './community_feed/community_feed_routes';
+import { createTournamentsApi, type TournamentsApi } from './tournaments/tournament_routes';
 
 // Step 2-3 from 08_HUONG_DAN_BACKEND_WEBSOCKET.md.
 //
@@ -275,6 +278,20 @@ export interface CChessServerOptions {
   /// HTTP server. Defaults to the real Firestore-backed API; tests inject a
   /// fake-store-backed instance.
   shopApi?: ShopApi;
+  /// REST API for clubs (S14 C3 — Kỳ Xã), mounted on the same HTTP server.
+  /// Defaults to the real Firestore-backed API; tests inject a fake-store-backed
+  /// instance.
+  clubsApi?: ClubsApi;
+  /// REST API for the community news/daily-challenge feed (S14 C6), mounted on
+  /// the same HTTP server. Defaults to the real Firestore-backed API; tests
+  /// inject a fake-store-backed instance.
+  communityFeedApi?: CommunityFeedApi;
+  /// REST API for tournaments (S14 C4 — Giải Đấu), mounted on the same HTTP
+  /// server. Also used in-process (via `.store`) by the create-room handler
+  /// and finishGame() below — tournament matches reuse the casual
+  /// private-room flow instead of new matchmaking surface. Defaults to the
+  /// real Firestore-backed API; tests inject a fake-store-backed instance.
+  tournamentsApi?: TournamentsApi;
   /// Per-instance timing / limits. Each field defaults to its env-backed
   /// module constant, so production (no config) is unchanged. The test lab
   /// passes this PER SCENARIO — unlike env vars (read once at import), an
@@ -326,6 +343,16 @@ export function createCChessServer(options: CChessServerOptions = {}): CChessSer
   // S16 economy REST API, mounted on the same HTTP server. It owns /shop*,
   // /wallet, /inventory* and /admin/shop*; everything else falls through.
   const shopApi = options.shopApi ?? createShopApi();
+  // S14 C3 clubs REST API, mounted on the same HTTP server. It owns /clubs*;
+  // everything else falls through.
+  const clubsApi = options.clubsApi ?? createClubsApi();
+  // S14 C6 community feed REST API, mounted on the same HTTP server. It owns
+  // /community/feed and /admin/community/feed*; everything else falls through.
+  const communityFeedApi = options.communityFeedApi ?? createCommunityFeedApi();
+  // S14 C4 tournaments REST API, mounted on the same HTTP server. It owns
+  // /tournaments*; everything else falls through. Also called in-process
+  // (`.store`) below for room attachment + match result recording.
+  const tournamentsApi = options.tournamentsApi ?? createTournamentsApi();
 
   const httpServer = createServer((req, res) => {
     const url = new URL(req.url ?? '/', 'http://localhost');
@@ -354,10 +381,14 @@ export function createCChessServer(options: CChessServerOptions = {}): CChessSer
 
     // Mounted REST APIs. Each handle() resolves true if it owned the request
     // (and already sent a response); we try the puzzle API, then the shop API,
-    // and 404 only if neither claimed the path.
+    // then the clubs API, then the community feed API, then the tournaments
+    // API, and 404 only if none claimed the path.
     void puzzleApi
       .handle(req, res)
       .then((handled) => (handled ? true : shopApi.handle(req, res)))
+      .then((handled) => (handled ? true : clubsApi.handle(req, res)))
+      .then((handled) => (handled ? true : communityFeedApi.handle(req, res)))
+      .then((handled) => (handled ? true : tournamentsApi.handle(req, res)))
       .then((handled) => {
         if (!handled && !res.headersSent) {
           res.writeHead(404);
@@ -499,6 +530,21 @@ export function createCChessServer(options: CChessServerOptions = {}): CChessSer
             console.error('[persist] error:', e);
             return null;
           });
+      // S14 C4: if this room was a tournament bracket match, record the
+      // result and advance the bracket — independent of (and in addition to)
+      // the ranked persist above, which tournament rooms always skip
+      // (mode:'casual'). A draw resets the match for a replay instead of
+      // advancing anyone (single-elimination has no draws).
+      if (room.tournamentTag && room.result) {
+        const { tournamentId, matchId } = room.tournamentTag;
+        const outcome: { winnerUid: string } | { draw: true } =
+          room.result === 'draw'
+            ? { draw: true }
+            : { winnerUid: room.result === 'red-win' ? room.redUid! : room.blackUid! };
+        await tournamentsApi.store
+          .recordMatchResult({ tournamentId, matchId, outcome, roomId: room.id })
+          .catch((e) => console.error('[tournament] recordMatchResult failed:', e));
+      }
       const elo = persisted?.elo
         ? {
             red: {
@@ -761,14 +807,33 @@ export function createCChessServer(options: CChessServerOptions = {}): CChessSer
           typeof rawClock === 'number' && rawClock >= cfg.minClockMs && rawClock <= cfg.maxClockMs
             ? rawClock
             : undefined;
-        const roomMode = msg.mode === 'casual' || msg.casual === true
+        // S14 C4: an optional tag linking this room to a tournament bracket
+        // match (see tournaments/tournament_routes.ts + the create-room WS
+        // protocol doc). Tournament rooms always run as 'casual' — ladder
+        // ELO is untouched; standings are tracked via TournamentStore
+        // instead.
+        const rawTag = (msg as { tournamentTag?: unknown }).tournamentTag as
+          | { tournamentId?: unknown; matchId?: unknown }
+          | undefined;
+        const tournamentTag =
+          rawTag &&
+          typeof rawTag.tournamentId === 'string' &&
+          rawTag.tournamentId.length > 0 &&
+          typeof rawTag.matchId === 'string' &&
+          rawTag.matchId.length > 0
+            ? { tournamentId: rawTag.tournamentId, matchId: rawTag.matchId }
+            : undefined;
+        const roomMode = tournamentTag
           ? 'casual'
-          : 'ranked';
+          : msg.mode === 'casual' || msg.casual === true
+            ? 'casual'
+            : 'ranked';
         const variant = msg.variant === 'cup' ? 'cup' : 'standard';
         const room = createRoom(socket, {
           initialClockMs: clockMs,
           mode: roomMode,
           variant,
+          tournamentTag,
         });
         // Waiting-room TTL: cancel the room if nobody joins in time.
         room.waitingTimer = setTimeout(() => {
@@ -793,6 +858,15 @@ export function createCChessServer(options: CChessServerOptions = {}): CChessSer
         console.log(
           `[room] ${room.id} created by ${uid} (mode=${room.mode} variant=${room.variant} clock=${clockMs ?? 'default'}ms)`,
         );
+        if (tournamentTag) {
+          // Fire-and-forget: lets the OTHER player's match-detail screen
+          // discover this room id (via GET /tournaments/:id/matches) instead
+          // of needing a new "who's hosting" protocol message. No-ops if
+          // `uid` isn't actually one of this match's two players.
+          void tournamentsApi.store
+            .attachRoomToMatch(tournamentTag.tournamentId, tournamentTag.matchId, room.id, uid)
+            .catch((e) => console.error('[tournament] attachRoomToMatch failed:', e));
+        }
         return;
       }
 

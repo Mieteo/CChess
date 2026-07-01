@@ -20,6 +20,8 @@ import type { CChessServer } from './server';
 import { PieceColor, uciOfMove, XiangqiGame } from './engine';
 import { getRoomById } from './rooms';
 import { __resetQueueForLab, queueSize } from './matchmaking';
+import type { TournamentsApi } from './tournaments/tournament_routes';
+import type { RecordMatchResultArgs, TournamentStore } from './tournaments/tournament_store';
 
 interface Msg {
   type: string;
@@ -45,14 +47,18 @@ afterEach(() => {
 type PersistFn = NonNullable<
   Parameters<typeof import('./server').createCChessServer>[0]
 >['persist'];
+type TournamentsApiOpt = NonNullable<
+  Parameters<typeof import('./server').createCChessServer>[0]
+>['tournamentsApi'];
 
 async function startTestServer(
-  opts: { persist?: PersistFn } = {},
+  opts: { persist?: PersistFn; tournamentsApi?: TournamentsApiOpt } = {},
 ): Promise<{ server: CChessServer; url: string }> {
   const { createCChessServer } = await import('./server');
   const server = createCChessServer({
     authenticate: async (token: string) => ({ uid: token }),
     persist: opts.persist ?? (async () => null),
+    tournamentsApi: opts.tournamentsApi,
   });
   return new Promise((resolve) => {
     server.httpServer.listen(0, '127.0.0.1', () => {
@@ -743,6 +749,112 @@ test('A1/C5: a spectator gets chat history on join and can chat to players', asy
     red.send({ type: 'resign' });
     await red.waitType('game-ended');
     await Promise.all([red.close(), black.close(), watcher.close()]);
+  } finally {
+    await server.close();
+  }
+});
+
+// ── S14 C4: tournament-tagged rooms ──────────────────────────────────────
+
+/// Records attachRoomToMatch/recordMatchResult calls instead of touching
+/// Firestore, so this exercises the server.ts wiring (parse tag → createRoom
+/// → attach; finishGame → recordMatchResult) without a real TournamentStore —
+/// the store's own logic is covered by tournaments/tournament.test.ts.
+function fakeTournamentsApi(): {
+  api: TournamentsApi;
+  attachCalls: Array<{ tournamentId: string; matchId: string; roomId: string; requesterUid: string }>;
+  resultCalls: RecordMatchResultArgs[];
+} {
+  const attachCalls: Array<{ tournamentId: string; matchId: string; roomId: string; requesterUid: string }> = [];
+  const resultCalls: RecordMatchResultArgs[] = [];
+  const store: TournamentStore = {
+    list: async () => [],
+    get: async () => null,
+    create: async () => {
+      throw new Error('not used in this test');
+    },
+    register: async () => {
+      throw new Error('not used in this test');
+    },
+    unregister: async () => {},
+    listParticipants: async () => [],
+    listMatches: async () => [],
+    getMatch: async () => null,
+    start: async () => [],
+    recordMatchResult: async (args) => {
+      resultCalls.push(args);
+    },
+    attachRoomToMatch: async (tournamentId, matchId, roomId, requesterUid) => {
+      attachCalls.push({ tournamentId, matchId, roomId, requesterUid });
+    },
+  };
+  return { api: { handle: async () => false, store }, attachCalls, resultCalls };
+}
+
+test('S14 C4: create-room with a tournamentTag sets room.tournamentTag, runs as casual, and attaches the room to the match', async () => {
+  const { api, attachCalls } = fakeTournamentsApi();
+  const { server, url } = await startTestServer({ tournamentsApi: api });
+  try {
+    const red = await connectAuthed(url, 'p1');
+    red.send({
+      type: 'create-room',
+      tournamentTag: { tournamentId: 'tour-1', matchId: 'r1_m0' },
+    });
+    const created = await red.waitType('room-created');
+    assert.equal(created.mode, 'casual'); // tournament rooms always skip ladder ELO
+
+    const room = getRoomById(created.roomId as string);
+    assert.deepEqual(room?.tournamentTag, { tournamentId: 'tour-1', matchId: 'r1_m0' });
+
+    // attachRoomToMatch is fire-and-forget; give the microtask a beat to run.
+    await new Promise((r) => setTimeout(r, 20));
+    assert.equal(attachCalls.length, 1);
+    assert.deepEqual(attachCalls[0], {
+      tournamentId: 'tour-1',
+      matchId: 'r1_m0',
+      roomId: created.roomId,
+      requesterUid: 'p1',
+    });
+
+    await red.close();
+  } finally {
+    await server.close();
+  }
+});
+
+test('S14 C4: finishGame on a tournament-tagged room calls recordMatchResult and still skips ranked persist', async () => {
+  const { api, resultCalls } = fakeTournamentsApi();
+  let persistCalls = 0;
+  const { server, url } = await startTestServer({
+    tournamentsApi: api,
+    persist: async () => {
+      persistCalls++;
+      return null;
+    },
+  });
+  try {
+    const red = await connectAuthed(url, 'p1');
+    const black = await connectAuthed(url, 'p2');
+    red.send({
+      type: 'create-room',
+      tournamentTag: { tournamentId: 'tour-1', matchId: 'r1_m0' },
+    });
+    const created = await red.waitType('room-created');
+    black.send({ type: 'join-room', roomId: created.roomId as string });
+    await red.waitType('game-start');
+    await black.waitType('game-start');
+
+    red.send({ type: 'resign' });
+    await red.waitType('game-ended');
+    await black.waitType('game-ended');
+
+    assert.equal(persistCalls, 0); // mode:'casual' skips ranked ELO persist
+    assert.equal(resultCalls.length, 1);
+    assert.equal(resultCalls[0].tournamentId, 'tour-1');
+    assert.equal(resultCalls[0].matchId, 'r1_m0');
+    assert.deepEqual(resultCalls[0].outcome, { winnerUid: 'p2' }); // red resigned -> black (p2) wins
+
+    await Promise.all([red.close(), black.close()]);
   } finally {
     await server.close();
   }

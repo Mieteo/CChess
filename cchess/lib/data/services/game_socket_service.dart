@@ -174,11 +174,17 @@ class GameSocketService {
     _channel?.sink.add(jsonEncode(data));
   }
 
-  void createRoom({int? clockMs, bool casual = false, String? variant}) {
+  void createRoom({
+    int? clockMs,
+    bool casual = false,
+    String? variant,
+    Map<String, String>? tournamentTag,
+  }) {
     final message = <String, dynamic>{'type': 'create-room'};
     if (clockMs != null) message['clockMs'] = clockMs;
     if (casual) message['mode'] = 'casual';
     if (variant != null) message['variant'] = variant;
+    if (tournamentTag != null) message['tournamentTag'] = tournamentTag;
     send(message);
   }
 

@@ -1,12 +1,15 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../datasources/remote/community_feed_api_source.dart';
 import '../models/community_models.dart';
 
 class CommunityRepository {
-  CommunityRepository(this._db);
+  CommunityRepository(this._db, {CommunityFeedApiSource? feedRemote})
+    : _feedRemote = feedRemote;
 
   final FirebaseFirestore _db;
+  final CommunityFeedApiSource? _feedRemote;
 
   Future<List<CommunityClub>> loadClubs({int limit = 8}) async {
     try {
@@ -40,7 +43,22 @@ class CommunityRepository {
     }
   }
 
-  List<CommunityFeedItem> loadFeed() {
+  /// Feed cards (daily challenge + featured match + news): backend → the
+  /// hardcoded fallback below when offline or the backend call fails.
+  Future<List<CommunityFeedItem>> loadFeed() async {
+    final remote = _feedRemote;
+    if (remote != null) {
+      try {
+        final items = await remote.listFeed();
+        if (items.isNotEmpty) return items;
+      } on FeedApiException {
+        // fall through to the hardcoded feed
+      }
+    }
+    return _fallbackFeed();
+  }
+
+  List<CommunityFeedItem> _fallbackFeed() {
     return const [
       CommunityFeedItem(
         id: 'daily-endgame',
@@ -48,6 +66,7 @@ class CommunityRepository {
         title: 'Tàn Cục Thách Đấu',
         subtitle: 'Chiếu hết trong 3 nước, thế xe pháo phối hợp.',
         meta: '488 kỳ thủ đã thử',
+        route: 'daily_puzzle',
       ),
       CommunityFeedItem(
         id: 'featured-match',
@@ -68,7 +87,10 @@ class CommunityRepository {
 }
 
 final communityRepositoryProvider = Provider<CommunityRepository>((ref) {
-  return CommunityRepository(FirebaseFirestore.instance);
+  return CommunityRepository(
+    FirebaseFirestore.instance,
+    feedRemote: ref.watch(communityFeedApiSourceProvider),
+  );
 });
 
 List<CommunityClub> seedCommunityClubs() {
@@ -80,7 +102,7 @@ List<CommunityClub> seedCommunityClubs() {
       description: 'Luyện khai cuộc, giao lưu cuối tuần và đấu đội nội bộ.',
       memberCount: 128,
       weeklyScore: 8420,
-      isJoined: true,
+      isMember: true,
     ),
     CommunityClub(
       id: 'club-sai-gon',

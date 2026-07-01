@@ -55,6 +55,7 @@ final communityDashboardProvider =
       final nearbyPlayers = seedCommunityPlayers(
         profile: profile,
       ).where((player) => player.id != profile?.id).take(6).toList();
+      final feed = await communityRepo.loadFeed();
 
       return CommunityDashboard(
         profile: profile,
@@ -65,7 +66,7 @@ final communityDashboardProvider =
         nearbyPlayers: nearbyPlayers,
         clubs: clubs,
         tournaments: tournaments,
-        feed: communityRepo.loadFeed(),
+        feed: feed,
       );
     });
 
