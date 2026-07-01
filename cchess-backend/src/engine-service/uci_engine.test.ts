@@ -42,7 +42,15 @@ function makeFakeProcess(writes: string[]): ChildProcessWithoutNullStreams {
       setImmediate(() => {
         if (trimmed === 'uci') stdout.emit('data', 'uciok\n');
         else if (trimmed === 'isready') stdout.emit('data', 'readyok\n');
-        else if (trimmed.startsWith('go ')) stdout.emit('data', 'bestmove h2e2\n');
+        else if (trimmed.startsWith('go ')) {
+          // Always report 4 MultiPV lines (regardless of whether MultiPV was
+          // actually raised) so blunder-roll tests have alternates to pick.
+          stdout.emit('data', 'info depth 5 multipv 1 score cp 50 pv h2e2 h7e7\n');
+          stdout.emit('data', 'info depth 5 multipv 2 score cp 40 pv h2c2 h7e7\n');
+          stdout.emit('data', 'info depth 5 multipv 3 score cp 30 pv b2c2 h7e7\n');
+          stdout.emit('data', 'info depth 5 multipv 4 score cp 20 pv g3g4 h7e7\n');
+          stdout.emit('data', 'bestmove h2e2\n');
+        }
       });
       return true;
     },
@@ -62,60 +70,51 @@ function makeEngine(writes: string[]): UciEngine {
   });
 }
 
-test('bestMove sets UCI_Elo before go, then resets to full strength after', async () => {
+test('blunderRate 1 raises MultiPV before go, resets after, and plays an alternate', async () => {
   const writes: string[] = [];
   const engine = makeEngine(writes);
 
-  const result = await engine.bestMove(FEN, {
-    movetimeMs: 250,
-    skillLevel: 6,
-    uciElo: 2050,
-  });
-  assert.equal(result.uci, 'h2e2');
+  const result = await engine.bestMove(FEN, { movetimeMs: 250, blunderRate: 1 });
 
   const goIdx = writes.findIndex((l) => l.startsWith('go '));
-  const limitOnIdx = writes.indexOf('setoption name UCI_LimitStrength value true');
-  const eloIdx = writes.indexOf('setoption name UCI_Elo value 2050');
-  assert.ok(limitOnIdx >= 0 && eloIdx >= 0, 'enables UCI_LimitStrength + UCI_Elo');
-  assert.ok(eloIdx < goIdx, 'strength is set before the search starts');
+  const multiPvOnIdx = writes.indexOf('setoption name MultiPV value 4');
+  assert.ok(multiPvOnIdx >= 0, 'raises MultiPV before searching');
+  assert.ok(multiPvOnIdx < goIdx, 'MultiPV is set before the search starts');
 
-  const resetIdx = writes.indexOf('setoption name UCI_LimitStrength value false');
-  assert.ok(resetIdx > goIdx, 'strength is reset after the search');
-  assert.ok(
-    writes.includes('setoption name Skill Level value 20'),
-    'skill restored to full',
-  );
+  const resetIdx = writes.indexOf('setoption name MultiPV value 1');
+  assert.ok(resetIdx > goIdx, 'MultiPV is reset to 1 after the search');
 
-  engine.dispose();
-});
-
-test('bestMove uses Skill Level when only skill is provided', async () => {
-  const writes: string[] = [];
-  const engine = makeEngine(writes);
-
-  await engine.bestMove(FEN, { movetimeMs: 250, skillLevel: 6 });
-
-  assert.ok(writes.includes('setoption name Skill Level value 6'));
-  assert.ok(!writes.some((l) => l.includes('UCI_Elo')), 'no UCI_Elo when skill-only');
+  // blunderRate 1 always rolls a blunder, so the engine's actual best move
+  // (h2e2, multipv 1) must NOT be the one played.
+  assert.notEqual(result.uci, 'h2e2');
+  assert.ok(['h2c2', 'b2c2', 'g3g4'].includes(result.uci ?? ''));
 
   engine.dispose();
 });
 
-test('full-strength search emits no strength options', async () => {
+test('no blunderRate never touches MultiPV and always plays the engine\'s best move', async () => {
   const writes: string[] = [];
   const engine = makeEngine(writes);
 
-  await engine.bestMove(FEN, { movetimeMs: 250 });
+  const result = await engine.bestMove(FEN, { movetimeMs: 250 });
 
   assert.ok(
-    !writes.some(
-      (l) =>
-        l.startsWith('setoption name UCI_LimitStrength') ||
-        l.startsWith('setoption name UCI_Elo') ||
-        l.startsWith('setoption name Skill Level'),
-    ),
-    'no strength options for a full-strength search',
+    !writes.some((l) => l.startsWith('setoption name MultiPV')),
+    'no MultiPV option for a full-strength search',
   );
+  assert.equal(result.uci, 'h2e2');
+
+  engine.dispose();
+});
+
+test('blunderRate 0 behaves identically to no blunderRate', async () => {
+  const writes: string[] = [];
+  const engine = makeEngine(writes);
+
+  const result = await engine.bestMove(FEN, { movetimeMs: 250, blunderRate: 0 });
+
+  assert.ok(!writes.some((l) => l.startsWith('setoption name MultiPV')));
+  assert.equal(result.uci, 'h2e2');
 
   engine.dispose();
 });

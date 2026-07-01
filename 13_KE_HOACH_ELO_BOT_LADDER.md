@@ -8,7 +8,7 @@
 > - **P0–P2** ✅ `engine_config.dart` (`configForElo`), engine nhận `EngineConfig`, `matchmaking/{bot_matchmaker,elo_scoring}.dart` + test.
 > - **P3** ✅ `game_screen` lưu bracket → `eloDelta` → `applyGameResult` + `GameRecord.eloDelta`; màn kết quả **lộ ELO bot + bracket**.
 > - **P4** ✅ `bot_select_screen` (standard) → ELO + **"Tìm trận"** (`pickBot`); `app_router` parse `botElo`/`bracket`; trong ván đối thủ chỉ hiện **"Bot"** (ẩn ELO). Cờ Úp giữ luồng tier riêng.
-> - **P5** ✅ backend: `EngineLimit.skillLevel/uciElo`, request `elo/skill`, clamp trong `limitForRequest`, **cache key kèm skill/elo** (`fen.ts`), `uci_engine` set `UCI_Elo`/`Skill Level` trước search + **reset** sau (env `PIKAFISH_STRENGTH_MODE`). Test: ELO/skill tới pool + cache tách + go-command set/reset.
+> - **P5** ✅ (rework 2026-06-30) backend: ban đầu set `UCI_Elo`/`Skill Level` trước search — **phát hiện Pikafish bản chính thức (release `Pikafish-2026-01-02`, build production) không có 3 option này** (`No such option: ...`, engine lờ đi và chạy full sức, không lỗi/crash — xác nhận bằng cách spawn binary thật, không qua mock). Đổi sang `EngineLimit.blunderRate` (0..1): `uci_engine.ts` raise `MultiPV` lúc cần blunder, sau `bestmove` có xác suất `blunderRate` chọn 1 trong các alternate line (2..N) thay vì nước tốt nhất — giống cơ chế `blunderRate` của minimax. Cache **bypass hoàn toàn** khi `blunderRate > 0` (không đưa vào cache key — kết quả random nên cache sẽ đóng băng 1 lần roll mãi mãi). Test: MultiPV set/reset quanh `go` + blunder chọn đúng alternate + cache bypass.
 > - **P6** ✅ bỏ `RankTier`/`RankInfo`/`rankForElo` → `EloConstants.colorForElo`; badge hiện **số ELO**. **Quyết định:** giữ `BotDifficulty`/`EngineLevel` (vẫn dùng cho Cờ Úp + hint/analysis + tương thích cũ) thay vì xoá. **Còn lại:** calibrate bảng số `configForElo` + env backend bằng đấu thử thực tế (thủ công, không tự động hoá được).
 
 ---
@@ -59,12 +59,14 @@ Mục tiêu mới:
 
 | Dải ELO | Engine | Núm vặn |
 |---|---|---|
-| 1000–1400 | **minimax** | depth 1–3 + `blunderRate` giảm dần (Pikafish ghì xuống dải này rất "máy móc") |
+| 1000–1400 | **minimax** | depth 1–3 + `blunderRate` giảm dần |
 | 1400–2000 | **minimax depth cao / ElephantEye** | depth 4–6 |
-| 2000–2600 | **Pikafish (giới hạn)** | `UCI_LimitStrength=true` + `UCI_Elo`, hoặc `Skill Level` 5–15 + movetime |
-| 2600–2900+ | **Pikafish (gần/full)** | `Skill Level` 18–20 / movetime cao |
+| 2000–2600 | **Pikafish** | movetime tăng dần + `blunderRate` giảm dần |
+| 2600–2900+ | **Pikafish (gần/full)** | movetime cao, `blunderRate` ~0 |
 
 > ⚠️ ELO engine tự báo **rất sai** trong cờ tướng. Bảng số chỉ là điểm xuất phát; **phải calibrate bằng đấu thử** (Phase 6).
+>
+> ⚠️ **(2026-06-30)** `UCI_LimitStrength`/`UCI_Elo`/`Skill Level` **không tồn tại** trong build Pikafish chính thức đang dùng (`pikafish-sse41-popcnt`, release `Pikafish-2026-01-02`) — xác nhận bằng cách spawn binary thật và gửi `setoption`, engine trả `No such option: ...` rồi lờ đi (không lỗi, không crash, nên không ai phát hiện qua test mock trước đó). Cũng phát hiện client (`remote_pikafish_engine.dart`) **không gửi `depth`** lên server, nên đòn bẩy thực tế duy nhất từng có chỉ là `movetimeMs` (250ms→1500ms) — đo trực tiếp cho thấy gap quá hẹp (depth 13 vs 18, cả hai đều đã rất mạnh nhờ NNUE). → Đã thay bằng `blunderRate` (MultiPV + chọn ngẫu nhiên alternate line, cùng ý tưởng với minimax) cho cả 5 dải Pikafish. Bảng `blunderRate` mới (0.12 → 0.08 → 0.05 → 0.02 → 0) **cũng chỉ là điểm xuất phát chưa calibrate** — xem §9.
 
 ---
 
@@ -155,8 +157,8 @@ int eloDelta({required EloBracket bracket, required bool won, required bool drew
 ---
 
 ## 6. Rủi ro & phụ thuộc
-- **Backend Pikafish strength**: bắt buộc cho dải 2000–2900. Nếu `UCI_Elo` không hỗ trợ → fallback `Skill Level` (thô hơn, cần calibrate kỹ).
-- **Cache poisoning**: quên thêm strength vào cache key → bot mọi cấp đánh giống nhau. (Đã đưa vào Phase 5.)
+- **Backend Pikafish strength**: ~~bắt buộc cho dải 2000–2900. Nếu UCI_Elo không hỗ trợ → fallback Skill Level~~ → **(2026-06-30) cả hai đều không tồn tại** trong build Pikafish chính thức đang dùng — đã đổi sang cơ chế `blunderRate` (MultiPV + chọn alternate ngẫu nhiên). Rủi ro còn lại: bảng `blunderRate` 5 dải Pikafish (0.12/0.08/0.05/0.02/0) **chưa calibrate bằng đấu thử thật** — xem §9.
+- **Cache poisoning**: quên thêm strength vào cache key → bot mọi cấp đánh giống nhau. (Đã đưa vào Phase 5; với `blunderRate` thì hướng xử lý đổi thành **bypass cache hoàn toàn** thay vì đưa vào key, vì kết quả random — đưa vào key sẽ đóng băng 1 lần roll mãi mãi.)
 - **Trạng thái UCI dùng chung**: quên reset → rò sức cờ giữa các request. (Đã đưa vào Phase 5.)
 - **Di trú dữ liệu**: ~~thang mới dùng chung `eloChess`~~ → **đã đổi (2026-06-26):** đấu bot dùng **pool riêng `eloBot`** (+ `botGames`/`botWins`/`botLosses`/`botDraws`), client-owned + persist cloud, tách khỏi `eloChess` ranked (server-authoritative). Lý do: ván bot chạy on-device không có server xác minh → không được ghi vào `eloChess` (chống gian lận + tránh bị splash sync ghi đè). Doc cũ mới có `eloChess` sẵn vẫn không cần migrate (field mới mặc định 1000); vẫn cần clamp sàn ELO < 1000. Chi tiết bug + fix: [09](09_BACKEND_SERVER_HOAT_DONG.md) §8.
 - **Bỏ RankTier** đụng nhiều widget hiển thị — Phase 6 cần quét kỹ (`grep RankTier|rankForElo`).
@@ -193,6 +195,7 @@ Nhấn icon **Copy** ở AppBar để lấy bảng số liệu dán vào tài li
 ## 9. Việc lớn còn lại (sau Phase 0–6 code)
 
 - ⬜ **Calibrate bảng `configForElo` bằng đấu thử thực tế** (mục 8) — quan trọng nhất; bảng số hiện tại chỉ là điểm xuất phát.
-- ⬜ **Calibrate env backend Pikafish** (`UCI_Elo`/`Skill Level`/movetime cho dải 2000–2900) cùng lúc với trên; kiểm tra build Pikafish có hỗ trợ `UCI_LimitStrength` thật.
-- ⬜ **Build ElephantEye `.so` thật cho mọi ABI Android** + xác nhận FFI chạy trên thiết bị thật (hiện có fallback an toàn về minimax khi lib vắng).
-- ⬜ **Test tay**: chơi vài ván mỗi dải để cảm nhận "đúng tầm", đặc biệt biên 1400/2000 (đổi engine minimax↔ElephantEye↔Pikafish).
+- ✅ **(2026-06-30)** Kiểm tra Pikafish có hỗ trợ `UCI_LimitStrength` thật → **không** (xác nhận bằng binary thật, xem §3 + §6). Đổi cơ chế dải 2000–2900 sang `blunderRate` (MultiPV + alternate ngẫu nhiên, `uci_engine.ts`/`engine_config.dart`); test đơn vị cập nhật xanh theo review thủ công (máy dev không có Node để chạy `npm test` trực tiếp — **cần CI hoặc máy có Node chạy lại để xác nhận**).
+- ⬜ **Calibrate bảng `blunderRate` Pikafish bằng đấu thử thật** (5 dải: 2000=0.12, 2200=0.08, 2400=0.05, 2600=0.02, 2800=0 — chỉ là điểm xuất phát chưa test). Công cụ calibration hiện tại (`calibration_runner.dart`, mục 8) **chỉ chạy local, cố tình loại trừ Zone B** vì mỗi nước cần gọi server — cần mở rộng hoặc đấu tay qua app thật để calibrate dải này.
+- ✅ **(2026-06-30)** Build ElephantEye `.so` cho mọi ABI Android (`flutter build apk --debug`, output `app-debug.apk`) — biên dịch sạch cho `arm64-v8a`/`armeabi-v7a`/`x86_64`, xác nhận patch `NewHash()` (fix crash hash-table null-pointer dải 1400+, xem [cùng ngày, hội thoại trước]) đã vào build qua ninja log. **Còn thiếu:** cài APK lên thiết bị/emulator thật và bấm lại nút calibration 1400→1500/1500→1700/1700→1900 để xác nhận hết crash (máy dev không có `adb devices` kết nối).
+- ⬜ **Test tay**: chơi vài ván mỗi dải để cảm nhận "đúng tầm", đặc biệt biên 1400/2000 (đổi engine minimax↔ElephantEye↔Pikafish) và biên trong Zone B (2000–2900) sau khi đổi sang `blunderRate`.

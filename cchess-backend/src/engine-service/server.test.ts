@@ -56,7 +56,7 @@ test('engine HTTP server requires auth then returns a cached best move', async (
   }
 });
 
-test('best-move forwards ELO/skill to the engine and keys the cache by them', async () => {
+test('best-move forwards blunderRate to the engine and never caches blunder rolls', async () => {
   const { createEngineHttpServer } = await import('./server');
   const pool = new FakePool();
   const service = createEngineHttpServer({
@@ -74,33 +74,53 @@ test('best-move forwards ELO/skill to the engine and keys the cache by them', as
   try {
     const baseUrl = await listen(service.httpServer);
 
-    // ELO/skill reach the pool as a strength-limited EngineLimit.
-    await postBestMoveBody(baseUrl, 'elo-user', {
+    // blunderRate reaches the pool as part of EngineLimit.
+    await postBestMoveBody(baseUrl, 'blunder-user', {
       fen: '4k4/9/9/9/9/9/9/9/9/4K4 w - - 0 1',
-      elo: 2050,
-      skill: 6,
+      blunderRate: 0.12,
     });
-    assert.equal(pool.lastLimit?.uciElo, 2050);
-    assert.equal(pool.lastLimit?.skillLevel, 6);
+    assert.equal(pool.lastLimit?.blunderRate, 0.12);
     assert.equal(pool.calls, 1);
 
-    // A different ELO on the SAME fen must NOT hit the cache — distinct key.
-    await postBestMoveBody(baseUrl, 'elo-user', {
+    // A blunder-enabled request must NEVER hit the cache, even repeating the
+    // exact same fen+blunderRate — every call needs its own fresh roll.
+    const second = await postBestMoveBody(baseUrl, 'blunder-user', {
       fen: '4k4/9/9/9/9/9/9/9/9/4K4 w - - 0 1',
-      elo: 2650,
-      skill: 18,
+      blunderRate: 0.12,
     });
+    assert.equal(second.cached, false);
     assert.equal(pool.calls, 2);
-    assert.equal(pool.lastLimit?.uciElo, 2650);
+  } finally {
+    await service.close();
+  }
+});
 
-    // Repeating the first ELO serves the cached move (no new engine call).
-    const cached = await postBestMoveBody(baseUrl, 'elo-user', {
+test('best-move without blunderRate still caches as before', async () => {
+  const { createEngineHttpServer } = await import('./server');
+  const pool = new FakePool();
+  const service = createEngineHttpServer({
+    pool,
+    authenticate: async (token) => ({ uid: token }),
+    isVip: async () => false,
+    requireAuth: true,
+    quota: new DailyQuotaStore({
+      bestMovePerDay: 100,
+      hintPerDay: 100,
+      analyzePerDay: 100,
+    }),
+  });
+
+  try {
+    const baseUrl = await listen(service.httpServer);
+    await postBestMoveBody(baseUrl, 'plain-user', {
       fen: '4k4/9/9/9/9/9/9/9/9/4K4 w - - 0 1',
-      elo: 2050,
-      skill: 6,
+    });
+    assert.equal(pool.calls, 1);
+    const cached = await postBestMoveBody(baseUrl, 'plain-user', {
+      fen: '4k4/9/9/9/9/9/9/9/9/4K4 w - - 0 1',
     });
     assert.equal(cached.cached, true);
-    assert.equal(pool.calls, 2);
+    assert.equal(pool.calls, 1);
   } finally {
     await service.close();
   }

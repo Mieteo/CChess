@@ -15,8 +15,15 @@ const int kMaxBotElo = 2900;
 /// Each backing engine reads only the fields it understands:
 ///   * minimax       → [depth] + [blunderRate];
 ///   * ElephantEye   → [depth] (native search ply);
-///   * Pikafish      → [skillLevel] / [uciElo] + [movetimeMs] ([depth] is the
-///     fallback search depth used if the remote call has to be served locally).
+///   * Pikafish      → [movetimeMs] + [blunderRate] ([depth] is the fallback
+///     search depth used if the remote call has to be served locally).
+///
+/// Note: Pikafish has no native strength dial — the official release has no
+/// `UCI_LimitStrength`/`UCI_Elo`/`Skill Level` option (confirmed against the
+/// real binary; unknown-option `setoption` calls are silently ignored). So
+/// Pikafish bands lean on [blunderRate] too, same as minimax: the backend
+/// raises `MultiPV` and occasionally plays a weaker candidate line instead of
+/// the engine's actual best move (see `cchess-backend/engine-service/uci_engine.ts`).
 class EngineConfig {
   /// Which engine plays this ELO band.
   final EngineSource engine;
@@ -29,23 +36,16 @@ class EngineConfig {
   /// Move-time budget in milliseconds (Pikafish bands only).
   final int? movetimeMs;
 
-  /// Pikafish `Skill Level` (0–20). Null for the local engines.
-  final int? skillLevel;
-
-  /// Pikafish `UCI_Elo` when `UCI_LimitStrength` is enabled. Null for the
-  /// local engines.
-  final int? uciElo;
-
-  /// Probability (0..1) of throwing in a deliberately random move. Only the
-  /// low minimax band uses this to feel beatable; 0 everywhere else.
+  /// Probability (0..1) of deliberately playing a weaker move instead of the
+  /// engine's actual best move. Minimax throws in a random legal move;
+  /// Pikafish (via the backend) plays a weaker MultiPV alternate. 0 means
+  /// always play the engine's best move.
   final double blunderRate;
 
   const EngineConfig({
     required this.engine,
     required this.depth,
     this.movetimeMs,
-    this.skillLevel,
-    this.uciElo,
     this.blunderRate = 0,
   });
 
@@ -55,18 +55,15 @@ class EngineConfig {
       other.engine == engine &&
       other.depth == depth &&
       other.movetimeMs == movetimeMs &&
-      other.skillLevel == skillLevel &&
-      other.uciElo == uciElo &&
       other.blunderRate == blunderRate;
 
   @override
-  int get hashCode =>
-      Object.hash(engine, depth, movetimeMs, skillLevel, uciElo, blunderRate);
+  int get hashCode => Object.hash(engine, depth, movetimeMs, blunderRate);
 
   @override
   String toString() =>
       'EngineConfig(${engine.name}, depth: $depth, movetimeMs: $movetimeMs, '
-      'skill: $skillLevel, uciElo: $uciElo, blunder: $blunderRate)';
+      'blunder: $blunderRate)';
 }
 
 /// One ELO band → its [EngineConfig]. [minElo] is the inclusive lower edge.
@@ -84,15 +81,15 @@ class _Band {
 /// opponents (doc 13, Phase 6). Keep this table monotonic: a higher ELO must
 /// never map to a weaker config.
 const List<_Band> _ladder = [
-  // 2600–2900+ : Pikafish near / full strength.
+  // 2600–2900+ : Pikafish near / full strength — top band blunders are 0,
+  // it's exactly as strong as the real engine's movetime budget allows.
   _Band(
     2800,
     EngineConfig(
       engine: EngineSource.remotePikafish,
       depth: 14,
       movetimeMs: 1500,
-      skillLevel: 20,
-      uciElo: 2850,
+      blunderRate: 0,
     ),
   ),
   _Band(
@@ -101,19 +98,18 @@ const List<_Band> _ladder = [
       engine: EngineSource.remotePikafish,
       depth: 12,
       movetimeMs: 1000,
-      skillLevel: 18,
-      uciElo: 2650,
+      blunderRate: 0.02,
     ),
   ),
-  // 2000–2600 : Pikafish, strength-limited.
+  // 2000–2600 : Pikafish, weakened via occasional MultiPV-alternate blunders
+  // (see EngineConfig doc — Pikafish has no native strength dial).
   _Band(
     2400,
     EngineConfig(
       engine: EngineSource.remotePikafish,
       depth: 10,
       movetimeMs: 600,
-      skillLevel: 14,
-      uciElo: 2450,
+      blunderRate: 0.05,
     ),
   ),
   _Band(
@@ -122,8 +118,7 @@ const List<_Band> _ladder = [
       engine: EngineSource.remotePikafish,
       depth: 9,
       movetimeMs: 400,
-      skillLevel: 10,
-      uciElo: 2250,
+      blunderRate: 0.08,
     ),
   ),
   _Band(
@@ -132,8 +127,7 @@ const List<_Band> _ladder = [
       engine: EngineSource.remotePikafish,
       depth: 8,
       movetimeMs: 250,
-      skillLevel: 6,
-      uciElo: 2050,
+      blunderRate: 0.12,
     ),
   ),
   // 1400–2000 : minimax (deep) / ElephantEye native search.

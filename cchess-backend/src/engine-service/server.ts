@@ -134,6 +134,13 @@ async function cachedBestMove(
   fen: string,
   limit: EngineLimit,
 ): Promise<EngineBestMove> {
+  // A blunder roll makes the result non-deterministic for a given fen+limit —
+  // caching it would freeze whichever move the first roll happened to pick,
+  // serving it forever after. Always search fresh when blunderRate is active.
+  if (limit.blunderRate !== undefined && limit.blunderRate > 0) {
+    const result = await pool.bestMove(fen, limit);
+    return { ...result, cached: false };
+  }
   const key = bestMoveCacheKey(fen, limit);
   const cached = cache.get(key);
   if (cached) return { ...cached, cached: true };
@@ -172,20 +179,15 @@ function limitForRequest(
   request: EngineBestMoveRequest | EngineAnalyzeRequest,
   feature: EngineFeature,
 ): EngineLimit {
-  // ELO-ladder strength dials only apply to bot play; hints + analysis stay
+  // ELO-ladder blunder dial only applies to bot play; hints + analysis stay
   // at full strength.
-  const strength: Pick<EngineLimit, 'skillLevel' | 'uciElo'> =
+  const strength: Pick<EngineLimit, 'blunderRate'> =
     feature === 'best-move'
       ? {
-          skillLevel: clampOptionalInt(
-            'skill' in request ? request.skill : undefined,
+          blunderRate: clampOptionalFloat(
+            'blunderRate' in request ? request.blunderRate : undefined,
             0,
-            20,
-          ),
-          uciElo: clampOptionalInt(
-            'elo' in request ? request.elo : undefined,
-            envInt('MIN_UCI_ELO', 1280),
-            envInt('MAX_UCI_ELO', 3000),
+            1,
           ),
         }
       : {};
@@ -283,6 +285,13 @@ function clampOptionalInt(raw: unknown, min: number, max: number): number | unde
   const value = Number(raw);
   if (!Number.isFinite(value)) return undefined;
   return Math.min(max, Math.max(min, Math.trunc(value)));
+}
+
+function clampOptionalFloat(raw: unknown, min: number, max: number): number | undefined {
+  if (raw === undefined || raw === null) return undefined;
+  const value = Number(raw);
+  if (!Number.isFinite(value)) return undefined;
+  return Math.min(max, Math.max(min, value));
 }
 
 function envInt(name: string, fallback: number): number {

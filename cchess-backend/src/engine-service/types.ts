@@ -12,10 +12,12 @@ export interface EngineLimit {
   movetimeMs?: number;
   depth?: number;
   timeoutMs?: number;
-  /** Pikafish `Skill Level` (0–20). Weakens play below full strength. */
-  skillLevel?: number;
-  /** Pikafish `UCI_Elo` (with `UCI_LimitStrength`). Targets a specific ELO. */
-  uciElo?: number;
+  /** Probability (0..1) of deliberately playing a weaker MultiPV alternate
+   * instead of Pikafish's actual best move. Pikafish has no native strength
+   * dial (no `UCI_LimitStrength`/`UCI_Elo`/`Skill Level`), so the ELO ladder's
+   * 2000-2900 bands use this — the same blunder-band idea as the local
+   * minimax engine — instead. */
+  blunderRate?: number;
 }
 
 export interface EngineBestMove {
@@ -31,10 +33,8 @@ export interface EngineBestMoveRequest {
   level?: string;
   movetimeMs?: number;
   depth?: number;
-  /** ELO-ladder strength target (maps to Pikafish `UCI_Elo`). */
-  elo?: number;
-  /** ELO-ladder skill level (maps to Pikafish `Skill Level`, 0–20). */
-  skill?: number;
+  /** ELO-ladder blunder probability (0..1) — see EngineLimit.blunderRate. */
+  blunderRate?: number;
 }
 
 export interface EngineAnalyzeRequest {

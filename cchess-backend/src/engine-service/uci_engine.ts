@@ -11,6 +11,12 @@ interface Waiter {
   timer: NodeJS.Timeout;
 }
 
+/** MultiPV width used while a blunder roll is active. Pikafish has no native
+ * strength dial, so the ELO ladder's 2000-2900 bands fake one: ask for this
+ * many candidate lines, then (with probability `limit.blunderRate`) play a
+ * weaker one instead of line 1. */
+const BLUNDER_MULTIPV = 4;
+
 export interface UciEngineOptions {
   binaryPath: string;
   evalFile?: string;
@@ -30,10 +36,10 @@ export class UciEngine {
   private subscribers = new Set<(line: string) => void>();
   private busy = false;
   private disposed = false;
-  /** True while a non-default strength is set, so we know to reset it. The
-   * pool reuses one process across requests, so leaked strength would weaken
-   * every later (full-strength) search. */
-  private strengthDirty = false;
+  /** True while MultiPV is raised above 1 for a blunder roll, so we know to
+   * reset it. The pool reuses one process across requests, so a leaked
+   * MultiPV width would change move ordering/timing for every later search. */
+  private multiPvDirty = false;
   private readonly stderrTail: string[] = [];
 
   constructor(private readonly options: UciEngineOptions) {}
@@ -57,17 +63,27 @@ export class UciEngine {
     let scoreCp: number | null = null;
     let depth: number | null = null;
     let pv: string[] = [];
+    // MultiPV line index -> that line's top move. Index 1 is always the
+    // engine's actual best move; populated regardless of blunderRate so the
+    // map is simply empty (besides slot 1) when no blunder roll is wanted.
+    const multiPvCandidates = new Map<number, string>();
     const unsubscribe = this.subscribe((line) => {
       const info = parseInfoLine(line);
       if (!info) return;
-      if (info.scoreCp !== undefined) scoreCp = info.scoreCp;
-      if (info.depth !== undefined) depth = info.depth;
-      if (info.pv !== undefined) pv = info.pv;
+      const slot = info.multipv ?? 1;
+      if (slot === 1) {
+        if (info.scoreCp !== undefined) scoreCp = info.scoreCp;
+        if (info.depth !== undefined) depth = info.depth;
+        if (info.pv !== undefined) pv = info.pv;
+      }
+      if (info.pv && info.pv.length > 0) {
+        multiPvCandidates.set(slot, info.pv[0]);
+      }
     });
 
     try {
       this.writeLine(`position fen ${normalizeFen(fen)}`);
-      this.applyStrength(limit);
+      this.applyBlunderMultiPv(limit);
       const goLimit = limit.depth !== undefined
         ? `depth ${limit.depth}`
         : `movetime ${limit.movetimeMs ?? this.options.defaultMovetimeMs}`;
@@ -77,46 +93,60 @@ export class UciEngine {
         limit.timeoutMs ?? this.options.searchTimeoutMs,
         'engine-timeout',
       );
+      const engineUci = parseBestMoveLine(line) ?? null;
       return {
-        uci: parseBestMoveLine(line) ?? null,
+        uci: this.maybeBlunder(engineUci, limit.blunderRate, multiPvCandidates),
         scoreCp,
         depth,
         pv,
       };
     } finally {
-      this.resetStrength();
+      this.resetMultiPv();
       unsubscribe();
       this.busy = false;
     }
   }
 
-  /// Apply a strength-limiting option before searching. Prefers UCI_Elo (a
-  /// direct ELO target); set PIKAFISH_STRENGTH_MODE=skill to force Skill Level
-  /// (e.g. if the build lacks UCI_LimitStrength).
-  private applyStrength(limit: EngineLimit): void {
-    const preferSkill = process.env.PIKAFISH_STRENGTH_MODE === 'skill';
-    if (!preferSkill && limit.uciElo !== undefined) {
-      this.writeLine('setoption name UCI_LimitStrength value true');
-      this.writeLine(`setoption name UCI_Elo value ${limit.uciElo}`);
-      this.strengthDirty = true;
-    } else if (limit.skillLevel !== undefined) {
-      this.writeLine(`setoption name Skill Level value ${limit.skillLevel}`);
-      this.strengthDirty = true;
+  /// Pikafish has no native strength dial (no `UCI_LimitStrength`/`UCI_Elo`/
+  /// `Skill Level` — confirmed absent from the official release). Raise
+  /// MultiPV instead so `maybeBlunder` has weaker alternates to fall back to.
+  private applyBlunderMultiPv(limit: EngineLimit): void {
+    if (limit.blunderRate !== undefined && limit.blunderRate > 0) {
+      this.writeLine(`setoption name MultiPV value ${BLUNDER_MULTIPV}`);
+      this.multiPvDirty = true;
     }
   }
 
-  /// Restore full strength after a limited search so the shared process doesn't
-  /// leak weakness into the next request. No-op if nothing was changed.
-  private resetStrength(): void {
-    if (!this.strengthDirty) return;
-    this.strengthDirty = false;
+  /// Restore MultiPV to 1 after a blunder-enabled search so the shared
+  /// process doesn't leak extra candidate-line overhead into the next
+  /// (possibly full-strength) request. No-op if nothing was changed.
+  private resetMultiPv(): void {
+    if (!this.multiPvDirty) return;
+    this.multiPvDirty = false;
     if (!this.proc || this.disposed) return;
     try {
-      this.writeLine('setoption name UCI_LimitStrength value false');
-      this.writeLine('setoption name Skill Level value 20');
+      this.writeLine('setoption name MultiPV value 1');
     } catch {
       // Engine already gone — nothing to reset.
     }
+  }
+
+  /// With probability `blunderRate`, replace the engine's actual best move
+  /// with a weaker MultiPV alternate (line 2..N) — the same blunder-band idea
+  /// as the local minimax engine, since Pikafish itself can't be told to play
+  /// below full strength.
+  private maybeBlunder(
+    bestUci: string | null,
+    blunderRate: number | undefined,
+    candidates: Map<number, string>,
+  ): string | null {
+    if (bestUci === null || !blunderRate || blunderRate <= 0) return bestUci;
+    if (Math.random() >= blunderRate) return bestUci;
+    const alternates = [...candidates.entries()]
+      .filter(([slot]) => slot > 1)
+      .map(([, uci]) => uci);
+    if (alternates.length === 0) return bestUci;
+    return alternates[Math.floor(Math.random() * alternates.length)];
   }
 
   dispose(): void {

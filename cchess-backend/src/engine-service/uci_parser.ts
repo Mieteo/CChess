@@ -2,6 +2,9 @@ export interface UciInfo {
   depth?: number;
   scoreCp?: number;
   pv?: string[];
+  /** 1-based MultiPV line index. Always present once `MultiPV` > 1 is set;
+   * index 1 is the engine's actual best line, 2..N are weaker alternates. */
+  multipv?: number;
 }
 
 export function parseInfoLine(line: string): UciInfo | null {
@@ -24,6 +27,9 @@ export function parseInfoLine(line: string): UciInfo | null {
       .split(/\s+/)
       .filter((move) => /^[a-i][0-9][a-i][0-9]$/.test(move));
   }
+
+  const multipv = /\bmultipv\s+(\d+)/.exec(line);
+  if (multipv) info.multipv = Number.parseInt(multipv[1], 10);
 
   return Object.keys(info).length === 0 ? null : info;
 }

@@ -37,11 +37,10 @@ export function normalizeUci(raw: unknown): string {
 export function bestMoveCacheKey(fen: string, limit: EngineLimit): string {
   const depth = limit.depth === undefined ? '' : `d${limit.depth}`;
   const movetime = limit.movetimeMs === undefined ? '' : `m${limit.movetimeMs}`;
-  // Strength MUST be part of the key: two bots at different ELO/skill share the
-  // same FEN but must NOT serve each other's cached move.
-  const skill = limit.skillLevel === undefined ? '' : `s${limit.skillLevel}`;
-  const elo = limit.uciElo === undefined ? '' : `e${limit.uciElo}`;
-  return `${fen}|${depth}|${movetime}|${skill}|${elo}`;
+  // blunderRate is intentionally NOT part of this key — callers must bypass
+  // the cache entirely when it's set (see server.ts cachedBestMove) since a
+  // blunder roll makes the result non-deterministic for a given fen+limit.
+  return `${fen}|${depth}|${movetime}`;
 }
 
 function parseNonNegativeInt(raw: string | undefined, fallback: number): number {

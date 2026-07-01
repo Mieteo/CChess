@@ -21,6 +21,12 @@
 // ── Constants from search.h that aren't re-exported ─────────────────────────
 static const int INTERRUPT_COUNT = 4096;
 
+// Transposition-table size as a power of two of *bytes*. 24 → 16 MiB, allocated
+// once per process. Must be set before any search: SearchMain() unconditionally
+// calls ClearHash()/ProbeHash()/RecordHash(), which dereference the global
+// hshItems pointer. Without NewHash() that pointer is NULL → segfault.
+static const int HASH_SCALE = 24;
+
 // ── Internal one-time init guard ─────────────────────────────────────────────
 static bool s_initialized = false;
 
@@ -29,6 +35,10 @@ static void ensureInit() {
     s_initialized = true;
 
     PreGenInit();
+
+    // Allocate the transposition table exactly once (NewHash both allocates and
+    // clears it). Skipping this is what crashed every ElephantEye search.
+    NewHash(HASH_SCALE);
 
     Search.pos.FromFen(cszStartFen);
     Search.pos.nDistance = 0;

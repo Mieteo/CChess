@@ -32,12 +32,11 @@ class RemotePikafishEngine implements MoveEngine {
     EngineConfig? config,
   }) async {
     // `level` is always sent for backward-compat with the current backend.
-    // The ELO-ladder strength fields are additive — a backend that doesn't yet
-    // understand them (pre Phase 5) simply ignores them and uses `level`.
+    // The ELO-ladder fields are additive — a backend that doesn't yet
+    // understand them simply ignores them and uses `level`.
     final body = <String, dynamic>{'fen': fen, 'level': level.apiName};
     if (config != null) {
-      if (config.uciElo != null) body['elo'] = config.uciElo;
-      if (config.skillLevel != null) body['skill'] = config.skillLevel;
+      if (config.blunderRate > 0) body['blunderRate'] = config.blunderRate;
       if (config.movetimeMs != null) body['movetimeMs'] = config.movetimeMs;
     }
     final json = await _postJson(

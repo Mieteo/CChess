@@ -3,11 +3,9 @@ import 'package:flutter_test/flutter_test.dart';
 
 /// A scalar proxy for "how strong is this config". Higher = stronger. Used only
 /// to assert the ladder is monotonic; the exact formula doesn't matter as long
-/// as engine source dominates depth/skill, which dominate the blunder rate.
+/// as engine source dominates depth, which dominates the blunder rate.
 int _strength(EngineConfig c) {
   return c.engine.index * 1000000 +
-      (c.skillLevel ?? 0) * 1000 +
-      (c.uciElo ?? 0) +
       c.depth * 100 -
       (c.blunderRate * 1000).round();
 }
@@ -24,7 +22,8 @@ void main() {
     test('clamps above the ceiling to the strongest config', () {
       expect(configForElo(5000), configForElo(kMaxBotElo));
       expect(configForElo(kMaxBotElo).engine, EngineSource.remotePikafish);
-      expect(configForElo(kMaxBotElo).skillLevel, 20);
+      // Top band plays at the engine's actual best move — no blunders.
+      expect(configForElo(kMaxBotElo).blunderRate, 0);
     });
 
     test('picks the right engine per band', () {
@@ -44,20 +43,26 @@ void main() {
       expect(configForElo(1500).engine, EngineSource.localElephantEye);
     });
 
-    test('Pikafish bands carry skill + uciElo + movetime', () {
+    test('Pikafish bands carry movetime + a valid blunderRate', () {
       final c = configForElo(2300);
       expect(c.engine, EngineSource.remotePikafish);
-      expect(c.skillLevel, isNotNull);
-      expect(c.uciElo, isNotNull);
       expect(c.movetimeMs, isNotNull);
+      expect(c.blunderRate, inInclusiveRange(0, 1));
+    });
+
+    test('Pikafish blunderRate decreases as ELO rises, reaching 0 at the top', () {
+      final rates = [2000, 2200, 2400, 2600, 2800]
+          .map((elo) => configForElo(elo).blunderRate)
+          .toList();
+      for (var i = 1; i < rates.length; i++) {
+        expect(rates[i], lessThanOrEqualTo(rates[i - 1]), reason: 'index $i');
+      }
+      expect(rates.last, 0);
     });
 
     test('local bands carry no Pikafish-only fields', () {
       for (final elo in [1000, 1250, 1500, 1800]) {
-        final c = configForElo(elo);
-        expect(c.skillLevel, isNull, reason: 'elo=$elo');
-        expect(c.uciElo, isNull, reason: 'elo=$elo');
-        expect(c.movetimeMs, isNull, reason: 'elo=$elo');
+        expect(configForElo(elo).movetimeMs, isNull, reason: 'elo=$elo');
       }
     });
 
