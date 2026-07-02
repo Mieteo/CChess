@@ -272,13 +272,21 @@ class _GameScreenState extends ConsumerState<GameScreen> {
     _controller.showHint(result.move.from, result.move.to);
     if (result.usedFallback) {
       final quotaHit = result.fallbackKind == EngineFallbackKind.quotaExceeded;
+      // Offline Pikafish keeps full strength — no need to warn about quality,
+      // only about the quota when that's what triggered the fallback.
+      final viaPikafish = result.source == EngineSource.localPikafish;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
             quotaHit
-                ? 'Đã hết lượt gợi ý AI miễn phí hôm nay — đang dùng gợi ý cơ '
-                    'bản. Nâng cấp VIP để gợi ý Đại Sư không giới hạn.'
-                : 'Gợi ý offline (minimax) — máy chủ chưa sẵn sàng.',
+                ? (viaPikafish
+                    ? 'Đã hết lượt gợi ý server hôm nay — đang dùng Pikafish '
+                        'Offline trên máy bạn.'
+                    : 'Đã hết lượt gợi ý AI miễn phí hôm nay — đang dùng gợi ý '
+                        'cơ bản. Nâng cấp VIP để gợi ý Đại Sư không giới hạn.')
+                : (viaPikafish
+                    ? 'Gợi ý bằng Pikafish Offline — máy chủ chưa sẵn sàng.'
+                    : 'Gợi ý offline (minimax) — máy chủ chưa sẵn sàng.'),
           ),
           duration: const Duration(seconds: 3),
         ),

@@ -127,6 +127,11 @@ class GameAnalysis {
     required this.blackMistakes,
   });
 
+  /// Build the aggregate report from per-move analyses. Shared by every
+  /// engine implementation so accuracy/blunder math never diverges.
+  factory GameAnalysis.aggregate(List<MoveAnalysis> analyses) =>
+      GameAnalyzer._aggregate(analyses);
+
   /// Accuracy for a given player.
   double accuracyFor(PieceColor color) =>
       color == PieceColor.red ? redAccuracy : blackAccuracy;

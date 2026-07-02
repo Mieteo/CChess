@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/chess_engine/chess_engine.dart';
 import '../../core/constants/app_constants.dart';
 import '../../data/services/google_auth_service.dart';
 import '../../theme/app_colors.dart';
@@ -110,6 +111,9 @@ class SettingsScreen extends ConsumerWidget {
                   ],
                 ),
                 AppSpacing.vGapLg,
+                _SectionLabel('AI Offline'),
+                const _PikafishSection(),
+                AppSpacing.vGapLg,
                 _SectionLabel('Sức khoẻ'),
                 _SettingsCard(
                   children: [
@@ -211,8 +215,9 @@ class SettingsScreen extends ConsumerWidget {
   }
 }
 
-/// Attribution required by the Pikafish GPL-3.0 license (engine runs
-/// server-side only — it is never bundled into this app binary).
+/// Attribution required by the Pikafish GPL-3.0 license. The Pikafish binary
+/// is bundled unmodified and runs as a SEPARATE child process (not linked
+/// into the app); the NNUE network is downloaded separately.
 void _showEngineAttribution(BuildContext context) {
   showDialog<void>(
     context: context,
@@ -227,16 +232,19 @@ void _showEngineAttribution(BuildContext context) {
       ),
       content: SingleChildScrollView(
         child: Text(
-          'CChess dùng hai engine cờ tướng:\n\n'
-          '• Engine offline (chơi bot, gợi ý khi mất mạng): minimax thuần '
-          'Dart do nhóm CChess tự phát triển, chạy ngay trên thiết bị.\n\n'
+          'CChess dùng các engine cờ tướng sau:\n\n'
+          '• Engine bot cơ bản: minimax thuần Dart do nhóm CChess tự phát '
+          'triển, chạy ngay trên thiết bị.\n\n'
           '• Engine phân tích mạnh (Đại Sư+, gợi ý, phân tích ván): '
           'Pikafish — engine cờ tướng mã nguồn mở theo giấy phép GPL-3.0, '
           'thuộc dự án official-pikafish/Pikafish trên GitHub. Pikafish chạy '
-          'trên máy chủ của CChess, KHÔNG được đóng gói trong ứng dụng này.\n\n'
-          '• Mạng NNUE (pikafish.nnue) thuộc official-pikafish/Networks và '
-          'có điều khoản riêng về sử dụng thương mại.\n\n'
-          'Nguồn: github.com/official-pikafish/Pikafish',
+          'trên máy chủ của CChess, và bản chính thức không sửa đổi cũng '
+          'được đóng gói kèm ứng dụng cho tính năng AI Offline — chạy như '
+          'một tiến trình độc lập, tách biệt với mã của ứng dụng.\n\n'
+          '• Mạng NNUE (pikafish.nnue, tải riêng khi bật AI Offline) thuộc '
+          'official-pikafish/Networks và có điều khoản riêng về sử dụng '
+          'thương mại.\n\n'
+          'Mã nguồn Pikafish: github.com/official-pikafish/Pikafish',
           style: AppTextStyles.captionSm.copyWith(
             color: AppColors.onSurfaceVariant,
             height: 1.5,
@@ -481,6 +489,178 @@ class _RowItem extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// "AI Offline" — install/remove the on-device Pikafish engine.
+///
+/// The ~50MB NNUE network downloads once; afterwards hints and game analysis
+/// keep full engine strength with no server, no quota, and no network.
+class _PikafishSection extends ConsumerStatefulWidget {
+  const _PikafishSection();
+
+  @override
+  ConsumerState<_PikafishSection> createState() => _PikafishSectionState();
+}
+
+class _PikafishSectionState extends ConsumerState<_PikafishSection> {
+  bool _downloading = false;
+  double _progress = 0;
+  String? _error;
+
+  Future<void> _download() async {
+    setState(() {
+      _downloading = true;
+      _progress = 0;
+      _error = null;
+    });
+    try {
+      await for (final p in ref.read(pikafishInstallerProvider).download()) {
+        if (!mounted) return;
+        setState(() => _progress = p);
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(
+          () => _error = 'Tải thất bại — kiểm tra mạng rồi thử lại. ($e)',
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _downloading = false);
+        ref.invalidate(pikafishInstallStatusProvider);
+      }
+    }
+  }
+
+  Future<void> _delete() async {
+    await ref.read(pikafishInstallerProvider).delete();
+    if (mounted) ref.invalidate(pikafishInstallStatusProvider);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final statusAsync = ref.watch(pikafishInstallStatusProvider);
+    return _SettingsCard(
+      children: [
+        statusAsync.when(
+          loading: () => const Padding(
+            padding: EdgeInsets.all(AppSpacing.base),
+            child: Center(child: BrushStrokeSpinner(size: 20)),
+          ),
+          error: (e, _) => _RowItem(
+            icon: Icons.error_outline,
+            label: 'Không đọc được trạng thái engine',
+          ),
+          data: (status) => _buildBody(status),
+        ),
+        if (_error != null) ...[
+          _Divider(),
+          Padding(
+            padding: const EdgeInsets.all(AppSpacing.base),
+            child: Text(
+              _error!,
+              style: AppTextStyles.captionSm.copyWith(
+                color: Colors.redAccent,
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildBody(PikafishInstallStatus status) {
+    if (!status.platformSupported || !status.binaryAvailable) {
+      return _RowItem(
+        icon: Icons.smart_toy_outlined,
+        label: 'Pikafish Offline',
+        trailing: 'Thiết bị chưa hỗ trợ',
+      );
+    }
+
+    if (_downloading) {
+      return Padding(
+        padding: const EdgeInsets.all(AppSpacing.base),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Đang tải bộ đánh giá NNUE… ${(_progress * 100).round()}%',
+              style: AppTextStyles.bodyMd,
+            ),
+            AppSpacing.vGapSm,
+            LinearProgressIndicator(
+              value: _progress,
+              color: AppColors.accentGold,
+              backgroundColor: AppColors.surfaceContainerHigh,
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (status.nnueInstalled) {
+      final sizeMb =
+          ((status.nnueSizeBytes ?? 0) / (1024 * 1024)).toStringAsFixed(0);
+      return Column(
+        children: [
+          _RowItem(
+            icon: Icons.smart_toy,
+            label: 'Pikafish Offline — đã bật',
+            trailing: '$sizeMb MB',
+          ),
+          _Divider(),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.base,
+              AppSpacing.xs,
+              AppSpacing.base,
+              AppSpacing.sm,
+            ),
+            child: Text(
+              'Gợi ý & phân tích ván dùng engine mạnh ngay trên máy khi '
+              'không có mạng hoặc máy chủ bận.',
+              style: AppTextStyles.captionSm.copyWith(
+                color: AppColors.parchmentTan,
+              ),
+            ),
+          ),
+          _Divider(),
+          _RowItem(
+            icon: Icons.delete_outline,
+            label: 'Gỡ bộ đánh giá (giải phóng dung lượng)',
+            onTap: _delete,
+          ),
+        ],
+      );
+    }
+
+    return Column(
+      children: [
+        _RowItem(
+          icon: Icons.download_outlined,
+          label: 'Bật Pikafish Offline (tải ~51 MB)',
+          onTap: _download,
+        ),
+        _Divider(),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.base,
+            AppSpacing.xs,
+            AppSpacing.base,
+            AppSpacing.sm,
+          ),
+          child: Text(
+            'Tải một lần bộ đánh giá NNUE để gợi ý và phân tích ván bằng '
+            'engine Pikafish ngay trên máy — hoạt động cả khi mất mạng.',
+            style: AppTextStyles.captionSm.copyWith(
+              color: AppColors.parchmentTan,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

@@ -98,6 +98,7 @@ class LocalElephantEye implements MoveEngine {
         return null;
       case EngineSource.localElephantEye:
         return config.depth;
+      case EngineSource.localPikafish:
       case EngineSource.remotePikafish:
         return config.depth.clamp(6, 12);
     }

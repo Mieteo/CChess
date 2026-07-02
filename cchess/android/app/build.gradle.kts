@@ -47,6 +47,16 @@ android {
         }
     }
 
+    packaging {
+        jniLibs {
+            // The Pikafish UCI engine ships as jniLibs "lib" executables
+            // (libpikafish*.so). Process.start() needs real files on disk, so
+            // force extraction to nativeLibraryDir instead of loading from
+            // the APK in place.
+            useLegacyPackaging = true
+        }
+    }
+
     buildTypes {
         release {
             // TODO: Add your own signing config for the release build.

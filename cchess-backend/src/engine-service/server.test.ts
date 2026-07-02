@@ -217,6 +217,66 @@ test('GET /engine/quota reports unlimited for VIP', async () => {
   }
 });
 
+test('GET /engine/nnue streams the network file to signed-in users', async () => {
+  const { createEngineHttpServer } = await import('./server');
+  const { mkdtempSync, writeFileSync, rmSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const { join } = await import('node:path');
+
+  const dir = mkdtempSync(join(tmpdir(), 'nnue-test-'));
+  const nnuePath = join(dir, 'pikafish.nnue');
+  const payload = Buffer.from('fake-nnue-bytes-for-testing');
+  writeFileSync(nnuePath, payload);
+
+  const service = createEngineHttpServer({
+    pool: new FakePool(),
+    authenticate: async (token) => ({ uid: token }),
+    requireAuth: true,
+    nnuePath,
+  });
+
+  try {
+    const baseUrl = await listen(service.httpServer);
+
+    const anonymous = await fetch(`${baseUrl}/engine/nnue`);
+    assert.equal(anonymous.status, 401);
+
+    const res = await fetch(`${baseUrl}/engine/nnue`, {
+      headers: { authorization: 'Bearer alice' },
+    });
+    assert.equal(res.status, 200);
+    assert.equal(res.headers.get('content-type'), 'application/octet-stream');
+    assert.equal(Number(res.headers.get('content-length')), payload.length);
+    const body = Buffer.from(await res.arrayBuffer());
+    assert.deepEqual(body, payload);
+  } finally {
+    await service.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('GET /engine/nnue returns 503 when no network file is configured', async () => {
+  const previous = process.env.EVAL_FILE;
+  delete process.env.EVAL_FILE;
+  const { createEngineHttpServer } = await import('./server');
+  const service = createEngineHttpServer({
+    pool: new FakePool(),
+    authenticate: async (token) => ({ uid: token }),
+    requireAuth: true,
+  });
+
+  try {
+    const baseUrl = await listen(service.httpServer);
+    const res = await fetch(`${baseUrl}/engine/nnue`, {
+      headers: { authorization: 'Bearer alice' },
+    });
+    assert.equal(res.status, 503);
+  } finally {
+    await service.close();
+    if (previous !== undefined) process.env.EVAL_FILE = previous;
+  }
+});
+
 function listen(server: Server): Promise<string> {
   return new Promise((resolve) => {
     server.listen(0, '127.0.0.1', () => {

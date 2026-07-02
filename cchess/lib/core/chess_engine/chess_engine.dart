@@ -25,6 +25,8 @@ export 'move.dart';
 export 'move_engine.dart';
 export 'move_rules.dart';
 export 'piece.dart';
+export 'pikafish/pikafish_installer.dart';
+export 'pikafish/pikafish_local_engine.dart';
 export 'position.dart';
 export 'remote_pikafish_engine.dart';
 export 'xiangqi_cup_game.dart';

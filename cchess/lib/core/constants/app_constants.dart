@@ -102,6 +102,25 @@ class AppConstants {
     defaultValue: 'https://cchess-engine.onrender.com',
   );
 
+  // Offline Pikafish: where the app downloads the NNUE network file from.
+  // Default is the engine service itself (GET /engine/nnue) so the network is
+  // guaranteed to match the Pikafish release bundled in the APK (both come
+  // from the same Pikafish-2026-01-02 distribution). Override with:
+  //   --dart-define=CCHESS_PIKAFISH_NNUE_URL=https://cdn.example.com/pikafish.nnue
+  static const String pikafishNnueUrl = String.fromEnvironment(
+    'CCHESS_PIKAFISH_NNUE_URL',
+    defaultValue: '$defaultEngineHttpUrl/engine/nnue',
+  );
+
+  // SHA-256 of the expected NNUE (the copy in cchess-backend/engine/, same
+  // release as the bundled binaries). Downloads that don't match are
+  // rejected. Set to '' to skip verification (dev only).
+  static const String pikafishNnueSha256 = String.fromEnvironment(
+    'CCHESS_PIKAFISH_NNUE_SHA256',
+    defaultValue:
+        'c4026370d7516d9b0f668447f9ca1931241538bdc689cde6fec6a991ac4d5f77',
+  );
+
   // A6 Spectate share link.
   // Base HTTPS origin for shareable room links (QR + invite text). The backend
   // serves a small landing page at `<base>/r/<roomId>` so the link opens

@@ -1,3 +1,4 @@
+import { createReadStream, statSync } from 'fs';
 import { createServer, type IncomingMessage, type ServerResponse } from 'http';
 
 import { initFirebaseAdmin, verifyIdToken, type VerifiedToken } from '../auth';
@@ -27,6 +28,8 @@ export interface EngineHttpServerOptions {
   quota?: QuotaStore;
   requireAuth?: boolean;
   maxRequestBytes?: number;
+  /** NNUE network file served at GET /engine/nnue (defaults to EVAL_FILE). */
+  nnuePath?: string;
 }
 
 export function createEngineHttpServer(options: EngineHttpServerOptions = {}) {
@@ -67,6 +70,33 @@ export function createEngineHttpServer(options: EngineHttpServerOptions = {}) {
           stats: pool?.stats() ?? null,
           cacheEntries: cache.size,
         });
+        return;
+      }
+
+      // Offline Pikafish: the app downloads the NNUE network from here so the
+      // on-device engine always gets the exact net matching the bundled
+      // binary release. Authenticated (any signed-in user), no quota — it's a
+      // one-time ~50MB download.
+      if (req.method === 'GET' && url.pathname === '/engine/nnue') {
+        await authenticateRequest(req, authenticate, requireAuth);
+        const nnuePath = options.nnuePath ?? process.env.EVAL_FILE;
+        if (!nnuePath) {
+          throw new EngineServiceError(503, 'nnue-unavailable', 'EVAL_FILE is not configured');
+        }
+        let size: number;
+        try {
+          size = statSync(nnuePath).size;
+        } catch {
+          throw new EngineServiceError(503, 'nnue-unavailable', 'NNUE file is missing on the server');
+        }
+        res.writeHead(200, {
+          'Content-Type': 'application/octet-stream',
+          'Content-Length': size,
+          'Cache-Control': 'public, max-age=86400',
+        });
+        const stream = createReadStream(nnuePath);
+        stream.on('error', () => res.destroy());
+        stream.pipe(res);
         return;
       }
 

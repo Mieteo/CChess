@@ -32,6 +32,10 @@ dependencies:
   # Native engine (Android FFI → ElephantEye .so)
   ffi: ^2.1.0
 
+  # Offline Pikafish (UCI child process + NNUE download/verify)
+  path_provider: ^2.1.0
+  crypto: ^3.0.3
+
   # Utilities
   equatable: ^2.0.5
   collection: ^1.18.0

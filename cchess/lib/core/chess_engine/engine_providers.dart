@@ -7,6 +7,9 @@ import 'engine_router.dart';
 import 'local_elephanteye_engine.dart';
 import 'local_minimax_engine.dart';
 import 'move_engine.dart';
+import 'pikafish/pikafish_installer.dart';
+import 'pikafish/pikafish_local_engine.dart';
+import 'pikafish/pikafish_support.dart' as pikafish_support;
 import 'remote_pikafish_engine.dart';
 
 final localMinimaxEngineProvider = Provider<MoveEngine>((ref) {
@@ -33,11 +36,41 @@ final remotePikafishEngineProvider = Provider<RemotePikafishEngine>((ref) {
   return engine;
 });
 
+/// Offline Pikafish child-process engine, or null on platforms that can't
+/// run one (web/iOS). Present ≠ usable: it only serves requests once the
+/// NNUE is installed (see [pikafishInstallStatusProvider]).
+final pikafishOfflineEngineProvider = Provider<PikafishLocalEngine?>((ref) {
+  final engine = pikafish_support.createPikafishLocalEngine();
+  if (engine != null) {
+    ref.onDispose(() => engine.dispose());
+  }
+  return engine;
+});
+
+/// Manages the on-device NNUE download (Settings → "Engine Offline").
+final pikafishInstallerProvider = Provider<PikafishInstaller>((ref) {
+  return pikafish_support.createPikafishInstaller(
+    tokenProvider: () async {
+      final user = FirebaseAuth.instance.currentUser;
+      return user?.getIdToken();
+    },
+  );
+});
+
+/// Current install state; re-fetched whenever re-watched (autoDispose) so the
+/// Settings screen updates right after a download/delete.
+final pikafishInstallStatusProvider =
+    FutureProvider.autoDispose<PikafishInstallStatus>((ref) {
+  return ref.watch(pikafishInstallerProvider).status();
+});
+
 final engineRouterProvider = Provider<EngineRouter>((ref) {
   return EngineRouter(
     local: ref.watch(localEngineProvider),
     remote: ref.watch(remotePikafishEngineProvider),
+    offline: ref.watch(pikafishOfflineEngineProvider),
     canUseRemote: () => true,
+    canUseOffline: pikafish_support.pikafishOfflineReady,
   );
 });
 
