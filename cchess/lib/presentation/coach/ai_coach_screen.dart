@@ -61,6 +61,17 @@ class AiCoachScreen extends ConsumerWidget {
                     'Gia Sư AI sẽ chỉ ra điểm mạnh, điểm yếu của bạn.',
               );
             }
+            if (record.isCupMode) {
+              return const _CenteredMessage(
+                icon: Icons.visibility_off_outlined,
+                color: AppColors.parchmentTan,
+                title: 'Cờ Úp chưa hỗ trợ Gia Sư AI',
+                detail:
+                    'Danh tính quân úp là thông tin ẩn nên engine chưa thể '
+                    'chấm điểm nước đi một cách chính xác. Hãy chọn một ván '
+                    'cờ thường để phân tích.',
+              );
+            }
             return _CoachBody(record: record);
           },
         ),

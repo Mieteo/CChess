@@ -19,6 +19,22 @@ GameRecord _sampleRecord() {
   );
 }
 
+GameRecord _cupRecord() {
+  return GameRecord(
+    id: 'r2',
+    opponentLabel: 'Bot',
+    mode: GameMode.cupVsBot,
+    humanColor: PieceColor.red,
+    startingFen: kInitialFen,
+    moves: const ['b2e2', 'b7e7'],
+    result: GameStatus.redWin,
+    endReason: EndReason.checkmate,
+    eloDelta: 0,
+    duration: const Duration(minutes: 3),
+    endedAt: DateTime(2026, 5, 17),
+  );
+}
+
 void main() {
   group('ReplayController', () {
     test('starts at ply 0 with the initial board', () {
@@ -70,6 +86,24 @@ void main() {
       expect(c.state.coachMode, isFalse);
       c.toggleCoachMode();
       expect(c.state.coachMode, isTrue);
+    });
+
+    test('toggleCoachMode is a no-op for Cờ Úp records', () {
+      final c = ReplayController(record: _cupRecord());
+      c.toggleCoachMode();
+      expect(c.state.coachMode, isFalse);
+      expect(c.state.analysis, isNull);
+      c.runAnalysis();
+      expect(c.state.analysis, isNull);
+    });
+  });
+
+  group('GameRecord AI-analysis gate', () {
+    test('cup modes do not support AI analysis, standard modes do', () {
+      expect(_cupRecord().isCupMode, isTrue);
+      expect(_cupRecord().supportsAiAnalysis, isFalse);
+      expect(_sampleRecord().isCupMode, isFalse);
+      expect(_sampleRecord().supportsAiAnalysis, isTrue);
     });
   });
 }

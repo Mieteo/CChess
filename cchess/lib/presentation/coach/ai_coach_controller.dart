@@ -141,7 +141,9 @@ final latestCoachGameProvider =
   final repo = ref.watch(gameHistoryRepositoryProvider);
   final all = await repo.all();
   final coachable = all
-      .where((r) => r.isFinished && r.moves.isNotEmpty)
+      .where(
+        (r) => r.isFinished && r.moves.isNotEmpty && r.supportsAiAnalysis,
+      )
       .toList()
     ..sort((a, b) => b.endedAt.compareTo(a.endedAt));
   return coachable.isEmpty ? null : coachable.first;

@@ -77,16 +77,18 @@ class _ReplayBody extends ConsumerWidget {
           onPressed: () => context.go(AppConstants.routeHistory),
         ),
         actions: [
-          IconButton(
-            icon: Icon(
-              state.coachMode
-                  ? Icons.smart_toy
-                  : Icons.smart_toy_outlined,
-              color: state.coachMode ? AppColors.accentGold : null,
+          // Cờ Úp: engine grading is disabled (hidden pieces can't be scored).
+          if (record.supportsAiAnalysis)
+            IconButton(
+              icon: Icon(
+                state.coachMode
+                    ? Icons.smart_toy
+                    : Icons.smart_toy_outlined,
+                color: state.coachMode ? AppColors.accentGold : null,
+              ),
+              tooltip: 'Bật / tắt AI Coach',
+              onPressed: controller.toggleCoachMode,
             ),
-            tooltip: 'Bật / tắt AI Coach',
-            onPressed: controller.toggleCoachMode,
-          ),
         ],
       ),
       body: SafeArea(
@@ -95,6 +97,10 @@ class _ReplayBody extends ConsumerWidget {
           child: Column(
             children: [
               _ReplayHeader(record: state.record),
+              if (state.record.isCupMode) ...[
+                AppSpacing.vGapSm,
+                const _CupReplayNotice(),
+              ],
               AppSpacing.vGapSm,
               Expanded(
                 child: AspectRatio(
@@ -174,6 +180,42 @@ class _ReplayHeader extends StatelessWidget {
                   ),
                 ),
               ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Temporary notice: Cờ Úp records don't yet persist reveal data, so this
+/// replay can diverge from what was actually played (see doc 14).
+class _CupReplayNotice extends StatelessWidget {
+  const _CupReplayNotice();
+
+  @override
+  Widget build(BuildContext context) {
+    return CChessCard(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical: AppSpacing.sm,
+      ),
+      borderColor: AppColors.accentGold.withValues(alpha: 0.5),
+      child: Row(
+        children: [
+          const Icon(
+            Icons.info_outline,
+            color: AppColors.accentGold,
+            size: 18,
+          ),
+          AppSpacing.hGapSm,
+          Expanded(
+            child: Text(
+              'Phục bàn Cờ Úp đang được nâng cấp: kỳ phổ hiện chưa lưu dữ '
+              'liệu lật quân nên diễn biến có thể không đúng ván đấu thật.',
+              style: AppTextStyles.captionSm.copyWith(
+                color: AppColors.parchmentTan,
+              ),
             ),
           ),
         ],

@@ -76,6 +76,15 @@ class GameRecord extends Equatable {
   bool get isDraw => result == GameStatus.draw;
   bool get isFinished => result.isOver;
 
+  /// True for Cờ Úp variants. Their records currently miss the hidden-piece
+  /// reveal data, so standard-rules replay/analysis tooling can't process them.
+  bool get isCupMode =>
+      mode == GameMode.cupLocal || mode == GameMode.cupVsBot;
+
+  /// AI coach / move grading only works for full-information standard games —
+  /// engines can't meaningfully score moves made against hidden pieces.
+  bool get supportsAiAnalysis => !isCupMode;
+
   Map<String, dynamic> toJson() => {
     'id': id,
     'opponentLabel': opponentLabel,

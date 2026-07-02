@@ -151,6 +151,9 @@ class ReplayController extends StateNotifier<ReplayUiState> {
   }
 
   void toggleCoachMode() {
+    // Cờ Úp: hidden-piece identities make engine grading meaningless, and the
+    // saved record lacks reveal data anyway — keep the coach off entirely.
+    if (state.record.isCupMode) return;
     final next = !state.coachMode;
     state = state.copyWith(coachMode: next);
     if (next && state.analysis == null) {
@@ -159,7 +162,10 @@ class ReplayController extends StateNotifier<ReplayUiState> {
   }
 
   /// Re-run AI Coach analysis from scratch.
-  void runAnalysis() => _runAnalysis();
+  void runAnalysis() {
+    if (state.record.isCupMode) return;
+    _runAnalysis();
+  }
 
   void _startAutoPlay() {
     _autoPlayTimer?.cancel();
