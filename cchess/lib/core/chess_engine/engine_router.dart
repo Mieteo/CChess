@@ -109,14 +109,19 @@ class EngineRouter implements MoveEngine {
   Future<GameAnalysis> analyze({
     required String startingFen,
     required List<String> moveUcis,
+    void Function(double progress)? onProgress,
+    bool allowWeakFallback = true,
   }) async {
+    Object? lastError;
     if (await _remoteAvailable()) {
       try {
         return await remote!.analyze(
           startingFen: startingFen,
           moveUcis: moveUcis,
+          onProgress: onProgress,
         );
-      } catch (_) {
+      } catch (error) {
+        lastError = error;
         // Fall through to the offline / local analyzers.
       }
     }
@@ -125,12 +130,26 @@ class EngineRouter implements MoveEngine {
         return await offline!.analyze(
           startingFen: startingFen,
           moveUcis: moveUcis,
+          onProgress: onProgress,
         );
-      } catch (_) {
-        // Fall through to the offline analyzer.
+      } catch (error) {
+        lastError = error;
+        // Fall through to the local analyzer.
       }
     }
-    return local.analyze(startingFen: startingFen, moveUcis: moveUcis);
+    if (!allowWeakFallback) {
+      // The caller wants real engine grades or an honest error — never the
+      // depth-2 minimax pretending to be one.
+      throw AnalysisUnavailableException(
+        lastError?.toString() ?? 'No strong analysis engine is available',
+        quotaExceeded: lastError is EngineQuotaExceededException,
+      );
+    }
+    return local.analyze(
+      startingFen: startingFen,
+      moveUcis: moveUcis,
+      onProgress: onProgress,
+    );
   }
 
   Future<bool> _shouldTryRemote(

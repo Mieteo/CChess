@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import '../constants/piece_constants.dart';
 import 'ai/engine_config.dart';
 import 'ai/game_analyzer.dart';
@@ -16,6 +18,7 @@ class RemotePikafishEngine implements MoveEngine {
     EngineTokenProvider? tokenProvider,
     PikafishTransport? transport,
     this.timeout = const Duration(seconds: 8),
+    this.jobPollInterval = const Duration(milliseconds: 900),
   }) : _tokenProvider = tokenProvider ?? _noToken,
        _transport = transport ?? createDefaultPikafishTransport();
 
@@ -23,6 +26,9 @@ class RemotePikafishEngine implements MoveEngine {
   final EngineTokenProvider _tokenProvider;
   final PikafishTransport _transport;
   final Duration timeout;
+
+  /// Delay between GET polls of an async analysis job.
+  final Duration jobPollInterval;
 
   @override
   Future<EngineMove?> bestMove(
@@ -57,17 +63,91 @@ class RemotePikafishEngine implements MoveEngine {
   Future<GameAnalysis> analyze({
     required String startingFen,
     required List<String> moveUcis,
+    void Function(double progress)? onProgress,
+    bool allowWeakFallback = true,
   }) async {
-    final json = await _postJson('/engine/analyze', {
-      'startingFen': startingFen,
-      'movesUci': moveUcis,
-    });
-    return _analysisFromJson(
+    try {
+      return await _analyzeViaJob(
+        startingFen: startingFen,
+        moveUcis: moveUcis,
+        onProgress: onProgress,
+      );
+    } on PikafishTransportException catch (e) {
+      // A backend that predates the job API 404s the submit — fall back to
+      // the legacy one-shot endpoint with a budget scaled to game length
+      // (the old fixed 3s timeout is what made every long game silently
+      // degrade to the shallow local analyzer).
+      if (e.statusCode != 404) rethrow;
+    }
+    final json = await _postJson(
+      '/engine/analyze',
+      {'startingFen': startingFen, 'movesUci': moveUcis},
+      timeout: _legacyAnalyzeBudget(moveUcis.length),
+    );
+    final analysis = _analysisFromJson(
       startingFen: startingFen,
       moveUcis: moveUcis,
       json: json,
     );
+    onProgress?.call(1.0);
+    return analysis;
   }
+
+  /// Submit an async analysis job, then poll until it settles. Progress and
+  /// partial per-move grades come straight from the job snapshots.
+  Future<GameAnalysis> _analyzeViaJob({
+    required String startingFen,
+    required List<String> moveUcis,
+    void Function(double progress)? onProgress,
+  }) async {
+    var snapshot = await _postJson('/engine/analyze-jobs', {
+      'startingFen': startingFen,
+      'movesUci': moveUcis,
+    });
+    final jobId = snapshot['jobId'] as String?;
+    if (jobId == null) {
+      throw const PikafishTransportException(
+        code: 'invalid-response',
+        message: 'Malformed analyze-job response (missing jobId)',
+      );
+    }
+
+    final deadline = DateTime.now().add(_jobDeadline(moveUcis.length));
+    while (true) {
+      final status = snapshot['status'] as String?;
+      final progress = snapshot['progress'];
+      if (progress is num) onProgress?.call(progress.toDouble().clamp(0, 1));
+      if (status == 'done') break;
+      if (status == 'error') {
+        final error = snapshot['error'];
+        throw PikafishTransportException(
+          code: 'job-failed',
+          message: 'Analyze job failed: $error',
+        );
+      }
+      if (DateTime.now().isAfter(deadline)) {
+        throw TimeoutException(
+          'Analyze job $jobId did not finish in time',
+          _jobDeadline(moveUcis.length),
+        );
+      }
+      await Future<void>.delayed(jobPollInterval);
+      snapshot = await _getJson('/engine/analyze-jobs/$jobId');
+    }
+
+    return _analysisFromJson(
+      startingFen: startingFen,
+      moveUcis: moveUcis,
+      json: snapshot,
+    );
+  }
+
+  /// Server grinds ~0.5–1s per move plus queueing slack.
+  Duration _jobDeadline(int moveCount) =>
+      Duration(milliseconds: moveCount * 2000 + 60000);
+
+  Duration _legacyAnalyzeBudget(int moveCount) =>
+      Duration(milliseconds: moveCount * 800 + 10000);
 
   /// Reads the caller's remaining free-tier allowance for today. Throws
   /// [PikafishTransportException] on transport failure (no offline fallback —
@@ -90,15 +170,16 @@ class RemotePikafishEngine implements MoveEngine {
 
   Future<Map<String, dynamic>> _postJson(
     String path,
-    Map<String, dynamic> body,
-  ) async {
+    Map<String, dynamic> body, {
+    Duration? timeout,
+  }) async {
     final headers = await _authHeaders();
     try {
       return await _transport.postJson(
         baseUri.resolve(path),
         headers: headers,
         body: body,
-        timeout: timeout,
+        timeout: timeout ?? this.timeout,
       );
     } on PikafishTransportException catch (e) {
       throw _mapTransportError(e, path);
@@ -185,16 +266,27 @@ class RemotePikafishEngine implements MoveEngine {
         moved: piece,
         captured: game.board.at(to),
       );
+      // Server scores are mover-relative; MoveAnalysis evals are Red-positive.
+      final mover = game.turn;
+      final rawBest = _asInt(item['scoreCp']);
+      final rawActual = _asInt(item['actualScoreCp']);
+      final evalAfter = _asInt(item['evalAfterCp']) ??
+          (rawActual == null
+              ? null
+              : (mover == PieceColor.red ? rawActual : -rawActual));
       analyses.add(
         MoveAnalysis(
           moveIndex: _asInt(item['moveIndex']) ?? i,
           move: move,
-          mover: game.turn,
+          mover: mover,
           recommendedMove: recommended,
-          bestEval: _asInt(item['scoreCp']) ?? 0,
-          actualEval: _asInt(item['actualScoreCp']) ?? 0,
+          bestEval: rawBest == null
+              ? 0
+              : (mover == PieceColor.red ? rawBest : -rawBest),
+          actualEval: evalAfter ?? 0,
           centipawnLoss: _asInt(item['centipawnLoss']) ?? 0,
           quality: _qualityFromString(item['classification'] as String?),
+          evalAfterCp: evalAfter,
         ),
       );
 
@@ -219,6 +311,7 @@ class RemotePikafishEngine implements MoveEngine {
       redMistakes: _asInt(summary['redMistakes']) ?? localSummary.redMistakes,
       blackMistakes:
           _asInt(summary['blackMistakes']) ?? localSummary.blackMistakes,
+      source: EngineSource.remotePikafish,
     );
   }
 

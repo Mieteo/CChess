@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../constants/piece_constants.dart';
 import '../move.dart';
+import '../move_engine.dart' show EngineSource;
 import '../xiangqi_game.dart';
 import 'minimax.dart';
 
@@ -93,6 +94,11 @@ class MoveAnalysis {
   /// Classification of this move.
   final MoveQuality quality;
 
+  /// Eval of the position right after this move, Red-positive centipawns —
+  /// the eval-chart series. Mate scores use ±(30000 − n); a finished game is
+  /// ±29999 (0 for a draw). Null when the engine reported no score.
+  final int? evalAfterCp;
+
   const MoveAnalysis({
     required this.moveIndex,
     required this.move,
@@ -102,6 +108,7 @@ class MoveAnalysis {
     required this.actualEval,
     required this.centipawnLoss,
     required this.quality,
+    this.evalAfterCp,
   });
 
   bool get isCorrect => quality == MoveQuality.best;
@@ -117,6 +124,11 @@ class GameAnalysis {
   final int redMistakes;
   final int blackMistakes;
 
+  /// Which engine produced these grades. Lets the UI distinguish a real
+  /// Pikafish review from the shallow offline fallback. Null on payloads
+  /// saved before this field existed.
+  final EngineSource? source;
+
   const GameAnalysis({
     required this.moves,
     required this.redAccuracy,
@@ -125,12 +137,16 @@ class GameAnalysis {
     required this.blackBlunders,
     required this.redMistakes,
     required this.blackMistakes,
+    this.source,
   });
 
   /// Build the aggregate report from per-move analyses. Shared by every
   /// engine implementation so accuracy/blunder math never diverges.
-  factory GameAnalysis.aggregate(List<MoveAnalysis> analyses) =>
-      GameAnalyzer._aggregate(analyses);
+  factory GameAnalysis.aggregate(
+    List<MoveAnalysis> analyses, {
+    EngineSource? source,
+  }) =>
+      GameAnalyzer._aggregate(analyses, source: source);
 
   /// Accuracy for a given player.
   double accuracyFor(PieceColor color) =>
@@ -269,6 +285,8 @@ class GameAnalyzer {
         actualEval: actualEval,
         centipawnLoss: loss,
         quality: quality,
+        // actualEval is already Red-positive — reuse it for the chart series.
+        evalAfterCp: actualEval,
       );
 
       yield AnalysisProgress(
@@ -288,7 +306,10 @@ class GameAnalyzer {
     return MoveQuality.blunder;
   }
 
-  static GameAnalysis _aggregate(List<MoveAnalysis> analyses) {
+  static GameAnalysis _aggregate(
+    List<MoveAnalysis> analyses, {
+    EngineSource? source,
+  }) {
     int redCount = 0, blackCount = 0;
     int redScore = 0, blackScore = 0;
     int redBlunder = 0, blackBlunder = 0;
@@ -314,6 +335,7 @@ class GameAnalyzer {
       blackBlunders: blackBlunder,
       redMistakes: redMistake,
       blackMistakes: blackMistake,
+      source: source,
     );
   }
 }

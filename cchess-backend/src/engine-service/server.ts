@@ -4,6 +4,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'http';
 import { initFirebaseAdmin, verifyIdToken, type VerifiedToken } from '../auth';
 import { analyzeGame } from './analysis';
 import { AnalysisCache } from './analysis_cache';
+import { AnalyzeJobStore } from './analyze_jobs';
 import { EnginePool, type SearchEngine } from './engine_pool';
 import { bestMoveCacheKey, normalizeFen } from './fen';
 import { createFirestoreVipChecker, FirestoreQuotaStore } from './firestore_quota';
@@ -30,6 +31,8 @@ export interface EngineHttpServerOptions {
   maxRequestBytes?: number;
   /** NNUE network file served at GET /engine/nnue (defaults to EVAL_FILE). */
   nnuePath?: string;
+  /** Async analysis job store (tests inject one with short TTLs). */
+  analyzeJobs?: AnalyzeJobStore;
 }
 
 export function createEngineHttpServer(options: EngineHttpServerOptions = {}) {
@@ -52,6 +55,9 @@ export function createEngineHttpServer(options: EngineHttpServerOptions = {}) {
     ?? (persistQuota ? new FirestoreQuotaStore(limits) : new DailyQuotaStore(limits));
   const isVip = options.isVip
     ?? (persistQuota ? createFirestoreVipChecker() : async () => false);
+  const analyzeJobs = options.analyzeJobs ?? new AnalyzeJobStore({
+    maxActiveJobs: envInt('MAX_ANALYZE_JOBS', 4),
+  });
 
   const httpServer = createServer(async (req, res) => {
     setCorsHeaders(res);
@@ -109,11 +115,50 @@ export function createEngineHttpServer(options: EngineHttpServerOptions = {}) {
         return;
       }
 
+      // Async analysis: poll a submitted job. Ownership enforced by uid.
+      if (req.method === 'GET' && url.pathname.startsWith('/engine/analyze-jobs/')) {
+        const user = await authenticateRequest(req, authenticate, requireAuth);
+        const jobId = url.pathname.slice('/engine/analyze-jobs/'.length);
+        sendJson(res, 200, analyzeJobs.get(jobId, user.uid));
+        return;
+      }
+
       if (req.method !== 'POST') {
         throw new EngineServiceError(404, 'not-found', 'Not found');
       }
       if (!pool) {
         throw new EngineServiceError(503, 'engine-unavailable', 'PIKAFISH_PATH is not configured');
+      }
+
+      // Async analysis: submit a job. Quota is charged ONCE here (polling is
+      // free); the actual searches run in the background through the same
+      // pool + cache as everything else.
+      if (url.pathname === '/engine/analyze-jobs') {
+        const user = await authenticateRequest(req, authenticate, requireAuth);
+        const request = (await readJsonBody(req, maxRequestBytes)) as EngineAnalyzeRequest;
+        const startingFen = normalizeFen(request.startingFen ?? request.fen);
+        const moves = Array.isArray(request.movesUci) ? request.movesUci : request.moves;
+        if (!Array.isArray(moves) || moves.length === 0) {
+          throw new EngineServiceError(400, 'invalid-request', 'movesUci must be a non-empty array');
+        }
+        if (moves.length > envInt('MAX_ANALYZE_MOVES', 400)) {
+          throw new EngineServiceError(400, 'invalid-request', 'Too many moves to analyze');
+        }
+        const limit = limitForRequest(request, 'analyze');
+        // Create first (rejects duplicates/busy without side effects), THEN
+        // charge quota — a rejected submit must not burn a free analysis.
+        const job = analyzeJobs.create(user.uid, moves.length);
+        try {
+          await quota.check(user.uid, 'analyze', await isVip(user.uid));
+        } catch (error) {
+          analyzeJobs.discard(job.jobId);
+          throw error;
+        }
+        void analyzeJobs.run(job.jobId, startingFen, moves, limit, (fen, searchLimit) =>
+          cachedBestMove(pool, cache, fen, searchLimit),
+        );
+        sendJson(res, 202, job);
+        return;
       }
 
       const feature = featureForPath(url.pathname);
@@ -237,7 +282,7 @@ function limitForRequest(
 }
 
 function defaultMovetimeFor(level: string | undefined, feature: EngineFeature): number {
-  if (feature === 'analyze') return envInt('ANALYZE_MOVETIME_MS', 300);
+  if (feature === 'analyze') return envInt('ANALYZE_MOVETIME_MS', 500);
   if (feature === 'hint') return envInt('HINT_MOVETIME_MS', 500);
   switch (level) {
     case 'grandmaster':

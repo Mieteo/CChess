@@ -42,8 +42,11 @@ export function parseBestMoveLine(line: string): string | null | undefined {
   return /^[a-i][0-9][a-i][0-9]$/.test(move) ? move : null;
 }
 
+/** Mate-in-n → ±(30000 − n): the convention the app charts use (±29999 ≈
+ * forced win next move, like Thiên Thiên Tượng Kỳ's win column). Keeping one
+ * scale everywhere lets analysis evals, blunder math and the client agree. */
 function mateToCp(pliesToMate: number): number {
   const sign = pliesToMate < 0 ? -1 : 1;
   const distancePenalty = Math.min(Math.abs(pliesToMate), 1000);
-  return sign * (100_000 - distancePenalty);
+  return sign * (30_000 - distancePenalty);
 }

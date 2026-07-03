@@ -103,6 +103,8 @@ class _RecordingEngine implements MoveEngine {
   Future<GameAnalysis> analyze({
     required String startingFen,
     required List<String> moveUcis,
+    void Function(double progress)? onProgress,
+    bool allowWeakFallback = true,
   }) async {
     analyzeCalls++;
     return const GameAnalysis(

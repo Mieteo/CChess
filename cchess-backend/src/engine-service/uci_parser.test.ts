@@ -14,7 +14,7 @@ test('parseInfoLine extracts depth cp score and pv', () => {
 
 test('parseInfoLine converts mate score to large centipawns', () => {
   const parsed = parseInfoLine('info depth 8 score mate -3 pv e0e1');
-  assert.equal(parsed?.scoreCp, -99_997);
+  assert.equal(parsed?.scoreCp, -29_997);
 });
 
 test('parseBestMoveLine accepts Xiangqi UCI and none', () => {

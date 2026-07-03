@@ -42,9 +42,20 @@ class LocalMinimaxEngine implements MoveEngine {
   Future<GameAnalysis> analyze({
     required String startingFen,
     required List<String> moveUcis,
-  }) {
-    return GameAnalyzer(
-      depth: analysisDepth,
-    ).analyze(startingFen: startingFen, moveUcis: moveUcis);
+    void Function(double progress)? onProgress,
+    bool allowWeakFallback = true,
+  }) async {
+    final analyses = <MoveAnalysis>[];
+    await for (final progress in GameAnalyzer(depth: analysisDepth).stream(
+      startingFen: startingFen,
+      moveUcis: moveUcis,
+    )) {
+      if (progress.latest != null) analyses.add(progress.latest!);
+      onProgress?.call(progress.fraction);
+    }
+    return GameAnalysis.aggregate(
+      analyses,
+      source: EngineSource.localMinimax,
+    );
   }
 }

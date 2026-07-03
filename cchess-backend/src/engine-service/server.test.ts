@@ -217,6 +217,154 @@ test('GET /engine/quota reports unlimited for VIP', async () => {
   }
 });
 
+const INITIAL_FEN =
+  'rnbakabnr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RNBAKABNR w - - 0 1';
+
+class SlowPool extends FakePool {
+  constructor(private readonly delayMs: number) {
+    super();
+  }
+
+  override async bestMove(fen: string, limit?: EngineLimit): Promise<EngineBestMove> {
+    await new Promise((resolve) => setTimeout(resolve, this.delayMs));
+    return super.bestMove(fen, limit);
+  }
+}
+
+async function submitAnalyzeJob(
+  baseUrl: string,
+  token: string,
+  moves: string[],
+): Promise<Response> {
+  return fetch(`${baseUrl}/engine/analyze-jobs`, {
+    method: 'POST',
+    headers: {
+      authorization: `Bearer ${token}`,
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({ startingFen: INITIAL_FEN, movesUci: moves }),
+  });
+}
+
+async function pollJobUntilSettled(
+  baseUrl: string,
+  token: string,
+  jobId: string,
+): Promise<Record<string, any>> {
+  const deadline = Date.now() + 10_000;
+  while (Date.now() < deadline) {
+    const res = await fetch(`${baseUrl}/engine/analyze-jobs/${jobId}`, {
+      headers: { authorization: `Bearer ${token}` },
+    });
+    assert.equal(res.status, 200);
+    const snapshot = (await res.json()) as Record<string, any>;
+    if (snapshot.status === 'done' || snapshot.status === 'error') return snapshot;
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+  throw new Error('analysis job never settled');
+}
+
+test('analyze job: submit → poll → done with evalAfterCp series', async () => {
+  const { createEngineHttpServer } = await import('./server');
+  const pool = new FakePool();
+  const service = createEngineHttpServer({
+    pool,
+    authenticate: async (token) => ({ uid: token }),
+    requireAuth: true,
+  });
+
+  try {
+    const baseUrl = await listen(service.httpServer);
+
+    const submit = await submitAnalyzeJob(baseUrl, 'alice', ['h2e2']);
+    assert.equal(submit.status, 202);
+    const created = (await submit.json()) as Record<string, any>;
+    assert.ok(created.jobId);
+
+    // A stranger polling the same job id sees a 404, not the data.
+    const stranger = await fetch(`${baseUrl}/engine/analyze-jobs/${created.jobId}`, {
+      headers: { authorization: 'Bearer mallory' },
+    });
+    assert.equal(stranger.status, 404);
+
+    const done = await pollJobUntilSettled(baseUrl, 'alice', created.jobId as string);
+    assert.equal(done.status, 'done');
+    assert.equal(done.progress, 1);
+    assert.equal(done.perMove.length, 1);
+    // FakePool scores every position +20 for the side to move: red's move is
+    // followed by a black-to-move +20 → −20 for red.
+    assert.equal(done.perMove[0].bestUci, 'h2e2');
+    assert.equal(done.perMove[0].classification, 'best');
+    assert.equal(done.perMove[0].evalAfterCp, -20);
+    assert.ok(done.summary);
+    // One search per position: 2 positions for 1 move.
+    assert.equal(pool.calls, 2);
+  } finally {
+    await service.close();
+  }
+});
+
+test('analyze job: one live job per user, quota charged once at submit', async () => {
+  const { createEngineHttpServer } = await import('./server');
+  const service = createEngineHttpServer({
+    pool: new SlowPool(150),
+    authenticate: async (token) => ({ uid: token }),
+    isVip: async () => false,
+    requireAuth: true,
+    quota: new DailyQuotaStore({ bestMovePerDay: 30, hintPerDay: 3, analyzePerDay: 2 }),
+  });
+
+  try {
+    const baseUrl = await listen(service.httpServer);
+
+    const first = await submitAnalyzeJob(baseUrl, 'bob', ['h2e2', 'h7e7']);
+    assert.equal(first.status, 202);
+    const job = (await first.json()) as Record<string, any>;
+
+    // Second submit while the first is still grinding → 409. The rejected
+    // submit must NOT burn quota (create is checked before quota).
+    const duplicate = await submitAnalyzeJob(baseUrl, 'bob', ['h2e2']);
+    assert.equal(duplicate.status, 409);
+
+    const done = await pollJobUntilSettled(baseUrl, 'bob', job.jobId as string);
+    assert.equal(done.status, 'done');
+    assert.equal(done.perMove.length, 2);
+
+    // Quota was 2/day and only 1 charged so far → a second job still fits.
+    const second = await submitAnalyzeJob(baseUrl, 'bob', ['h2e2']);
+    assert.equal(second.status, 202);
+    const secondJob = (await second.json()) as Record<string, any>;
+    await pollJobUntilSettled(baseUrl, 'bob', secondJob.jobId as string);
+
+    // Now the daily allowance (2) is spent → 429.
+    const third = await submitAnalyzeJob(baseUrl, 'bob', ['h2e2']);
+    assert.equal(third.status, 429);
+  } finally {
+    await service.close();
+  }
+});
+
+test('analyze job: invalid submissions are rejected up front', async () => {
+  const { createEngineHttpServer } = await import('./server');
+  const service = createEngineHttpServer({
+    pool: new FakePool(),
+    authenticate: async (token) => ({ uid: token }),
+    requireAuth: true,
+  });
+
+  try {
+    const baseUrl = await listen(service.httpServer);
+    const empty = await submitAnalyzeJob(baseUrl, 'carol', []);
+    assert.equal(empty.status, 400);
+    const unknown = await fetch(`${baseUrl}/engine/analyze-jobs/nope`, {
+      headers: { authorization: 'Bearer carol' },
+    });
+    assert.equal(unknown.status, 404);
+  } finally {
+    await service.close();
+  }
+});
+
 test('GET /engine/nnue streams the network file to signed-in users', async () => {
   const { createEngineHttpServer } = await import('./server');
   const { mkdtempSync, writeFileSync, rmSync } = await import('node:fs');

@@ -103,6 +103,24 @@ class EngineMove {
   }
 }
 
+/// Thrown by routing engines when [MoveEngine.analyze] was asked for a
+/// strong (Pikafish-grade) analysis but no strong engine could serve it and
+/// the caller forbade degrading to the shallow minimax analyzer. The UI
+/// should offer "retry" / "use quick offline analysis" instead of silently
+/// showing low-quality grades.
+class AnalysisUnavailableException implements Exception {
+  final String message;
+
+  /// True when the remote engine refused because the free daily analysis
+  /// quota is spent (worth a VIP upsell rather than a retry).
+  final bool quotaExceeded;
+
+  AnalysisUnavailableException(this.message, {this.quotaExceeded = false});
+
+  @override
+  String toString() => 'AnalysisUnavailableException: $message';
+}
+
 abstract class MoveEngine {
   /// [config] is the ELO-ladder strength dial. When non-null it takes
   /// precedence over [level] for bot play (depth / blunder rate / which engine
@@ -115,8 +133,16 @@ abstract class MoveEngine {
     EngineConfig? config,
   });
 
+  /// Grade a finished game.
+  ///
+  /// [onProgress] reports real progress in [0, 1] as moves are graded.
+  /// [allowWeakFallback] only matters for routing engines: when false they
+  /// must throw [AnalysisUnavailableException] rather than serve results from
+  /// the shallow minimax analyzer; leaf engines ignore it.
   Future<GameAnalysis> analyze({
     required String startingFen,
     required List<String> moveUcis,
+    void Function(double progress)? onProgress,
+    bool allowWeakFallback = true,
   });
 }

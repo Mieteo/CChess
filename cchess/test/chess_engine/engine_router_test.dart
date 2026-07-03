@@ -145,6 +145,8 @@ class _FakeEngine implements MoveEngine {
   Future<GameAnalysis> analyze({
     required String startingFen,
     required List<String> moveUcis,
+    void Function(double progress)? onProgress,
+    bool allowWeakFallback = true,
   }) async {
     return const GameAnalysis(
       moves: [],

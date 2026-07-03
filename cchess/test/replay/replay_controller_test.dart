@@ -35,6 +35,40 @@ GameRecord _cupRecord() {
   );
 }
 
+/// Strong path always fails; weak path returns a labelled minimax analysis.
+class _StrictFailEngine implements MoveEngine {
+  int strictCalls = 0;
+  int weakCalls = 0;
+
+  @override
+  Future<EngineMove?> bestMove(
+    String fen, {
+    required EngineLevel level,
+    EngineUseCase useCase = EngineUseCase.bot,
+    EngineConfig? config,
+  }) async =>
+      null;
+
+  @override
+  Future<GameAnalysis> analyze({
+    required String startingFen,
+    required List<String> moveUcis,
+    void Function(double progress)? onProgress,
+    bool allowWeakFallback = true,
+  }) async {
+    if (!allowWeakFallback) {
+      strictCalls++;
+      throw AnalysisUnavailableException('server down');
+    }
+    weakCalls++;
+    onProgress?.call(1.0);
+    return GameAnalysis.aggregate(
+      const [],
+      source: EngineSource.localMinimax,
+    );
+  }
+}
+
 void main() {
   group('ReplayController', () {
     test('starts at ply 0 with the initial board', () {
@@ -96,6 +130,32 @@ void main() {
       c.runAnalysis();
       expect(c.state.analysis, isNull);
     });
+
+    test(
+      'strong-engine failure surfaces analysisUnavailable instead of a '
+      'silent weak fallback; runQuickAnalysis then opts into it',
+      () async {
+        final engine = _StrictFailEngine();
+        final c = ReplayController(
+          record: _sampleRecord(),
+          analysisEngine: engine,
+        );
+
+        c.toggleCoachMode();
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+        expect(c.state.analysis, isNull);
+        expect(c.state.analysisUnavailable, isNotNull);
+        expect(engine.strictCalls, 1);
+        expect(engine.weakCalls, 0);
+
+        c.runQuickAnalysis();
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+        expect(c.state.analysisUnavailable, isNull);
+        expect(c.state.analysis, isNotNull);
+        expect(c.state.analysis!.source, EngineSource.localMinimax);
+        expect(engine.weakCalls, 1);
+      },
+    );
   });
 
   group('GameRecord AI-analysis gate', () {

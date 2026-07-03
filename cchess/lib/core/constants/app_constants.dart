@@ -52,6 +52,10 @@ class AppConstants {
   static const String boxSettings = 'cchess_settings';
   static const String boxGameHistory = 'cchess_game_history';
   static const String boxPuzzleProgress = 'cchess_puzzle_progress';
+
+  /// Cached AI game reviews, keyed by GameRecord id — analyze once (server
+  /// quota / battery), replay forever.
+  static const String boxGameAnalysis = 'cchess_game_analysis';
   // Offline cache of remote puzzles (B4 — Kho Tàn Cục). Lets the list/daily
   // screens fall back to the last-fetched server catalog when offline.
   static const String boxPuzzleCache = 'cchess_puzzle_cache';

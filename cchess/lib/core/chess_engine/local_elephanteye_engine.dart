@@ -79,9 +79,16 @@ class LocalElephantEye implements MoveEngine {
   Future<GameAnalysis> analyze({
     required String startingFen,
     required List<String> moveUcis,
+    void Function(double progress)? onProgress,
+    bool allowWeakFallback = true,
   }) {
     // The native engine exposes no analyze entrypoint; use the Dart analyzer.
-    return _fallback.analyze(startingFen: startingFen, moveUcis: moveUcis);
+    return _fallback.analyze(
+      startingFen: startingFen,
+      moveUcis: moveUcis,
+      onProgress: onProgress,
+      allowWeakFallback: allowWeakFallback,
+    );
   }
 
   /// Native search depth for an ELO-ladder [config], or null to defer to the

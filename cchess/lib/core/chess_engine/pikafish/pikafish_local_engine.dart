@@ -130,6 +130,8 @@ class PikafishLocalEngine implements MoveEngine {
   Future<GameAnalysis> analyze({
     required String startingFen,
     required List<String> moveUcis,
+    void Function(double progress)? onProgress,
+    bool allowWeakFallback = true,
   }) async {
     final client = await _ensureStarted();
     final game = XiangqiGame.fromFen(startingFen);
@@ -180,6 +182,7 @@ class PikafishLocalEngine implements MoveEngine {
       if (loss > _cpLossCap) loss = _cpLossCap;
 
       final isBest = current?.bestUci == moveUcis[i];
+      final evalAfterRed = mover == PieceColor.red ? actualCp : -actualCp;
       analyses.add(
         MoveAnalysis(
           moveIndex: i,
@@ -187,17 +190,22 @@ class PikafishLocalEngine implements MoveEngine {
           mover: mover,
           recommendedMove: recommended,
           bestEval: mover == PieceColor.red ? bestCp : -bestCp,
-          actualEval: mover == PieceColor.red ? actualCp : -actualCp,
+          actualEval: evalAfterRed,
           centipawnLoss: loss,
           quality: _classify(loss, isBestMove: isBest),
+          evalAfterCp: evalAfterRed,
         ),
       );
+      onProgress?.call((i + 1) / moveUcis.length);
 
       if (game.status.isOver) break;
       current = next;
     }
 
-    return GameAnalysis.aggregate(analyses);
+    return GameAnalysis.aggregate(
+      analyses,
+      source: EngineSource.localPikafish,
+    );
   }
 
   Future<void> dispose() async {

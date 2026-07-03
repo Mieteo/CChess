@@ -9,6 +9,7 @@ import '../../theme/app_colors.dart';
 import '../../theme/app_spacing.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/chess/chess_board.dart';
+import '../../widgets/chess/eval_chart.dart';
 import '../../widgets/common/common.dart';
 import 'replay_controller.dart';
 
@@ -115,9 +116,22 @@ class _ReplayBody extends ConsumerWidget {
               if (state.coachMode)
                 _CoachStrip(
                   state: state,
+                  controller: controller,
                   currentMoveAnalysis: currentAnalysis,
                 ),
               if (state.coachMode) AppSpacing.vGapSm,
+              if (state.coachMode && state.analysis != null) ...[
+                SizedBox(
+                  height: 72,
+                  child: EvalChart(
+                    analysis: state.analysis!,
+                    totalPly: state.totalPly,
+                    currentPly: state.currentPly,
+                    onSeek: controller.seek,
+                  ),
+                ),
+                AppSpacing.vGapSm,
+              ],
               _TransportBar(state: state, controller: controller),
               AppSpacing.vGapSm,
               SizedBox(
@@ -226,17 +240,83 @@ class _CupReplayNotice extends StatelessWidget {
 
 class _CoachStrip extends StatelessWidget {
   final ReplayUiState state;
+  final ReplayController controller;
   final MoveAnalysis? currentMoveAnalysis;
 
   const _CoachStrip({
     required this.state,
+    required this.controller,
     required this.currentMoveAnalysis,
   });
+
+  /// Human label for where the grades came from — a Pikafish review and the
+  /// depth-2 minimax fallback are worlds apart and must not look the same.
+  static String _sourceLabel(EngineSource? source) {
+    switch (source) {
+      case EngineSource.remotePikafish:
+        return 'Pikafish (máy chủ)';
+      case EngineSource.localPikafish:
+        return 'Pikafish Offline';
+      case EngineSource.localElephantEye:
+      case EngineSource.localMinimax:
+        return 'Phân tích nhanh (offline, kém chính xác)';
+      case null:
+        return 'Không rõ nguồn';
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final analysis = state.analysis;
     if (analysis == null) {
+      final unavailable = state.analysisUnavailable;
+      if (unavailable != null) {
+        // No silent minimax fallback: tell the user and let them choose.
+        return CChessCard(
+          padding: const EdgeInsets.all(AppSpacing.sm),
+          borderColor: AppColors.error.withValues(alpha: 0.5),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                unavailable.quotaExceeded
+                    ? 'Đã hết lượt phân tích AI miễn phí hôm nay. Nâng cấp '
+                        'VIP hoặc bật Pikafish Offline trong Cài Đặt để phân '
+                        'tích không giới hạn.'
+                    : 'Máy chủ phân tích chưa sẵn sàng. Thử lại, hoặc dùng '
+                        'bản phân tích nhanh trên máy (kém chính xác).',
+                style: AppTextStyles.captionSm.copyWith(
+                  color: AppColors.onSurfaceVariant,
+                ),
+              ),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  if (!unavailable.quotaExceeded)
+                    TextButton(
+                      onPressed: controller.runAnalysis,
+                      child: Text(
+                        'Thử lại',
+                        style: AppTextStyles.bodyMd.copyWith(
+                          color: AppColors.accentGold,
+                        ),
+                      ),
+                    ),
+                  TextButton(
+                    onPressed: controller.runQuickAnalysis,
+                    child: Text(
+                      'Phân tích nhanh',
+                      style: AppTextStyles.bodyMd.copyWith(
+                        color: AppColors.parchmentTan,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        );
+      }
       return CChessCard(
         padding: const EdgeInsets.symmetric(
           horizontal: AppSpacing.md,
@@ -270,24 +350,37 @@ class _CoachStrip extends StatelessWidget {
           vertical: AppSpacing.sm,
         ),
         borderColor: AppColors.accentGold.withValues(alpha: 0.5),
-        child: Row(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _AccuracyChip(
-              label: 'Đỏ',
-              value: analysis.redAccuracy,
-              tint: AppColors.vermilionRed,
+            Row(
+              children: [
+                _AccuracyChip(
+                  label: 'Đỏ',
+                  value: analysis.redAccuracy,
+                  tint: AppColors.vermilionRed,
+                ),
+                AppSpacing.hGapMd,
+                _AccuracyChip(
+                  label: 'Đen',
+                  value: analysis.blackAccuracy,
+                  tint: AppColors.deepNavyBlack,
+                ),
+                const Spacer(),
+                Text(
+                  '⌐ ${analysis.redBlunders + analysis.blackBlunders} sai lầm lớn',
+                  style: AppTextStyles.captionSm.copyWith(
+                    color: AppColors.error,
+                  ),
+                ),
+              ],
             ),
-            AppSpacing.hGapMd,
-            _AccuracyChip(
-              label: 'Đen',
-              value: analysis.blackAccuracy,
-              tint: AppColors.deepNavyBlack,
-            ),
-            const Spacer(),
+            AppSpacing.vGapXs,
             Text(
-              '⌐ ${analysis.redBlunders + analysis.blackBlunders} sai lầm lớn',
+              'Nguồn: ${_sourceLabel(analysis.source)}',
               style: AppTextStyles.captionSm.copyWith(
-                color: AppColors.error,
+                color: AppColors.parchmentTan,
+                fontSize: 10,
               ),
             ),
           ],

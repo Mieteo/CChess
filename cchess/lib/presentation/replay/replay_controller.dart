@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/chess_engine/chess_engine.dart';
 import '../../data/models/game_record.dart';
+import '../../data/repositories/analysis_cache_repository.dart';
 import '../../data/repositories/game_history_repository.dart';
 
 class ReplayUiState {
@@ -34,6 +35,11 @@ class ReplayUiState {
   /// Fraction in [0, 1] for analysis progress.
   final double analysisProgress;
 
+  /// Set when a strong (Pikafish-grade) analysis could not be obtained and
+  /// the user must choose: retry, or accept the quick offline analyzer.
+  /// Never set while [analysis] is non-null.
+  final AnalysisUnavailableException? analysisUnavailable;
+
   const ReplayUiState({
     required this.record,
     required this.currentPly,
@@ -44,6 +50,7 @@ class ReplayUiState {
     required this.coachMode,
     required this.analysis,
     required this.analysisProgress,
+    this.analysisUnavailable,
   });
 
   int get totalPly => record.moves.length;
@@ -60,6 +67,8 @@ class ReplayUiState {
     bool? coachMode,
     GameAnalysis? analysis,
     double? analysisProgress,
+    AnalysisUnavailableException? analysisUnavailable,
+    bool clearAnalysisUnavailable = false,
   }) {
     return ReplayUiState(
       record: record,
@@ -71,6 +80,9 @@ class ReplayUiState {
       coachMode: coachMode ?? this.coachMode,
       analysis: analysis ?? this.analysis,
       analysisProgress: analysisProgress ?? this.analysisProgress,
+      analysisUnavailable: clearAnalysisUnavailable
+          ? null
+          : (analysisUnavailable ?? this.analysisUnavailable),
     );
   }
 }
@@ -80,22 +92,27 @@ class ReplayController extends StateNotifier<ReplayUiState> {
   Timer? _autoPlayTimer;
   int _analysisRunId = 0;
   final MoveEngine _analysisEngine;
+  final AnalysisCacheRepository? _analysisCache;
 
-  ReplayController({required GameRecord record, MoveEngine? analysisEngine})
-    : _analysisEngine = analysisEngine ?? LocalMinimaxEngine(),
-      super(
-        ReplayUiState(
-          record: record,
-          currentPly: 0,
-          board: Board.fromFen(record.startingFen),
-          lastMove: null,
-          isPlaying: false,
-          speed: 1.0,
-          coachMode: false,
-          analysis: null,
-          analysisProgress: 0,
-        ),
-      );
+  ReplayController({
+    required GameRecord record,
+    MoveEngine? analysisEngine,
+    AnalysisCacheRepository? analysisCache,
+  })  : _analysisEngine = analysisEngine ?? LocalMinimaxEngine(),
+        _analysisCache = analysisCache,
+        super(
+          ReplayUiState(
+            record: record,
+            currentPly: 0,
+            board: Board.fromFen(record.startingFen),
+            lastMove: null,
+            isPlaying: false,
+            speed: 1.0,
+            coachMode: false,
+            analysis: null,
+            analysisProgress: 0,
+          ),
+        );
 
   @override
   void dispose() {
@@ -161,10 +178,19 @@ class ReplayController extends StateNotifier<ReplayUiState> {
     }
   }
 
-  /// Re-run AI Coach analysis from scratch.
+  /// (Re-)run the AI Coach analysis, demanding a strong engine (server or
+  /// offline Pikafish). On failure the state exposes [ReplayUiState.analysisUnavailable]
+  /// so the UI can offer "retry" / "quick offline analysis".
   void runAnalysis() {
     if (state.record.isCupMode) return;
     _runAnalysis();
+  }
+
+  /// User explicitly accepted the shallow offline analyzer after the strong
+  /// engines were unavailable.
+  void runQuickAnalysis() {
+    if (state.record.isCupMode) return;
+    _runAnalysis(allowWeakFallback: true, useCache: false);
   }
 
   void _startAutoPlay() {
@@ -188,20 +214,54 @@ class ReplayController extends StateNotifier<ReplayUiState> {
     }
   }
 
-  void _runAnalysis() {
+  void _runAnalysis({bool allowWeakFallback = false, bool useCache = true}) {
     final runId = ++_analysisRunId;
-    state = state.copyWith(analysisProgress: 0.05, analysis: null);
+    state = state.copyWith(
+      analysisProgress: 0.02,
+      analysis: null,
+      clearAnalysisUnavailable: true,
+    );
     unawaited(() async {
       try {
+        // A finished review is cached per record — replaying it is free.
+        if (useCache) {
+          final cached = await _analysisCache?.get(state.record);
+          if (!mounted || runId != _analysisRunId) return;
+          if (cached != null) {
+            state = state.copyWith(analysis: cached, analysisProgress: 1.0);
+            return;
+          }
+        }
+
         final analysis = await _analysisEngine.analyze(
           startingFen: state.record.startingFen,
           moveUcis: state.record.moves,
+          allowWeakFallback: allowWeakFallback,
+          onProgress: (fraction) {
+            if (!mounted || runId != _analysisRunId) return;
+            state = state.copyWith(
+              analysisProgress: fraction.clamp(0.02, 1.0),
+            );
+          },
         );
         if (!mounted || runId != _analysisRunId) return;
         state = state.copyWith(analysis: analysis, analysisProgress: 1.0);
-      } catch (_) {
+        // Strong results are worth keeping; the cache ignores weak ones.
+        unawaited(
+          Future<void>.value(_analysisCache?.put(state.record, analysis)),
+        );
+      } on AnalysisUnavailableException catch (error) {
         if (!mounted || runId != _analysisRunId) return;
-        state = state.copyWith(analysisProgress: 1.0);
+        state = state.copyWith(
+          analysisProgress: 0,
+          analysisUnavailable: error,
+        );
+      } catch (error) {
+        if (!mounted || runId != _analysisRunId) return;
+        state = state.copyWith(
+          analysisProgress: 0,
+          analysisUnavailable: AnalysisUnavailableException(error.toString()),
+        );
       }
     }());
   }
@@ -244,6 +304,7 @@ final replayControllerProvider = StateNotifierProvider.autoDispose
       return ReplayController(
         record: record,
         analysisEngine: ref.watch(engineRouterProvider),
+        analysisCache: ref.watch(analysisCacheRepositoryProvider),
       );
     });
 
