@@ -98,9 +98,13 @@ class _ReplayBody extends ConsumerWidget {
           child: Column(
             children: [
               _ReplayHeader(record: state.record),
-              if (state.record.isCupMode) ...[
+              if (state.record.isCupMode &&
+                  !state.record.hasCupReplayData) ...[
                 AppSpacing.vGapSm,
-                const _CupReplayNotice(),
+                const _LegacyCupReplayNotice(),
+              ] else if (state.replayTruncated) ...[
+                AppSpacing.vGapSm,
+                _CorruptReplayNotice(faultyMoveNumber: state.playableMoves + 1),
               ],
               AppSpacing.vGapSm,
               Expanded(
@@ -109,6 +113,7 @@ class _ReplayBody extends ConsumerWidget {
                   child: ChessBoard(
                     board: state.board,
                     lastMove: state.lastMove,
+                    hiddenPositions: state.hiddenPositions,
                   ),
                 ),
               ),
@@ -202,10 +207,11 @@ class _ReplayHeader extends StatelessWidget {
   }
 }
 
-/// Temporary notice: Cờ Úp records don't yet persist reveal data, so this
-/// replay can diverge from what was actually played (see doc 14).
-class _CupReplayNotice extends StatelessWidget {
-  const _CupReplayNotice();
+/// Legacy Cờ Úp records (saved before P3) never persisted the hidden deal —
+/// an accurate board replay is impossible, so playback stays at move 0 and
+/// only the move list is browsable.
+class _LegacyCupReplayNotice extends StatelessWidget {
+  const _LegacyCupReplayNotice();
 
   @override
   Widget build(BuildContext context) {
@@ -225,8 +231,47 @@ class _CupReplayNotice extends StatelessWidget {
           AppSpacing.hGapSm,
           Expanded(
             child: Text(
-              'Phục bàn Cờ Úp đang được nâng cấp: kỳ phổ hiện chưa lưu dữ '
-              'liệu lật quân nên diễn biến có thể không đúng ván đấu thật.',
+              'Kỳ phổ Cờ Úp cũ này không lưu dữ liệu lật quân nên không thể '
+              'phát lại bàn cờ chính xác — chỉ xem được danh sách nước đi. '
+              'Các ván Cờ Úp chơi từ bây giờ sẽ phục bàn đầy đủ.',
+              style: AppTextStyles.captionSm.copyWith(
+                color: AppColors.parchmentTan,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Shown when the stored move list stops being applicable mid-game (corrupt
+/// record): playback halts AT the bad move instead of the old frozen-board
+/// behaviour where the highlight kept running.
+class _CorruptReplayNotice extends StatelessWidget {
+  final int faultyMoveNumber;
+  const _CorruptReplayNotice({required this.faultyMoveNumber});
+
+  @override
+  Widget build(BuildContext context) {
+    return CChessCard(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical: AppSpacing.sm,
+      ),
+      borderColor: AppColors.error.withValues(alpha: 0.5),
+      child: Row(
+        children: [
+          const Icon(
+            Icons.warning_amber_rounded,
+            color: AppColors.error,
+            size: 18,
+          ),
+          AppSpacing.hGapSm,
+          Expanded(
+            child: Text(
+              'Kỳ phổ lỗi từ nước $faultyMoveNumber: dữ liệu không hợp lệ '
+              'nên chỉ phát lại được đến trước nước này.',
               style: AppTextStyles.captionSm.copyWith(
                 color: AppColors.parchmentTan,
               ),
@@ -568,9 +613,13 @@ class _TransportBar extends StatelessWidget {
                   child: Slider(
                     value: state.currentPly.toDouble(),
                     min: 0,
-                    max: state.totalPly.toDouble().clamp(1, double.infinity),
+                    // Range ends where playback can actually go — a corrupt /
+                    // legacy record must not let the thumb outrun the board.
+                    max: state.playableMoves
+                        .toDouble()
+                        .clamp(1, double.infinity),
                     divisions:
-                        state.totalPly == 0 ? 1 : state.totalPly,
+                        state.playableMoves == 0 ? 1 : state.playableMoves,
                     onChanged: (v) => controller.seek(v.round()),
                   ),
                 ),

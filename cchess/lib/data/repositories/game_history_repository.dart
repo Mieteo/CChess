@@ -40,6 +40,8 @@ class GameHistoryRepository {
       duration: record.duration,
       endedAt: record.endedAt,
       isFavorite: record.isFavorite,
+      cupHiddenFen: record.cupHiddenFen,
+      cupReveals: record.cupReveals,
     );
     await box.put(id, stored.toJson());
     _remote?.pushGameRecord(stored).ignore();

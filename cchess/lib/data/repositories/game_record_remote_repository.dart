@@ -39,6 +39,10 @@ class GameRecordRemoteRepository {
       'duration': r.duration.inMilliseconds,
       'endedAt': Timestamp.fromDate(r.endedAt),
       'isFavorite': r.isFavorite,
+      // Cờ Úp replay data (P3) — null for standard games; kept in the cloud
+      // copy so a reinstalled device can still replay cup games faithfully.
+      if (r.cupHiddenFen != null) 'cupHiddenFen': r.cupHiddenFen,
+      if (r.cupReveals != null) 'cupReveals': r.cupReveals,
     });
   }
 

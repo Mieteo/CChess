@@ -353,6 +353,9 @@ class _GameScreenState extends ConsumerState<GameScreen> {
     final duration = _gameStartedAt == null
         ? Duration.zero
         : DateTime.now().difference(_gameStartedAt!);
+    // Cờ Úp: persist the shuffled deal + per-move reveal log so the replay
+    // screen can reconstruct the exact game (P3, doc 14 §4.3).
+    final cupGame = game is XiangqiCupGame ? game : null;
     await repo.save(
       GameRecord(
         id: '',
@@ -366,6 +369,15 @@ class _GameScreenState extends ConsumerState<GameScreen> {
         eloDelta: delta,
         duration: duration,
         endedAt: DateTime.now(),
+        cupHiddenFen: cupGame == null
+            ? null
+            : CupRecordCodec.encodeHiddenMap(cupGame.initialHiddenAssignments),
+        cupReveals: cupGame == null
+            ? null
+            : CupRecordCodec.deriveReveals(
+                cupGame.initialHiddenAssignments,
+                cupGame.history,
+              ),
       ),
     );
 

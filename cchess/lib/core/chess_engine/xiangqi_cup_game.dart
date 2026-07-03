@@ -25,6 +25,11 @@ class XiangqiCupGame implements ChessGameSession {
   final Map<Position, Piece> _hiddenAssignments;
   final List<_CupSnapshot> _undoStack;
 
+  /// Hidden identities as dealt when this game object was created. Reveals
+  /// remove entries from [_hiddenAssignments], so the record writer needs this
+  /// untouched copy to persist the full deal (P3 cup replay).
+  final Map<Position, Piece> _initialHidden;
+
   XiangqiCupGame._(
     this._board,
     this._turn,
@@ -34,7 +39,10 @@ class XiangqiCupGame implements ChessGameSession {
     this._fullmoveNumber,
     this._hiddenAssignments,
     this._undoStack,
-  ) : _endReason = null;
+  )  : _endReason = null,
+       _initialHidden = Map.unmodifiable(
+         Map<Position, Piece>.from(_hiddenAssignments),
+       );
 
   /// Test/debug hook for focused rule fixtures. Production play should use
   /// [XiangqiCupGame.initial] so hidden assignments are shuffled normally.
@@ -98,6 +106,11 @@ class XiangqiCupGame implements ChessGameSession {
 
   /// Test/debug hook for verifying deterministic shuffles. UI should not use it.
   Piece? debugHiddenPieceAt(Position pos) => _hiddenAssignments[pos];
+
+  /// The full square→true-identity deal at game start (unmodifiable). This is
+  /// what gets serialized into `GameRecord.cupHiddenFen` so a saved Cờ Úp game
+  /// can be replayed with the exact reveal sequence.
+  Map<Position, Piece> get initialHiddenAssignments => _initialHidden;
 
   @override
   String toFen() {

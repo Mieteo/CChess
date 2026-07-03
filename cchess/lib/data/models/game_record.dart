@@ -46,6 +46,16 @@ class GameRecord extends Equatable {
   /// Marked by the user.
   final bool isFavorite;
 
+  /// Cờ Úp only: the full square→true-identity deal at game start, encoded by
+  /// [CupRecordCodec.encodeHiddenMap]. Null for standard games and for legacy
+  /// cup records saved before P3 (those can't be replayed accurately).
+  final String? cupHiddenFen;
+
+  /// Cờ Úp only: parallel to [moves] — entry i is the FEN char revealed by
+  /// move i, or null when that move didn't flip a face-down piece. Used as an
+  /// integrity cross-check against [cupHiddenFen] during replay.
+  final List<String?>? cupReveals;
+
   const GameRecord({
     required this.id,
     required this.opponentLabel,
@@ -59,6 +69,8 @@ class GameRecord extends Equatable {
     required this.duration,
     required this.endedAt,
     this.isFavorite = false,
+    this.cupHiddenFen,
+    this.cupReveals,
   });
 
   /// Whether the human won this game. Always false for local 2-player.
@@ -76,10 +88,17 @@ class GameRecord extends Equatable {
   bool get isDraw => result == GameStatus.draw;
   bool get isFinished => result.isOver;
 
-  /// True for Cờ Úp variants. Their records currently miss the hidden-piece
-  /// reveal data, so standard-rules replay/analysis tooling can't process them.
+  /// True for Cờ Úp variants.
   bool get isCupMode =>
       mode == GameMode.cupLocal || mode == GameMode.cupVsBot;
+
+  /// Rules variant, derived from [mode] so legacy records classify correctly.
+  String get variant => isCupMode ? 'cup' : 'standard';
+
+  /// Whether this Cờ Úp record carries the hidden deal needed for an accurate
+  /// replay (P3). Legacy cup records return false: their reveal data was never
+  /// saved and is unrecoverable, so board playback stays disabled for them.
+  bool get hasCupReplayData => isCupMode && cupHiddenFen != null;
 
   /// AI coach / move grading only works for full-information standard games —
   /// engines can't meaningfully score moves made against hidden pieces.
@@ -98,6 +117,8 @@ class GameRecord extends Equatable {
     'durationSeconds': duration.inSeconds,
     'endedAt': endedAt.toIso8601String(),
     'isFavorite': isFavorite,
+    if (cupHiddenFen != null) 'cupHiddenFen': cupHiddenFen,
+    if (cupReveals != null) 'cupReveals': cupReveals,
   };
 
   factory GameRecord.fromJson(Map<dynamic, dynamic> json) {
@@ -130,6 +151,10 @@ class GameRecord extends Equatable {
       duration: Duration(seconds: json['durationSeconds'] as int? ?? 0),
       endedAt: DateTime.parse(json['endedAt'] as String),
       isFavorite: json['isFavorite'] as bool? ?? false,
+      cupHiddenFen: json['cupHiddenFen'] as String?,
+      cupReveals: (json['cupReveals'] as List?)
+          ?.map((e) => e as String?)
+          .toList(),
     );
   }
 
@@ -146,6 +171,8 @@ class GameRecord extends Equatable {
     duration: duration,
     endedAt: endedAt,
     isFavorite: isFavorite ?? this.isFavorite,
+    cupHiddenFen: cupHiddenFen,
+    cupReveals: cupReveals,
   );
 
   @override
@@ -162,6 +189,8 @@ class GameRecord extends Equatable {
     duration,
     endedAt,
     isFavorite,
+    cupHiddenFen,
+    cupReveals,
   ];
 }
 

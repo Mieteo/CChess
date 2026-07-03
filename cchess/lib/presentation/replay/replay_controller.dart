@@ -17,6 +17,14 @@ class ReplayUiState {
   /// Current board after applying [currentPly] moves.
   final Board board;
 
+  /// Squares whose piece is still face-down at [currentPly] (Cờ Úp only).
+  final Set<Position> hiddenPositions;
+
+  /// How many leading moves of the record can actually be applied. Equals
+  /// [totalPly] for intact records; smaller when the record is corrupt from
+  /// some move on, and 0 for legacy Cờ Úp records without reveal data.
+  final int playableMoves;
+
   /// Last move played (i.e. the move at index currentPly-1), if any.
   final Move? lastMove;
 
@@ -44,6 +52,8 @@ class ReplayUiState {
     required this.record,
     required this.currentPly,
     required this.board,
+    required this.hiddenPositions,
+    required this.playableMoves,
     required this.lastMove,
     required this.isPlaying,
     required this.speed,
@@ -55,11 +65,19 @@ class ReplayUiState {
 
   int get totalPly => record.moves.length;
   bool get atStart => currentPly == 0;
-  bool get atEnd => currentPly >= totalPly;
+
+  /// Playback stops at [playableMoves], not [totalPly]: past that point the
+  /// stored moves can't be applied (corrupt data / legacy Cờ Úp record) and
+  /// letting the cursor run further is exactly the frozen-board bug of P3.
+  bool get atEnd => currentPly >= playableMoves;
+
+  /// True when part of the move list can't be replayed on the board.
+  bool get replayTruncated => playableMoves < totalPly;
 
   ReplayUiState copyWith({
     int? currentPly,
     Board? board,
+    Set<Position>? hiddenPositions,
     Move? lastMove,
     bool clearLastMove = false,
     bool? isPlaying,
@@ -74,6 +92,8 @@ class ReplayUiState {
       record: record,
       currentPly: currentPly ?? this.currentPly,
       board: board ?? this.board,
+      hiddenPositions: hiddenPositions ?? this.hiddenPositions,
+      playableMoves: playableMoves,
       lastMove: clearLastMove ? null : (lastMove ?? this.lastMove),
       isPlaying: isPlaying ?? this.isPlaying,
       speed: speed ?? this.speed,
@@ -88,23 +108,51 @@ class ReplayUiState {
 }
 
 /// Controller that walks through a saved [GameRecord] move-by-move.
+///
+/// Playback is delegated to a variant-aware [ReplaySession]: standard rules
+/// for normal games, [CupReplaySession] for Cờ Úp records that carry their
+/// hidden deal, and a start-position-only session for legacy cup records.
 class ReplayController extends StateNotifier<ReplayUiState> {
   Timer? _autoPlayTimer;
   int _analysisRunId = 0;
+  final ReplaySession _session;
   final MoveEngine _analysisEngine;
   final AnalysisCacheRepository? _analysisCache;
 
-  ReplayController({
+  factory ReplayController({
     required GameRecord record,
     MoveEngine? analysisEngine,
     AnalysisCacheRepository? analysisCache,
-  })  : _analysisEngine = analysisEngine ?? LocalMinimaxEngine(),
+  }) {
+    return ReplayController._(
+      record: record,
+      session: ReplaySession.build(
+        isCupGame: record.isCupMode,
+        startingFen: record.startingFen,
+        moveUcis: record.moves,
+        cupHiddenFen: record.cupHiddenFen,
+        cupReveals: record.cupReveals,
+      ),
+      analysisEngine: analysisEngine,
+      analysisCache: analysisCache,
+    );
+  }
+
+  ReplayController._({
+    required GameRecord record,
+    required ReplaySession session,
+    MoveEngine? analysisEngine,
+    AnalysisCacheRepository? analysisCache,
+  })  : _session = session,
+        _analysisEngine = analysisEngine ?? LocalMinimaxEngine(),
         _analysisCache = analysisCache,
         super(
           ReplayUiState(
             record: record,
             currentPly: 0,
-            board: Board.fromFen(record.startingFen),
+            board: session.frameAt(0).board,
+            hiddenPositions: session.frameAt(0).hiddenPositions,
+            playableMoves: session.playableMoves,
             lastMove: null,
             isPlaying: false,
             speed: 1.0,
@@ -121,17 +169,19 @@ class ReplayController extends StateNotifier<ReplayUiState> {
     super.dispose();
   }
 
-  /// Jump to [ply] (0 = before first move, totalPly = after last move).
+  /// Jump to [ply] (0 = before first move). Clamped to [ReplayUiState.playableMoves]
+  /// so a corrupt record stops AT the bad move instead of the highlight
+  /// running ahead of a frozen board.
   void seek(int ply) {
-    final target = ply.clamp(0, state.totalPly);
-    final board = _rebuildBoardAt(target);
-    final lastMove = target == 0 ? null : _moveAt(target - 1, board: null);
+    final target = ply.clamp(0, state.playableMoves);
+    final frame = _session.frameAt(target);
     state = state.copyWith(
       currentPly: target,
-      board: board,
-      lastMove: lastMove,
-      clearLastMove: target == 0,
-      isPlaying: target >= state.totalPly ? false : state.isPlaying,
+      board: frame.board,
+      hiddenPositions: frame.hiddenPositions,
+      lastMove: frame.lastMove,
+      clearLastMove: frame.lastMove == null,
+      isPlaying: target >= state.playableMoves ? false : state.isPlaying,
     );
   }
 
@@ -149,7 +199,7 @@ class ReplayController extends StateNotifier<ReplayUiState> {
   }
 
   void goToStart() => seek(0);
-  void goToEnd() => seek(state.totalPly);
+  void goToEnd() => seek(state.playableMoves);
 
   void toggleAutoPlay() {
     if (state.isPlaying) {
@@ -168,8 +218,9 @@ class ReplayController extends StateNotifier<ReplayUiState> {
   }
 
   void toggleCoachMode() {
-    // Cờ Úp: hidden-piece identities make engine grading meaningless, and the
-    // saved record lacks reveal data anyway — keep the coach off entirely.
+    // Cờ Úp: grading moves made under imperfect information with a
+    // full-information engine is meaningless (P0 decision), so the coach
+    // stays off even for post-P3 records that do carry replay data.
     if (state.record.isCupMode) return;
     final next = !state.coachMode;
     state = state.copyWith(coachMode: next);
@@ -266,37 +317,6 @@ class ReplayController extends StateNotifier<ReplayUiState> {
     }());
   }
 
-  /// Rebuild a fresh board representing the position after [ply] moves.
-  Board _rebuildBoardAt(int ply) {
-    final game = XiangqiGame.fromFen(state.record.startingFen);
-    for (int i = 0; i < ply; i++) {
-      final coords = Move.parseUciCoords(state.record.moves[i]);
-      if (coords == null) break;
-      if (!game.isValidMove(coords.$1, coords.$2)) break;
-      game.makeMove(coords.$1, coords.$2);
-    }
-    // Return a copy so callers can't mutate our snapshot.
-    return game.board.copy();
-  }
-
-  /// Reconstruct the Move object at index [moveIndex] (0-based). We need
-  /// the board *before* that move to know which piece moved + what was on
-  /// the destination — so this method replays up to but not including the
-  /// move first.
-  Move? _moveAt(int moveIndex, {Board? board}) {
-    if (moveIndex < 0 || moveIndex >= state.totalPly) return null;
-    final coords = Move.parseUciCoords(state.record.moves[moveIndex]);
-    if (coords == null) return null;
-    final priorBoard = board ?? _rebuildBoardAt(moveIndex);
-    final piece = priorBoard.at(coords.$1);
-    if (piece == null) return null;
-    return Move(
-      from: coords.$1,
-      to: coords.$2,
-      moved: piece,
-      captured: priorBoard.at(coords.$2),
-    );
-  }
 }
 
 final replayControllerProvider = StateNotifierProvider.autoDispose
