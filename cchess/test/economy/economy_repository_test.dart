@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:cchess/data/datasources/remote/economy_api_source.dart';
 import 'package:cchess/data/datasources/remote/puzzle_api_transport.dart';
 import 'package:cchess/data/models/economy_models.dart';
+import 'package:cchess/data/models/shop_item.dart';
 import 'package:cchess/data/repositories/economy_repository.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive_flutter/hive_flutter.dart';
@@ -32,6 +33,9 @@ class _FakeTransport implements PuzzleApiTransport {
   Object? error;
   final List<String> calls = [];
 
+  /// Last JSON body sent per POST path, so tests can assert the wire format.
+  final Map<String, Map<String, dynamic>> bodies = {};
+
   @override
   Future<Map<String, dynamic>> getJson(
     Uri uri, {
@@ -51,6 +55,7 @@ class _FakeTransport implements PuzzleApiTransport {
     Duration timeout = const Duration(seconds: 10),
   }) async {
     calls.add('POST ${uri.path}');
+    bodies[uri.path] = body;
     if (error != null) throw error!;
     return responses[uri.path] ?? const {};
   }
@@ -151,6 +156,37 @@ void main() {
       expect(() => repo.checkin(), throwsA(isA<EconomyApiException>()));
       expect(() => repo.craft('r1'), throwsA(isA<EconomyApiException>()));
     });
+
+    test('markMailRead patches the cached copy', () async {
+      final t = _FakeTransport();
+      t.responses['/mail'] = {
+        'messages': [_mailJson('m1')],
+      };
+      final repo = _repo(t);
+      await repo.mail();
+
+      await repo.markMailRead('m1');
+      expect(t.calls, contains('POST /mail/m1/read'));
+
+      // Offline reload sees the read flag from the cache.
+      t.error = _networkError;
+      expect((await repo.mail()).single.read, isTrue);
+    });
+
+    test('deleteMail removes the message from the cache', () async {
+      final t = _FakeTransport();
+      t.responses['/mail'] = {
+        'messages': [_mailJson('m1'), _mailJson('m2')],
+      };
+      final repo = _repo(t);
+      await repo.mail();
+
+      await repo.deleteMail('m1');
+      expect(t.calls, contains('POST /mail/m1/delete'));
+
+      t.error = _networkError;
+      expect((await repo.mail()).map((m) => m.id), ['m2']);
+    });
   });
 
   group('events', () {
@@ -190,7 +226,7 @@ void main() {
       expect(await repo.eventClaims(), {'tet__lixi'});
     });
 
-    test('claimEventGift records the claim key locally', () async {
+    test('claimEventGift records the claim key locally and sends giftId', () async {
       final t = _FakeTransport();
       t.responses['/events/tet/claim'] = {
         'wallet': {'coins': 88, 'gems': 0, 'equipped': {}},
@@ -199,9 +235,83 @@ void main() {
       final repo = _repo(t);
       final outcome = await repo.claimEventGift('tet', 'lixi');
       expect(outcome.wallet.coins, 88);
+      expect(t.bodies['/events/tet/claim'], {'giftId': 'lixi'});
 
       t.error = _networkError;
       expect(await repo.eventClaims(), {'tet__lixi'});
+    });
+  });
+
+  group('api source auth + errors', () {
+    test('personal reads without a token → 401 missing-token; public reads OK',
+        () async {
+      final t = _FakeTransport();
+      t.responses['/events'] = {'events': []};
+      t.responses['/crafting'] = {'recipes': []};
+      final source = EconomyApiSource(
+        baseUri: Uri.parse('https://api.example.com'),
+        transport: t,
+        tokenProvider: () async => null,
+      );
+
+      // Catalog reads need no auth.
+      expect(await source.listEvents(), isEmpty);
+      expect(await source.listRecipes(), isEmpty);
+
+      // The personal surface fails fast with a 401 before hitting the wire.
+      for (final call in <Future<Object?> Function()>[
+        source.listMail,
+        source.getWelfare,
+        source.listEventClaims,
+        source.checkin,
+        () => source.claimMail('m1'),
+        () => source.craft('r1'),
+      ]) {
+        await expectLater(
+          call,
+          throwsA(isA<EconomyApiException>()
+              .having((e) => e.statusCode, 'statusCode', 401)
+              .having((e) => e.code, 'code', 'missing-token')),
+        );
+      }
+      expect(t.calls.where((c) => c.startsWith('POST')), isEmpty);
+    });
+
+    test('a 409 from the backend maps to isAlreadyClaimed', () async {
+      final t = _FakeTransport();
+      t.error = const PuzzleApiException(
+        statusCode: 409,
+        code: 'already-claimed',
+        message: 'Gift already claimed',
+      );
+      final source = EconomyApiSource(
+        baseUri: Uri.parse('https://api.example.com'),
+        transport: t,
+        tokenProvider: () async => 'tok',
+      );
+      await expectLater(
+        () => source.claimEventGift('tet', 'lixi'),
+        throwsA(isA<EconomyApiException>()
+            .having((e) => e.isAlreadyClaimed, 'isAlreadyClaimed', isTrue)
+            .having((e) => e.isNetworkError, 'isNetworkError', isFalse)),
+      );
+    });
+  });
+
+  group('welfare offline', () {
+    test('no server + no cache → default empty status (nothing claimable)',
+        () async {
+      final repo = EconomyRepository(remote: null);
+      final status = await repo.welfare();
+      expect(status.streak, 0);
+      expect(status.todayClaimed, isFalse);
+      expect(status.comebackAvailable, isFalse);
+      expect(status.cycle, isEmpty);
+    });
+
+    test('no server + no cache → empty event claims', () async {
+      final repo = EconomyRepository(remote: null);
+      expect(await repo.eventClaims(), isEmpty);
     });
   });
 
@@ -323,6 +433,58 @@ void main() {
       });
       expect(m.reward, isNull);
       expect(m.hasUnclaimedReward, isFalse);
+    });
+
+    test('malformed JSON fields fall back to safe defaults', () {
+      final mail = MailMessage.fromJson({
+        'id': 1, // wrong type
+        'title': null,
+        'reward': 'junk',
+        'read': 'yes',
+        'createdAtMs': 'sớm',
+      });
+      expect(mail.id, '');
+      expect(mail.title, '');
+      expect(mail.reward, isNull);
+      expect(mail.read, isFalse);
+      expect(mail.createdAtMs, isNull);
+
+      final event = EconEvent.fromJson({'id': 'e', 'gifts': 'junk'});
+      expect(event.gifts, isEmpty);
+      expect(event.startAtMs, 0);
+
+      // Recipe missing its output still parses (screen renders it disabled).
+      final recipe = CraftRecipe.fromJson({'id': 'r', 'nameVi': 'x'});
+      expect(recipe.output.itemId, '');
+      expect(recipe.ingredients, isEmpty);
+      expect(recipe.costCoins, 0);
+
+      final welfare = WelfareStatus.fromJson({'streak': '3', 'cycle': 'junk'});
+      expect(welfare.streak, 0);
+      expect(welfare.cycle, isEmpty);
+    });
+
+    test('RewardItem qty defaults to 1; unknown kind falls back to consumable',
+        () {
+      final item = RewardItem.fromJson({
+        'itemId': 'x',
+        'kind': 'không-tồn-tại',
+        'payloadKey': 'p',
+      });
+      expect(item.qty, 1);
+      expect(item.kind, ShopItemKind.consumable);
+    });
+
+    test('RewardBundle.isEmpty treats non-positive amounts as empty', () {
+      expect(const RewardBundle().isEmpty, isTrue);
+      expect(const RewardBundle(coins: -5).isEmpty, isTrue);
+      expect(const RewardBundle(gems: 1).isEmpty, isFalse);
+      expect(
+        const RewardBundle(items: [
+          RewardItem(itemId: 'x', kind: ShopItemKind.consumable, payloadKey: 'p'),
+        ]).isEmpty,
+        isFalse,
+      );
     });
   });
 }

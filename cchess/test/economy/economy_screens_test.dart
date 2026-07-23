@@ -1,8 +1,13 @@
 import 'package:cchess/data/models/economy_models.dart';
+import 'package:cchess/data/models/inventory_item.dart';
+import 'package:cchess/data/models/shop_item.dart';
+import 'package:cchess/data/models/wallet.dart';
+import 'package:cchess/presentation/economy/crafting_screen.dart';
 import 'package:cchess/presentation/economy/economy_controller.dart';
 import 'package:cchess/presentation/economy/events_screen.dart';
 import 'package:cchess/presentation/economy/mail_screen.dart';
 import 'package:cchess/presentation/economy/welfare_screen.dart';
+import 'package:cchess/presentation/shop/shop_controller.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -172,6 +177,125 @@ void main() {
       expect(find.text('Tết 2026'), findsOneWidget);
       expect(find.byIcon(Icons.check_circle), findsOneWidget); // lixi claimed
       expect(find.text('Nhận'), findsOneWidget); // phao still claimable
+    });
+  });
+
+  group('CraftingScreen', () {
+    const recipe = CraftRecipe(
+      id: 'jade',
+      nameVi: 'Bàn Ngọc Bích',
+      ingredients: [CraftIngredient(itemId: 'shard', qty: 3)],
+      costCoins: 100,
+      output: RewardItem(
+        itemId: 'jade-board',
+        kind: ShopItemKind.boardTheme,
+        payloadKey: 'jade',
+      ),
+    );
+
+    InventoryItem shard(int qty) => InventoryItem(
+          itemId: 'shard',
+          kind: ShopItemKind.consumable,
+          payloadKey: 'shard',
+          qty: qty,
+        );
+
+    Widget crafting({
+      required int coins,
+      List<InventoryItem> owned = const [],
+      List<CraftRecipe> recipes = const [recipe],
+    }) =>
+        _wrap(
+          [
+            craftRecipesProvider.overrideWith((ref) async => recipes),
+            walletProvider.overrideWith((ref) async => Wallet(coins: coins)),
+            inventoryProvider.overrideWith((ref) async => owned),
+          ],
+          const CraftingScreen(),
+        );
+
+    FilledButton buttonWithText(WidgetTester tester, String label) =>
+        tester.widget<FilledButton>(find.widgetWithText(FilledButton, label));
+
+    testWidgets('enabled when ingredients + coins suffice', (tester) async {
+      await tester.pumpWidget(crafting(coins: 150, owned: [shard(4)]));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Bàn Ngọc Bích'), findsOneWidget);
+      expect(find.text('shard 4/3'), findsOneWidget);
+      expect(find.text('100 đồng'), findsOneWidget);
+      expect(buttonWithText(tester, 'Đúc ngay').onPressed, isNotNull);
+    });
+
+    testWidgets('missing ingredients disables the button with the reason',
+        (tester) async {
+      await tester.pumpWidget(crafting(coins: 150, owned: [shard(1)]));
+      await tester.pumpAndSettle();
+
+      expect(find.text('shard 1/3'), findsOneWidget);
+      expect(buttonWithText(tester, 'Chưa đủ nguyên liệu').onPressed, isNull);
+    });
+
+    testWidgets('not enough coins disables the button', (tester) async {
+      await tester.pumpWidget(crafting(coins: 10, owned: [shard(3)]));
+      await tester.pumpAndSettle();
+
+      expect(buttonWithText(tester, 'Chưa đủ đồng').onPressed, isNull);
+    });
+
+    testWidgets('already-owned output shows Đã sở hữu + check', (tester) async {
+      await tester.pumpWidget(crafting(
+        coins: 500,
+        owned: [
+          shard(9),
+          const InventoryItem(
+            itemId: 'jade-board',
+            kind: ShopItemKind.boardTheme,
+            payloadKey: 'jade',
+            qty: 1,
+          ),
+        ],
+      ));
+      await tester.pumpAndSettle();
+
+      expect(find.byIcon(Icons.check_circle), findsOneWidget);
+      expect(buttonWithText(tester, 'Đã sở hữu').onPressed, isNull);
+    });
+
+    testWidgets('empty catalog shows the empty state', (tester) async {
+      await tester.pumpWidget(crafting(coins: 0, recipes: const []));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Chưa có công thức'), findsOneWidget);
+    });
+  });
+
+  group('unreadMailCountProvider', () {
+    test('counts unread + unclaimed messages for the Explore badge', () async {
+      final container = ProviderContainer(overrides: [
+        mailProvider.overrideWith((ref) async => const [
+              MailMessage(id: 'a', title: 'Chưa đọc'), // unread
+              MailMessage(
+                id: 'b',
+                title: 'Đọc rồi nhưng còn quà',
+                read: true,
+                reward: RewardBundle(coins: 5), // unclaimed reward
+              ),
+              MailMessage(
+                id: 'c',
+                title: 'Xong',
+                read: true,
+                reward: RewardBundle(coins: 5),
+                claimed: true,
+              ),
+            ]),
+      ]);
+      addTearDown(container.dispose);
+
+      // Loading → badge hidden (0), then counts once the mail resolves.
+      expect(container.read(unreadMailCountProvider), 0);
+      await container.read(mailProvider.future);
+      expect(container.read(unreadMailCountProvider), 2);
     });
   });
 }
