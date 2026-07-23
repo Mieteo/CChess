@@ -100,3 +100,25 @@ Nhiệt / pin / UI: bình thường / chi tiết bất thường
 
 - `FIREBASE_SERVICE_ACCOUNT_JSON`, Firebase ID token và `RENDER_API_KEY` là bí mật; tuyệt đối không ghi vào tài liệu, commit hoặc chat.
 - Smoke/quota smoke có thể tạo Firebase Anonymous user thử nghiệm; không dùng tài khoản người chơi thật để kiểm quota.
+
+---
+
+## 7. QA S16 Economy trên Android — PASS (2026-07-23, emulator)
+
+Bản release `main@3dbb804`, emulator Phone_3 (Android, 1080×2400), backend production Render + Firestore `cchess-dev`. Đi trọn vòng lặp kinh tế bằng tay:
+
+| Bước | Kết quả |
+|---|---|
+| Hub Khám Phá: 6 tile sống + ví | PASS — ví khớp từng phép cộng/trừ (410 đồng + 22 ngọc cuối phiên) |
+| D5 Sự Kiện: nhận 2 quà `quoc-khanh-2026` | PASS — "+290 đồng, +2 ngọc" và "+5 hint_pack_5, +3 manh-ngoc"; nhận lại bị chặn (✓) |
+| D7 Đúc Bàn Cờ: đúc Bàn Ngọc Bích | PASS — nguyên liệu 3/3→0/3, ví −200, nút chuyển "Đã sở hữu"; recipe thiếu nguyên liệu bị khóa đúng |
+| Balo: bàn đúc xuất hiện + Trang bị | PASS — "Đang dùng" + nút Gỡ; tab Công cụ có 5 gói gợi ý |
+| D6 Phúc Lợi: điểm danh + quà tân thủ | PASS — "+20 đồng" (N1 ✓, chuỗi 1) và "+200 đồng, +10 ngọc"; điểm danh lại bị chặn, thẻ tân thủ biến mất |
+| D4 Hộp Thư: gửi qua Admin SDK → badge → nhận | PASS — badge "1" trên hub, mail hiện đủ, "+68 đồng, +1 ngọc", "Đã nhận" + nút xóa |
+
+**Bug tìm thấy & đã sửa trong phiên** (`3dbb804`): hub badge giữ `mailProvider` (autoDispose) sống → mở Hộp Thư dùng cache cũ, mail gửi sau khi mở app không hiện (phải restart); màn trống không kéo-refresh được. Fix: invalidate khi vào màn + bọc empty state trong RefreshIndicator.
+
+**Ghi chú còn lại (ngoài phạm vi S16):**
+1. Restart app sau force-stop quay lại onboarding (`onboardingCompleted` chưa bền?) — cần xem lại luồng onboarding.
+2. Balo tab Công cụ hiển thị nhãn payloadKey ("Công cụ • hint_pack") thay vì tên đẹp từ catalog — polish nhỏ có sẵn từ trước.
+3. Nội dung QA này chạy trên emulator (đủ cho REST+UI economy); không thay thế QA nhiệt/pin thiết bị thật của Pikafish (mục 4).
