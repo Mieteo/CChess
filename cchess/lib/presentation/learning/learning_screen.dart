@@ -6,6 +6,7 @@ import '../../theme/app_colors.dart';
 import '../../theme/app_spacing.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/common/common.dart';
+import '../puzzle/widgets/daily_challenge_banner.dart';
 
 /// Học Tập (Học Cờ) hub screen.
 class LearningScreen extends StatelessWidget {
@@ -23,9 +24,8 @@ class LearningScreen extends StatelessWidget {
       children: [
         _Header(),
         AppSpacing.vGapLg,
-        _DailyChallengeBanner(
-          onTry: () => context.go('${AppConstants.routePuzzle}/p003'),
-        ),
+        // Real daily endgame challenge (B4) — shared with Home + puzzle list.
+        const DailyChallengeBanner(),
         AppSpacing.vGapLg,
         const _SectionGrid(),
         AppSpacing.vGapLg,
@@ -83,81 +83,6 @@ class _Header extends StatelessWidget {
           ),
         ),
       ],
-    );
-  }
-}
-
-class _DailyChallengeBanner extends StatelessWidget {
-  final VoidCallback onTry;
-  const _DailyChallengeBanner({required this.onTry});
-
-  @override
-  Widget build(BuildContext context) {
-    return CChessCard(
-      gradient: const LinearGradient(
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-        colors: [AppColors.inkBlack, AppColors.woodDark],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.sm,
-              vertical: 2,
-            ),
-            decoration: BoxDecoration(
-              color: AppColors.vermilionRed.withValues(alpha: 0.2),
-              borderRadius: AppRadius.chip,
-              border: Border.all(
-                color: AppColors.vermilionRed.withValues(alpha: 0.5),
-              ),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(
-                  Icons.local_fire_department,
-                  size: 14,
-                  color: AppColors.error,
-                ),
-                AppSpacing.hGapXs,
-                Text(
-                  'NÓNG HỔI',
-                  style: AppTextStyles.captionSm.copyWith(
-                    color: AppColors.error,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 1.2,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          AppSpacing.vGapSm,
-          Text('Tàn Cục Thách Đấu Hôm Nay', style: AppTextStyles.titleLg),
-          AppSpacing.vGapXs,
-          Row(
-            children: [
-              const Icon(Icons.timer, size: 16, color: AppColors.parchmentTan),
-              AppSpacing.hGapXs,
-              Text(
-                'Kết thúc sau: 05:42:10',
-                style: AppTextStyles.monoTimer.copyWith(
-                  color: AppColors.onSurfaceVariant,
-                  fontSize: 14,
-                ),
-              ),
-            ],
-          ),
-          AppSpacing.vGapMd,
-          CChessButton(
-            label: 'Thử Ngay',
-            variant: CChessButtonVariant.danger,
-            onPressed: onTry,
-          ),
-        ],
-      ),
     );
   }
 }

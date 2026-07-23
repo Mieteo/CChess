@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -12,6 +10,7 @@ import '../../theme/app_spacing.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/common/common.dart';
 import 'puzzle_list_controller.dart';
+import 'widgets/daily_challenge_banner.dart';
 
 class PuzzleListScreen extends ConsumerStatefulWidget {
   const PuzzleListScreen({super.key});
@@ -48,7 +47,6 @@ class _PuzzleListScreenState extends ConsumerState<PuzzleListScreen> {
   Widget build(BuildContext context) {
     final state = ref.watch(puzzleListControllerProvider);
     final controller = ref.read(puzzleListControllerProvider.notifier);
-    final daily = ref.watch(dailyPuzzleProvider);
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -76,10 +74,7 @@ class _PuzzleListScreenState extends ConsumerState<PuzzleListScreen> {
             physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.all(AppSpacing.base),
             children: [
-              _DailyChallengeBanner(
-                daily: daily,
-                onTap: (id) => context.go('${AppConstants.routePuzzle}/$id'),
-              ),
+              const DailyChallengeBanner(),
               AppSpacing.vGapLg,
               _ProgressSummary(
                 solved: state.solvedCount,
@@ -119,9 +114,7 @@ class _PuzzleListScreenState extends ConsumerState<PuzzleListScreen> {
       ];
     }
     if (state.error != null && state.puzzles.isEmpty) {
-      return [
-        _ErrorState(onRetry: controller.refresh),
-      ];
+      return [_ErrorState(onRetry: controller.refresh)];
     }
     if (state.puzzles.isEmpty) {
       return const [_EmptyPuzzleState()];
@@ -154,125 +147,6 @@ class _PuzzleListScreenState extends ConsumerState<PuzzleListScreen> {
   }
 }
 
-/// Featured daily puzzle with a live countdown to the next VN-midnight reset.
-class _DailyChallengeBanner extends StatefulWidget {
-  final AsyncValue<ChessPuzzle?> daily;
-  final ValueChanged<String> onTap;
-
-  const _DailyChallengeBanner({required this.daily, required this.onTap});
-
-  @override
-  State<_DailyChallengeBanner> createState() => _DailyChallengeBannerState();
-}
-
-class _DailyChallengeBannerState extends State<_DailyChallengeBanner> {
-  Timer? _timer;
-  Duration _remaining = Duration.zero;
-
-  @override
-  void initState() {
-    super.initState();
-    _remaining = _timeToVnReset();
-    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (!mounted) return;
-      setState(() => _remaining = _timeToVnReset());
-    });
-  }
-
-  @override
-  void dispose() {
-    _timer?.cancel();
-    super.dispose();
-  }
-
-  /// Time until the next daily reset (00:00 in Vietnam, UTC+7).
-  static Duration _timeToVnReset() {
-    final nowUtc = DateTime.now().toUtc();
-    final vnNow = nowUtc.add(const Duration(hours: 7));
-    final nextVnMidnight =
-        DateTime.utc(vnNow.year, vnNow.month, vnNow.day)
-            .add(const Duration(days: 1));
-    final nextResetUtc = nextVnMidnight.subtract(const Duration(hours: 7));
-    final diff = nextResetUtc.difference(nowUtc);
-    return diff.isNegative ? Duration.zero : diff;
-  }
-
-  String get _countdown {
-    final h = _remaining.inHours.toString().padLeft(2, '0');
-    final m = (_remaining.inMinutes % 60).toString().padLeft(2, '0');
-    final s = (_remaining.inSeconds % 60).toString().padLeft(2, '0');
-    return '$h:$m:$s';
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final puzzle = widget.daily.valueOrNull;
-    return CChessCard(
-      gradient: const LinearGradient(
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-        colors: [AppColors.charcoalDark, AppColors.woodDark],
-      ),
-      borderColor: AppColors.accentGold.withValues(alpha: 0.5),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            children: [
-              const Icon(Icons.local_fire_department,
-                  color: AppColors.accentGold, size: 20),
-              AppSpacing.hGapSm,
-              Text('Thử thách hôm nay', style: AppTextStyles.headingMd),
-              const Spacer(),
-              const Icon(Icons.schedule,
-                  size: 14, color: AppColors.parchmentTan),
-              AppSpacing.hGapXs,
-              Text(
-                _countdown,
-                style: AppTextStyles.monoTimer.copyWith(
-                  fontSize: 14,
-                  color: AppColors.accentGold,
-                ),
-              ),
-            ],
-          ),
-          AppSpacing.vGapSm,
-          if (widget.daily.isLoading)
-            Text(
-              'Đang tải thử thách…',
-              style: AppTextStyles.captionSm.copyWith(
-                color: AppColors.parchmentTan,
-              ),
-            )
-          else if (puzzle == null)
-            Text(
-              'Hôm nay chưa có thử thách. Quay lại sau nhé!',
-              style: AppTextStyles.captionSm.copyWith(
-                color: AppColors.parchmentTan,
-              ),
-            )
-          else ...[
-            Text(
-              puzzle.titleVi,
-              style: AppTextStyles.titleLg.copyWith(
-                color: AppColors.parchmentTan,
-              ),
-            ),
-            AppSpacing.vGapMd,
-            CChessButton(
-              label: 'Vào giải ngay',
-              icon: Icons.play_arrow,
-              variant: CChessButtonVariant.danger,
-              fullWidth: true,
-              onPressed: () => widget.onTap(puzzle.id),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
 class _ProgressSummary extends StatelessWidget {
   final int solved;
   final int shown;
@@ -299,8 +173,11 @@ class _ProgressSummary extends StatelessWidget {
               border: Border.all(color: AppColors.accentGold),
             ),
             alignment: Alignment.center,
-            child: const Icon(Icons.workspace_premium,
-                color: AppColors.accentGold, size: 22),
+            child: const Icon(
+              Icons.workspace_premium,
+              color: AppColors.accentGold,
+              size: 22,
+            ),
           ),
           AppSpacing.hGapMd,
           Expanded(
@@ -535,8 +412,9 @@ class _PuzzleListItem extends StatelessWidget {
             alignment: Alignment.center,
             child: Icon(
               progress.solved ? Icons.check : Icons.extension_outlined,
-              color:
-                  progress.solved ? AppColors.tealSuccess : AppColors.primary,
+              color: progress.solved
+                  ? AppColors.tealSuccess
+                  : AppColors.primary,
               size: 22,
             ),
           ),
@@ -631,8 +509,11 @@ class _ErrorState extends StatelessWidget {
     return CChessCard(
       child: Column(
         children: [
-          const Icon(Icons.cloud_off,
-              color: AppColors.onSurfaceVariant, size: 32),
+          const Icon(
+            Icons.cloud_off,
+            color: AppColors.onSurfaceVariant,
+            size: 32,
+          ),
           AppSpacing.vGapSm,
           Text('Không tải được kho bài', style: AppTextStyles.headingMd),
           AppSpacing.vGapXs,
@@ -644,7 +525,11 @@ class _ErrorState extends StatelessWidget {
             textAlign: TextAlign.center,
           ),
           AppSpacing.vGapMd,
-          CChessButton(label: 'Thử lại', icon: Icons.refresh, onPressed: onRetry),
+          CChessButton(
+            label: 'Thử lại',
+            icon: Icons.refresh,
+            onPressed: onRetry,
+          ),
         ],
       ),
     );

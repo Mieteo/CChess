@@ -1,11 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/constants/app_constants.dart';
+import '../../data/models/economy_models.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_spacing.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/common/common.dart';
+import '../economy/economy_controller.dart';
+import '../economy/economy_widgets.dart';
+import '../puzzle/widgets/daily_challenge_banner.dart';
 
 /// Trang Chủ — Main lobby for Đánh Cờ.
 class HomeScreen extends StatelessWidget {
@@ -21,7 +26,9 @@ class HomeScreen extends StatelessWidget {
         96,
       ),
       children: [
-        const _WelcomeBanner(),
+        // Real daily endgame challenge (B4): live countdown + today's puzzle,
+        // shared with Học Cờ and the puzzle list.
+        const DailyChallengeBanner(),
         AppSpacing.vGapLg,
         SectionHeader(
           title: 'Đánh Cờ Ngay',
@@ -89,9 +96,7 @@ class HomeScreen extends StatelessWidget {
         AppSpacing.vGapLg,
         const SectionHeader(title: 'Khám Phá'),
         AppSpacing.vGapMd,
-        _ExploreCard(
-          onTap: () => context.push(AppConstants.routeExplore),
-        ),
+        _ExploreCard(onTap: () => context.push(AppConstants.routeExplore)),
       ],
     );
   }
@@ -115,9 +120,15 @@ class _ExploreCard extends StatelessWidget {
             decoration: BoxDecoration(
               color: AppColors.accentGold.withValues(alpha: 0.12),
               shape: BoxShape.circle,
-              border: Border.all(color: AppColors.accentGold.withValues(alpha: 0.4)),
+              border: Border.all(
+                color: AppColors.accentGold.withValues(alpha: 0.4),
+              ),
             ),
-            child: const Icon(Icons.storefront, color: AppColors.accentGold, size: 22),
+            child: const Icon(
+              Icons.storefront,
+              color: AppColors.accentGold,
+              size: 22,
+            ),
           ),
           AppSpacing.hGapMd,
           Expanded(
@@ -128,101 +139,14 @@ class _ExploreCard extends StatelessWidget {
                 AppSpacing.vGapXs,
                 Text(
                   'Sắm bàn cờ, quân cờ và trang bị vật phẩm',
-                  style: AppTextStyles.captionSm
-                      .copyWith(color: AppColors.onSurfaceVariant),
+                  style: AppTextStyles.captionSm.copyWith(
+                    color: AppColors.onSurfaceVariant,
+                  ),
                 ),
               ],
             ),
           ),
           const Icon(Icons.chevron_right, color: AppColors.onSurfaceVariant),
-        ],
-      ),
-    );
-  }
-}
-
-class _WelcomeBanner extends StatelessWidget {
-  const _WelcomeBanner();
-
-  @override
-  Widget build(BuildContext context) {
-    return CChessCard(
-      padding: const EdgeInsets.all(AppSpacing.lg),
-      gradient: const LinearGradient(
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-        colors: [AppColors.woodDark, AppColors.charcoalDark],
-      ),
-      borderColor: AppColors.accentGold.withValues(alpha: 0.4),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.sm,
-                  vertical: 2,
-                ),
-                decoration: BoxDecoration(
-                  color: AppColors.vermilionRed.withValues(alpha: 0.2),
-                  border: Border.all(
-                    color: AppColors.vermilionRed.withValues(alpha: 0.5),
-                  ),
-                  borderRadius: AppRadius.chip,
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(
-                      Icons.local_fire_department,
-                      size: 14,
-                      color: AppColors.error,
-                    ),
-                    AppSpacing.hGapXs,
-                    Text(
-                      'NÓNG HỔI',
-                      style: AppTextStyles.captionSm.copyWith(
-                        color: AppColors.error,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 1.2,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          AppSpacing.vGapSm,
-          Text(
-            'Tàn Cục Thách Đấu Hôm Nay',
-            style: AppTextStyles.titleLg.copyWith(color: AppColors.onSurface),
-          ),
-          AppSpacing.vGapXs,
-          Row(
-            children: [
-              const Icon(
-                Icons.timer_outlined,
-                size: 16,
-                color: AppColors.parchmentTan,
-              ),
-              AppSpacing.hGapXs,
-              Text(
-                'Kết thúc sau: 05:42:10',
-                style: AppTextStyles.monoTimer.copyWith(
-                  color: AppColors.onSurfaceVariant,
-                  fontSize: 14,
-                ),
-              ),
-            ],
-          ),
-          AppSpacing.vGapMd,
-          CChessButton(
-            label: 'Thử Ngay',
-            variant: CChessButtonVariant.danger,
-            icon: Icons.bolt,
-            onPressed: () {},
-          ),
         ],
       ),
     );
@@ -307,22 +231,61 @@ class _PlayModeCard extends StatelessWidget {
   }
 }
 
-class _DailyRewardCard extends StatelessWidget {
+/// Điểm danh hàng ngày — the REAL S16 welfare check-in: same provider and
+/// claim action as the Phúc Lợi screen, compact for the lobby. Tapping the
+/// card opens the full welfare page.
+class _DailyRewardCard extends ConsumerWidget {
   const _DailyRewardCard();
 
-  static const _days = [
-    ('T2', 10, false),
-    ('T3', 20, false),
-    ('T4', 30, true), // today
-    ('T5', 40, false),
-    ('T6', 60, false),
-    ('T7', 80, false),
-    ('CN', 200, false),
-  ];
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final welfare = ref.watch(welfareProvider);
+    return welfare.when(
+      loading: () => const CChessCard(
+        child: SizedBox(
+          height: 64,
+          child: Center(child: BrushStrokeSpinner(size: 28)),
+        ),
+      ),
+      error: (_, _) => CChessCard(
+        onTap: () => ref.invalidate(welfareProvider),
+        child: Row(
+          children: [
+            const Icon(Icons.cloud_off, color: AppColors.parchmentTan),
+            AppSpacing.hGapSm,
+            Expanded(
+              child: Text(
+                'Không tải được điểm danh — chạm để thử lại.',
+                style: AppTextStyles.captionSm.copyWith(
+                  color: AppColors.onSurfaceVariant,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+      data: (status) => _DailyRewardLoaded(status: status),
+    );
+  }
+}
+
+class _DailyRewardLoaded extends ConsumerWidget {
+  final WelfareStatus status;
+  const _DailyRewardLoaded({required this.status});
+
+  Future<void> _claim(BuildContext context, WidgetRef ref) async {
+    try {
+      final outcome = await ref.read(economyControllerProvider).checkin();
+      if (context.mounted) showRewardSnack(context, outcome.reward);
+    } catch (e) {
+      if (context.mounted) showEconomyError(context, e);
+    }
+  }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return CChessCard(
+      onTap: () => context.push(AppConstants.routeWelfare),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -330,10 +293,14 @@ class _DailyRewardCard extends StatelessWidget {
             children: [
               const Icon(Icons.card_giftcard, color: AppColors.accentGold),
               AppSpacing.hGapSm,
-              Text('Điểm danh hàng ngày', style: AppTextStyles.headingMd),
-              const Spacer(),
+              Expanded(
+                child: Text(
+                  'Điểm danh hàng ngày',
+                  style: AppTextStyles.headingMd,
+                ),
+              ),
               Text(
-                'Streak: 3 ngày',
+                'Streak: ${status.streak} ngày',
                 style: AppTextStyles.captionSm.copyWith(
                   color: AppColors.accentGold,
                 ),
@@ -341,67 +308,110 @@ class _DailyRewardCard extends StatelessWidget {
             ],
           ),
           AppSpacing.vGapMd,
-          SizedBox(
-            height: 84,
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              itemCount: _days.length,
-              separatorBuilder: (_, _) => AppSpacing.hGapSm,
-              itemBuilder: (_, i) {
-                final (day, amount, isToday) = _days[i];
-                return Container(
-                  width: 60,
-                  decoration: BoxDecoration(
-                    color: isToday
-                        ? AppColors.accentGold.withValues(alpha: 0.18)
-                        : AppColors.surfaceContainerHigh,
-                    borderRadius: AppRadius.card,
-                    border: Border.all(
-                      color: isToday
-                          ? AppColors.accentGold
-                          : AppColors.outlineVariant,
-                      width: isToday ? 1.5 : 1,
-                    ),
-                  ),
-                  alignment: Alignment.center,
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        day,
-                        style: AppTextStyles.captionSm.copyWith(
-                          color: isToday
-                              ? AppColors.accentGold
-                              : AppColors.parchmentTan,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      const Icon(
-                        Icons.savings,
-                        size: 18,
-                        color: AppColors.accentGold,
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        '$amount',
-                        style: AppTextStyles.captionSm.copyWith(
-                          color: AppColors.onSurface,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              },
+          if (status.cycle.isNotEmpty)
+            SizedBox(
+              height: 84,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: status.cycle.length,
+                separatorBuilder: (_, _) => AppSpacing.hGapSm,
+                itemBuilder: (_, i) => _DayChip(
+                  day: i + 1,
+                  reward: status.cycle[i],
+                  collected: status.todayClaimed
+                      ? i <= status.todayIndex
+                      : i < status.todayIndex,
+                  isToday: i == status.todayIndex,
+                ),
+              ),
             ),
-          ),
           AppSpacing.vGapMd,
           CChessButton(
-            label: 'Nhận thưởng hôm nay',
+            label: status.todayClaimed
+                ? 'Hôm nay đã điểm danh'
+                : 'Điểm danh hôm nay',
             fullWidth: true,
-            icon: Icons.redeem,
-            onPressed: () {},
+            icon: status.todayClaimed ? Icons.check : Icons.redeem,
+            onPressed: status.todayClaimed ? null : () => _claim(context, ref),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// One slot of the 7-day cycle strip (mirrors the Phúc Lợi grid, horizontal).
+class _DayChip extends StatelessWidget {
+  final int day;
+  final RewardBundle reward;
+  final bool collected;
+  final bool isToday;
+
+  const _DayChip({
+    required this.day,
+    required this.reward,
+    required this.collected,
+    required this.isToday,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final highlight = isToday && !collected;
+    return Container(
+      width: 60,
+      decoration: BoxDecoration(
+        color: collected
+            ? AppColors.tealSuccess.withValues(alpha: 0.12)
+            : highlight
+            ? AppColors.accentGold.withValues(alpha: 0.18)
+            : AppColors.surfaceContainerHigh,
+        borderRadius: AppRadius.card,
+        border: Border.all(
+          color: collected
+              ? AppColors.tealSuccess.withValues(alpha: 0.5)
+              : highlight
+              ? AppColors.accentGold
+              : AppColors.outlineVariant,
+          width: highlight ? 1.5 : 1,
+        ),
+      ),
+      alignment: Alignment.center,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(
+            'N$day',
+            style: AppTextStyles.captionSm.copyWith(
+              color: highlight
+                  ? AppColors.accentGold
+                  : collected
+                  ? AppColors.tealSuccess
+                  : AppColors.parchmentTan,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 2),
+          if (collected)
+            const Icon(
+              Icons.check_circle,
+              size: 18,
+              color: AppColors.tealSuccess,
+            )
+          else
+            Icon(
+              reward.gems > 0 ? Icons.diamond_outlined : Icons.savings,
+              size: 18,
+              color: reward.gems > 0
+                  ? AppColors.tertiary
+                  : AppColors.accentGold,
+            ),
+          const SizedBox(height: 2),
+          Text(
+            '${reward.gems > 0 ? reward.gems : reward.coins}',
+            style: AppTextStyles.captionSm.copyWith(
+              color: AppColors.onSurface,
+              fontWeight: FontWeight.w700,
+            ),
           ),
         ],
       ),
