@@ -133,6 +133,34 @@
       "consumableQty": 5,
       "sortOrder": 60,
       "active": true
+    },
+    {
+      "id": "manh-ngoc",
+      "kind": "consumable",
+      "nameVi": "Mảnh Ngọc",
+      "descVi": "Nguyên liệu đúc Bàn Ngọc Bích (cần 3 mảnh). Rơi từ sự kiện hoặc mua tại đây.",
+      "payloadKey": "jade_shard",
+      "priceCoins": 100,
+      "priceGems": 0,
+      "rarity": "rare",
+      "consumable": true,
+      "consumableQty": 1,
+      "sortOrder": 61,
+      "active": true
+    },
+    {
+      "id": "giot-muc",
+      "kind": "consumable",
+      "nameVi": "Giọt Mực",
+      "descVi": "Nguyên liệu đúc Bàn Thủy Mặc (cần 5 giọt). Rơi từ sự kiện hoặc mua tại đây.",
+      "payloadKey": "ink_drop",
+      "priceCoins": 60,
+      "priceGems": 0,
+      "rarity": "common",
+      "consumable": true,
+      "consumableQty": 1,
+      "sortOrder": 62,
+      "active": true
     }
   ]
 }

@@ -15,10 +15,11 @@
         },
         {
           "id": "goi-goi-y",
-          "title": "Gói Gợi Ý mừng lễ",
+          "title": "Quà vật phẩm mừng lễ",
           "reward": {
             "items": [
-              { "itemId": "hint-pack-5", "kind": "consumable", "payloadKey": "hint_pack", "qty": 5 }
+              { "itemId": "hint_pack_5", "kind": "consumable", "payloadKey": "hint_pack", "qty": 5 },
+              { "itemId": "manh-ngoc", "kind": "consumable", "payloadKey": "jade_shard", "qty": 3 }
             ]
           }
         }
