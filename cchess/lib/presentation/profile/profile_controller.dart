@@ -8,12 +8,21 @@ import '../../data/repositories/user_remote_repository.dart';
 class ProfileController extends StateNotifier<AsyncValue<UserProfile>> {
   ProfileController(this._repo, this._remote, this._auth)
       : super(const AsyncValue.loading()) {
-    _load();
+    _initialLoad = _load();
   }
 
   final ProfileRepository _repo;
   final UserRemoteRepository _remote;
   final FirebaseAuth _auth;
+
+  /// Completes once the first Hive read has populated [state]. Mutations await
+  /// this because the controller is created lazily: a caller's very first
+  /// `ref.read` can be immediately followed by an update (vd OnboardingScreen
+  /// reads the notifier inside `_finish()` and calls [completeOnboarding]
+  /// right after). Without the await, `update()` saw a loading state and
+  /// silently dropped the mutation — the S16 QA bug where finishing
+  /// onboarding never persisted and a force-stop bounced the user back.
+  late final Future<void> _initialLoad;
 
   Future<void> _load() async {
     try {
@@ -29,8 +38,9 @@ class ProfileController extends StateNotifier<AsyncValue<UserProfile>> {
   Future<void> refresh() => _load();
 
   Future<void> update(UserProfile Function(UserProfile) mutator) async {
+    await _initialLoad;
     final current = state.valueOrNull;
-    if (current == null) return;
+    if (current == null) return; // initial load failed — nothing to mutate
     final next = mutator(current);
     state = AsyncValue.data(next);
     await _repo.save(next);
