@@ -12,11 +12,25 @@ import 'economy_widgets.dart';
 /// Hộp Thư (S16 D4). Personal mailbox: system notices + claimable gifts.
 /// Tapping an unread mail marks it read; mails with an attachment show a
 /// "Nhận quà" button; claimed/notification mails can be deleted.
-class MailScreen extends ConsumerWidget {
+class MailScreen extends ConsumerStatefulWidget {
   const MailScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<MailScreen> createState() => _MailScreenState();
+}
+
+class _MailScreenState extends ConsumerState<MailScreen> {
+  @override
+  void initState() {
+    super.initState();
+    // The Explore hub watches mailProvider for its unread badge, which keeps
+    // the autoDispose provider alive — so entering this screen would otherwise
+    // show the list fetched when the hub first opened. Force a refetch.
+    Future.microtask(() => ref.invalidate(mailProvider));
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final mailAsync = ref.watch(mailProvider);
 
     return Scaffold(
@@ -36,10 +50,26 @@ class MailScreen extends ConsumerWidget {
           ),
           data: (messages) {
             if (messages.isEmpty) {
-              return const EconomyMessage(
-                icon: Icons.mail_outline,
-                title: 'Hộp thư trống',
-                detail: 'Quà và thông báo từ hệ thống sẽ xuất hiện ở đây.',
+              // Keep the empty state pull-to-refreshable: without a scrollable
+              // child RefreshIndicator never triggers.
+              return RefreshIndicator(
+                onRefresh: () async => ref.invalidate(mailProvider),
+                child: LayoutBuilder(
+                  builder: (context, constraints) => ListView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    children: [
+                      SizedBox(
+                        height: constraints.maxHeight,
+                        child: const EconomyMessage(
+                          icon: Icons.mail_outline,
+                          title: 'Hộp thư trống',
+                          detail:
+                              'Quà và thông báo từ hệ thống sẽ xuất hiện ở đây.',
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               );
             }
             return RefreshIndicator(
