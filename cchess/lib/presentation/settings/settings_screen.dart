@@ -188,13 +188,40 @@ class SettingsScreen extends ConsumerWidget {
                     _RowItem(
                       icon: Icons.privacy_tip_outlined,
                       label: 'Chính sách dữ liệu',
-                      onTap: () {},
+                      onTap: () => _showInfoDialog(
+                        context,
+                        title: 'Chính sách dữ liệu',
+                        body:
+                            '• CChess tạo một tài khoản ẩn danh (Firebase) để '
+                            'lưu hồ sơ, ELO, vật phẩm và lịch sử đấu của bạn '
+                            'trên máy chủ.\n\n'
+                            '• Dữ liệu chỉ dùng để vận hành trò chơi: ghép '
+                            'trận, bảng xếp hạng và đồng bộ giữa các thiết '
+                            'bị. Không bán hay chia sẻ cho bên thứ ba.\n\n'
+                            '• Liên kết Google là tùy chọn, chỉ nhằm khôi '
+                            'phục tài khoản khi đổi máy.\n\n'
+                            'Bản chính sách đầy đủ sẽ được công bố trước khi '
+                            'phát hành chính thức.',
+                      ),
                     ),
                     _Divider(),
                     _RowItem(
                       icon: Icons.gavel_outlined,
                       label: 'Điều khoản sử dụng',
-                      onTap: () {},
+                      onTap: () => _showInfoDialog(
+                        context,
+                        title: 'Điều khoản sử dụng',
+                        body:
+                            '• Không gian lận trong các ván xếp hạng (ví dụ '
+                            'dùng engine ngoài) và không phá hoại trải '
+                            'nghiệm của người chơi khác.\n\n'
+                            '• Tên hiển thị không được xúc phạm hoặc mạo '
+                            'danh người khác.\n\n'
+                            '• Vật phẩm và tiền tệ trong game không có giá '
+                            'trị quy đổi bên ngoài trò chơi.\n\n'
+                            'Bản điều khoản đầy đủ sẽ được công bố trước khi '
+                            'phát hành chính thức.',
+                      ),
                     ),
                     _Divider(),
                     _RowItem(
@@ -221,6 +248,46 @@ class SettingsScreen extends ConsumerWidget {
       ),
     );
   }
+}
+
+/// Simple titled info dialog for the policy/terms summaries (full legal text
+/// ships with the store release).
+void _showInfoDialog(
+  BuildContext context, {
+  required String title,
+  required String body,
+}) {
+  showDialog<void>(
+    context: context,
+    builder: (context) => AlertDialog(
+      backgroundColor: AppColors.surfaceContainerLow,
+      title: Text(
+        title,
+        style: AppTextStyles.bodyMd.copyWith(
+          color: AppColors.accentGold,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+      content: SingleChildScrollView(
+        child: Text(
+          body,
+          style: AppTextStyles.captionSm.copyWith(
+            color: AppColors.onSurfaceVariant,
+            height: 1.5,
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(
+            'Đóng',
+            style: AppTextStyles.bodyMd.copyWith(color: AppColors.accentGold),
+          ),
+        ),
+      ],
+    ),
+  );
 }
 
 /// Attribution required by the Pikafish GPL-3.0 license. The Pikafish binary

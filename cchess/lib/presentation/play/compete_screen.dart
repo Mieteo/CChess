@@ -45,15 +45,16 @@ class CompeteScreen extends StatelessWidget {
           icon: Icons.people_alt_outlined,
           color: AppColors.accentGold,
           badge: 'MVP',
-          onTap: () => context.go('${AppConstants.routeGame}?mode=local'),
+          // push (not go) so leaving the game returns to this tab.
+          onTap: () => context.push('${AppConstants.routeGame}?mode=local'),
         ),
         AppSpacing.vGapMd,
         _CompeteOption(
           title: 'Đấu Bot AI',
-          subtitle: '5 cấp độ — luyện tập an toàn',
+          subtitle: 'Ghép trận Bot theo ELO của bạn',
           icon: Icons.smart_toy_outlined,
           color: AppColors.tertiary,
-          onTap: () => context.go(AppConstants.routeBotSelect),
+          onTap: () => context.push(AppConstants.routeBotSelect),
         ),
         AppSpacing.vGapMd,
         _CompeteOption(
@@ -62,7 +63,7 @@ class CompeteScreen extends StatelessWidget {
           icon: Icons.help_outline,
           color: AppColors.vermilionRed,
           badge: 'Mới',
-          onTap: () => context.go('${AppConstants.routeGame}?mode=cup'),
+          onTap: () => context.push('${AppConstants.routeGame}?mode=cup'),
         ),
         AppSpacing.vGapMd,
         _CompeteOption(
@@ -72,7 +73,7 @@ class CompeteScreen extends StatelessWidget {
           color: AppColors.vermilionRed,
           badge: 'Mới',
           onTap: () =>
-              context.go('${AppConstants.routeBotSelect}?variant=cup'),
+              context.push('${AppConstants.routeBotSelect}?variant=cup'),
         ),
         AppSpacing.vGapMd,
         _CompeteOption(
@@ -90,7 +91,7 @@ class CompeteScreen extends StatelessWidget {
           subtitle: 'Bracket loại trực tiếp',
           icon: Icons.emoji_events_outlined,
           color: AppColors.accentGold,
-          onTap: () {},
+          onTap: () => context.go('${AppConstants.routeCommunity}/tournaments'),
         ),
         AppSpacing.vGapMd,
         _CompeteOption(
