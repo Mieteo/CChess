@@ -385,3 +385,19 @@ test('POST /admin/daily wires a date to a puzzle', async () => {
     assert.equal(store.daily.get('2026-07-01'), 'p010');
   });
 });
+
+test('puzzle api only owns its own /admin namespace (regression: it used to shadow /admin/shop)', async () => {
+  const api = createPuzzleApi({ store: new FakePuzzleStore() });
+  const fakeRes = {
+    setHeader() {}, writeHead() {}, end() {},
+    headersSent: false,
+  } as unknown as import('http').ServerResponse;
+  const fakeReq = (url: string) =>
+    ({ url, method: 'GET', headers: {} }) as unknown as import('http').IncomingMessage;
+  assert.equal(await api.handle(fakeReq('/admin/shop'), fakeRes), false);
+  assert.equal(await api.handle(fakeReq('/admin/community/feed'), fakeRes), false);
+  assert.equal(await api.handle(fakeReq('/admin/mail'), fakeRes), false);
+  assert.equal(await api.handle(fakeReq('/admin/puzzles'), fakeRes), true);
+  assert.equal(await api.handle(fakeReq('/admin/daily'), fakeRes), true);
+  assert.equal(await api.handle(fakeReq('/puzzles'), fakeRes), true);
+});

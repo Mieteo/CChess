@@ -38,6 +38,7 @@ import {
 } from './matchmaking';
 import { createPuzzleApi, type PuzzleApi } from './puzzles/puzzle_routes';
 import { createShopApi, type ShopApi } from './shop/shop_routes';
+import { createEconomyApi, type EconomyApi } from './economy/economy_routes';
 import { createClubsApi, type ClubsApi } from './clubs/clubs_routes';
 import { createCommunityFeedApi, type CommunityFeedApi } from './community_feed/community_feed_routes';
 import { createTournamentsApi, type TournamentsApi } from './tournaments/tournament_routes';
@@ -278,6 +279,10 @@ export interface CChessServerOptions {
   /// HTTP server. Defaults to the real Firestore-backed API; tests inject a
   /// fake-store-backed instance.
   shopApi?: ShopApi;
+  /// REST API for the S16 economy extension (D4 Hộp Thư / D5 Sự Kiện / D6 Phúc
+  /// Lợi / D7 Đúc Bàn Cờ), mounted on the same HTTP server. Defaults to the
+  /// real Firestore-backed API; tests inject a fake-store-backed instance.
+  economyApi?: EconomyApi;
   /// REST API for clubs (S14 C3 — Kỳ Xã), mounted on the same HTTP server.
   /// Defaults to the real Firestore-backed API; tests inject a fake-store-backed
   /// instance.
@@ -343,6 +348,9 @@ export function createCChessServer(options: CChessServerOptions = {}): CChessSer
   // S16 economy REST API, mounted on the same HTTP server. It owns /shop*,
   // /wallet, /inventory* and /admin/shop*; everything else falls through.
   const shopApi = options.shopApi ?? createShopApi();
+  // S16 economy extension (mail/events/welfare/crafting). It owns /mail*,
+  // /events*, /welfare*, /crafting* + matching /admin paths.
+  const economyApi = options.economyApi ?? createEconomyApi();
   // S14 C3 clubs REST API, mounted on the same HTTP server. It owns /clubs*;
   // everything else falls through.
   const clubsApi = options.clubsApi ?? createClubsApi();
@@ -386,6 +394,7 @@ export function createCChessServer(options: CChessServerOptions = {}): CChessSer
     void puzzleApi
       .handle(req, res)
       .then((handled) => (handled ? true : shopApi.handle(req, res)))
+      .then((handled) => (handled ? true : economyApi.handle(req, res)))
       .then((handled) => (handled ? true : clubsApi.handle(req, res)))
       .then((handled) => (handled ? true : communityFeedApi.handle(req, res)))
       .then((handled) => (handled ? true : tournamentsApi.handle(req, res)))

@@ -205,12 +205,17 @@ export function createPuzzleApi(options: PuzzleApiOptions = {}): PuzzleApi {
 
 /// True for paths this API is responsible for. Keep this in sync with the host
 /// server so unrelated routes (/health, /r/<id>) still reach their handlers.
+/// NOTE: only the puzzle admin namespace is claimed — claiming all of /admin/*
+/// here used to shadow /admin/shop and /admin/community/feed (mounted after
+/// this API in server.ts), 404-ing them in production.
 function owns(path: string): boolean {
   return (
     path === '/puzzles' ||
     path.startsWith('/puzzles/') ||
     path === '/admin' ||
-    path.startsWith('/admin/')
+    path === '/admin/puzzles' ||
+    path.startsWith('/admin/puzzles/') ||
+    path === '/admin/daily'
   );
 }
 
