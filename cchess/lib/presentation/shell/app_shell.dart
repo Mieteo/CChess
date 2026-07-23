@@ -71,22 +71,11 @@ class AppShell extends ConsumerWidget {
         onNotificationTap: () => context.push(AppConstants.routeMail),
         onSettingsTap: () => context.push(AppConstants.routeSettings),
       ),
-      body: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 220),
-        switchInCurve: Curves.easeOut,
-        switchOutCurve: Curves.easeIn,
-        transitionBuilder: (child, animation) => FadeTransition(
-          opacity: animation,
-          child: SlideTransition(
-            position: Tween<Offset>(
-              begin: const Offset(0.02, 0),
-              end: Offset.zero,
-            ).animate(animation),
-            child: child,
-          ),
-        ),
-        child: KeyedSubtree(key: ValueKey(currentLocation), child: child),
-      ),
+      // The tab cross-fade lives in the router's CustomTransitionPage. An
+      // AnimatedSwitcher here used to retain the outgoing tab's subtree next
+      // to the Navigator's copy, throwing "Duplicate GlobalKey detected"
+      // bursts on relaunch/IME changes (KeyedSubtree-[<'/'>] never updating).
+      body: child,
       bottomNavigationBar: CChessBottomNav(
         tabs: tabs,
         currentIndex: currentIndex,

@@ -239,7 +239,18 @@ class _OnlineLobbyScreenState extends ConsumerState<OnlineLobbyScreen> {
 
   Future<void> _leave() async {
     await _ctrl.leave();
-    if (mounted) context.go(AppConstants.routeCompete);
+    if (!mounted) return;
+    _exitLobby();
+  }
+
+  /// Pop back to whichever screen pushed the lobby (Home's "Mời Bạn", Đối Đầu
+  /// entries…); deep links have no stack, so fall back to the Đối Đầu tab.
+  void _exitLobby() {
+    if (context.canPop()) {
+      context.pop();
+    } else {
+      context.go(AppConstants.routeCompete);
+    }
   }
 
   String _lobbyTitle() {
@@ -275,7 +286,7 @@ class _OnlineLobbyScreenState extends ConsumerState<OnlineLobbyScreen> {
         title: Text(_lobbyTitle()),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
-          onPressed: () => context.go(AppConstants.routeCompete),
+          onPressed: _exitLobby,
         ),
       ),
       body: SafeArea(

@@ -150,8 +150,9 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppConstants.routeBotSelect,
         builder: (context, state) => BotSelectScreen(
-          variant:
-              state.uri.queryParameters['variant'] == 'cup' ? 'cup' : 'standard',
+          variant: state.uri.queryParameters['variant'] == 'cup'
+              ? 'cup'
+              : 'standard',
         ),
       ),
       // Khám Phá (S16): hub → shop + inventory. Top-level routes (pushed over
@@ -318,11 +319,16 @@ final appRouterProvider = Provider<GoRouter>((ref) {
 });
 
 CustomTransitionPage<T> _fade<T>(GoRouterState state, Widget child) {
+  // Navigator-owned tab fade (the AppShell used to layer an AnimatedSwitcher
+  // on top, which duplicated live subtrees — see app_shell.dart).
   return CustomTransitionPage<T>(
     key: state.pageKey,
-    transitionDuration: const Duration(milliseconds: 0),
+    transitionDuration: const Duration(milliseconds: 220),
     child: child,
-    transitionsBuilder: (_, _, _, c) => c,
+    transitionsBuilder: (_, animation, _, c) => FadeTransition(
+      opacity: CurveTween(curve: Curves.easeOut).animate(animation),
+      child: c,
+    ),
   );
 }
 

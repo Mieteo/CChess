@@ -34,7 +34,14 @@ class BotSelectScreen extends ConsumerWidget {
         title: Text(_isCup ? 'Cờ Úp với Máy' : 'Luyện tập với Bot'),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
-          onPressed: () => context.go(AppConstants.routeHome),
+          // Pushed from Home or Đối Đầu → pop back to wherever we came from.
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go(AppConstants.routeHome);
+            }
+          },
         ),
       ),
       body: SafeArea(
@@ -53,7 +60,8 @@ class _Matchmaking extends StatelessWidget {
 
   void _findMatch(BuildContext context, int playerElo) {
     final match = pickBot(playerElo);
-    context.go(
+    // push so leaving the game lands back here ("find another match").
+    context.push(
       '${AppConstants.routeGame}?mode=bot'
       '&botElo=${match.botElo}&bracket=${match.bracket.name}',
     );
@@ -92,10 +100,7 @@ class _Matchmaking extends StatelessWidget {
             ),
           ),
           AppSpacing.vGapLg,
-          Text(
-            'Ghép trận theo trình độ',
-            style: AppTextStyles.titleLg,
-          ),
+          Text('Ghép trận theo trình độ', style: AppTextStyles.titleLg),
           AppSpacing.vGapXs,
           Text(
             'Hệ thống sẽ ghép bạn với một Bot quanh ELO của bạn — có thể ngang '
@@ -187,7 +192,7 @@ class _BotCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return CChessCard(
-      onTap: () => context.go(
+      onTap: () => context.push(
         '${AppConstants.routeGame}?mode=cupbot&level=${difficulty.name}',
       ),
       borderColor: _accent.withValues(alpha: 0.5),

@@ -33,7 +33,7 @@ class HomeScreen extends StatelessWidget {
         SectionHeader(
           title: 'Đánh Cờ Ngay',
           actionLabel: 'Xem tất cả',
-          onActionPressed: () {},
+          onActionPressed: () => context.go(AppConstants.routeCompete),
         ),
         AppSpacing.vGapMd,
         Row(
@@ -44,17 +44,19 @@ class HomeScreen extends StatelessWidget {
                 subtitle: '2 người cùng máy',
                 icon: Icons.people_alt_outlined,
                 accent: AppColors.accentGold,
-                onTap: () => context.go('${AppConstants.routeGame}?mode=local'),
+                // push (not go) so leaving the game returns to this tab.
+                onTap: () =>
+                    context.push('${AppConstants.routeGame}?mode=local'),
               ),
             ),
             AppSpacing.hGapMd,
             Expanded(
               child: _PlayModeCard(
                 title: 'Đấu với AI',
-                subtitle: 'Luyện tập 5 cấp độ',
+                subtitle: 'Ghép trận theo ELO',
                 icon: Icons.smart_toy_outlined,
                 accent: AppColors.tertiary,
-                onTap: () => context.go(AppConstants.routeBotSelect),
+                onTap: () => context.push(AppConstants.routeBotSelect),
               ),
             ),
           ],
@@ -69,7 +71,7 @@ class HomeScreen extends StatelessWidget {
                 icon: Icons.help_outline,
                 accent: AppColors.vermilionRed,
                 badge: 'MỚI',
-                onTap: () => context.go('${AppConstants.routeGame}?mode=cup'),
+                onTap: () => context.push('${AppConstants.routeGame}?mode=cup'),
               ),
             ),
             AppSpacing.hGapMd,
