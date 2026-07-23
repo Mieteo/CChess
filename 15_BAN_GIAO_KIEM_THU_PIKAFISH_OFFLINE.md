@@ -1,6 +1,6 @@
 # 15 — Bàn giao kiểm thử Pikafish Offline
 
-> Cập nhật: 2026-07-15. Tài liệu vận hành/checklist tạm thời, không thay đổi mã sản phẩm.
+> Cập nhật: 2026-07-23 — Android QA thiết bị thật **PASS toàn bộ** (xem mục 4); tài liệu này đã merge vào `main`.
 > Mục tiêu: có thể tiếp tục nghiệm thu engine và Pikafish Offline trên bất kỳ máy nào mà không phải lặp lại các bước đã xác nhận.
 
 ## 1. Mốc hiện tại
@@ -45,7 +45,9 @@ Endpoint mặc định: `https://cchess-engine.onrender.com`.
    npm run engine:smoke
    ```
 
-## 4. Việc tiếp theo: Android thật — chưa nghiệm thu
+## 4. Android thật — ĐÃ NGHIỆM THU (PASS, 2026-07-23)
+
+**Kết quả: PASS toàn bộ A/B/C** (cài NNUE, gợi ý offline, phân tích/phục bàn offline) trên thiết bị Android thật, bản release. Chi tiết đo đạc từng bước (thiết bị cụ thể, thời gian tải, nhiệt độ/pin) chưa được ghi lại kèm — xem mẫu ở mục D nếu cần bổ sung sau.
 
 Thiết bị thật arm64 Android đã được phát hiện; cần chạy bản **release**, không dùng emulator cho phần nhiệt/pin và extraction native binary.
 
@@ -56,20 +58,20 @@ flutter run --release -d <android-device-id>
 
 Sau khi app mở, thực hiện checklist theo thứ tự. Không test AI trên Cờ Úp: sản phẩm chủ động chặn phân tích Cờ Úp.
 
-### A. Cài NNUE
+### A. Cài NNUE — ✅ PASS
 
 - Vào **Hồ sơ → Cài đặt → AI Offline**.
 - Tải AI Offline; xác nhận hoàn tất, không có lỗi checksum và trạng thái ready/đã cài.
 - Ghi thời gian tải và dung lượng hiển thị (xấp xỉ 50.75 MB).
 
-### B. Gợi ý khi offline
+### B. Gợi ý khi offline — ✅ PASS
 
 - Bật Airplane mode **sau** khi NNUE đã tải xong.
 - Tạo ván **Cờ Tướng thường** với bot, đi một vài nước, bấm **Gợi ý**.
 - Pass khi UI ghi nguồn **Pikafish Offline**, trả nước hợp lệ và app không crash.
 - Fail cần ghi rõ nếu UI chỉ dùng "Phân tích nhanh (offline)"/minimax, báo không có AI Offline, treo hoặc crash.
 
-### C. Phân tích/phục bàn khi offline
+### C. Phân tích/phục bàn khi offline — ✅ PASS
 
 - Kết thúc ván thường khoảng 8–15 nước, mở lại từ Lịch sử → Phục bàn → Phân tích ván.
 - Pass khi có tiến độ, kết quả nước đi + biểu đồ, nguồn **Pikafish Offline**, và không fallback âm thầm sang minimax.
@@ -77,7 +79,7 @@ Sau khi app mở, thực hiện checklist theo thứ tự. Không test AI trên 
 
 ### D. Ghi nhận hiệu năng
 
-Ghi theo mẫu sau để cập nhật tài liệu này:
+Kết quả tổng hợp 2026-07-23: **PASS** cả A/B/C, không crash, không fallback âm thầm sang minimax. Số liệu chi tiết theo mẫu dưới đây **chưa được ghi lại** (thiết bị cụ thể, thời gian tải, nhiệt độ/pin) — bổ sung khi có lần chạy tiếp theo:
 
 ```text
 Thiết bị / Android:
@@ -98,4 +100,3 @@ Nhiệt / pin / UI: bình thường / chi tiết bất thường
 
 - `FIREBASE_SERVICE_ACCOUNT_JSON`, Firebase ID token và `RENDER_API_KEY` là bí mật; tuyệt đối không ghi vào tài liệu, commit hoặc chat.
 - Smoke/quota smoke có thể tạo Firebase Anonymous user thử nghiệm; không dùng tài khoản người chơi thật để kiểm quota.
-- `main` không bị dùng làm nhánh lưu checklist này. Tài liệu đang nằm trên nhánh `ke_hoach_test`.
