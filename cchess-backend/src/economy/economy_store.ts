@@ -89,6 +89,19 @@ export interface EconomyStore {
   removeRecipe(recipeId: string): Promise<boolean>;
 }
 
+/// Firestore rejects batches above 500 operations — large mail fan-outs are
+/// split into chunks of this size.
+const MAX_BATCH_OPS = 500;
+
+/// Split [items] into consecutive slices of at most [size] elements.
+export function chunk<T>(items: readonly T[], size: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < items.length; i += size) {
+    out.push(items.slice(i, i + size));
+  }
+  return out;
+}
+
 const USERS = 'users';
 const MAIL = 'mail';
 const EVENTS = 'events';
@@ -177,20 +190,24 @@ export class FirestoreEconomyStore implements EconomyStore {
     const db = this.getDb();
     const now = this.now();
     // Batched fan-out (admin-triggered, uids list is validated + deduped).
-    const batch = db.batch();
-    for (const uid of input.uids) {
-      const ref = db.collection(USERS).doc(uid).collection(MAIL).doc();
-      batch.set(ref, {
-        title: input.title,
-        body: input.body,
-        reward: input.reward,
-        read: false,
-        claimed: false,
-        createdAt: now,
-        expiresAt: input.expiresAtMs === null ? null : new Date(input.expiresAtMs),
-      });
+    // Firestore caps a batch at 500 ops, so server-wide blasts go out in
+    // sequential chunks.
+    for (const uids of chunk(input.uids, MAX_BATCH_OPS)) {
+      const batch = db.batch();
+      for (const uid of uids) {
+        const ref = db.collection(USERS).doc(uid).collection(MAIL).doc();
+        batch.set(ref, {
+          title: input.title,
+          body: input.body,
+          reward: input.reward,
+          read: false,
+          claimed: false,
+          createdAt: now,
+          expiresAt: input.expiresAtMs === null ? null : new Date(input.expiresAtMs),
+        });
+      }
+      await batch.commit();
     }
-    await batch.commit();
     return input.uids.length;
   }
 

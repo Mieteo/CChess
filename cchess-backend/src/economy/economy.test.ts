@@ -6,6 +6,7 @@ import type { AddressInfo } from 'node:net';
 import type { InventoryItemDoc } from '../shop/types';
 import { createEconomyApi, type EconomyApiOptions } from './economy_routes';
 import {
+  chunk,
   mapEvent,
   mapMail,
   mapRecipe,
@@ -815,6 +816,16 @@ test('mapRecipe: ingredient qty clamps to ≥1, invalid entries dropped, output 
   assert.equal(r.costCoins, 0);
   assert.equal(r.active, true);
   assert.equal(mapRecipe('x', { active: false }).active, false);
+});
+
+test('chunk splits large uid lists under the 500-op Firestore batch cap', () => {
+  assert.deepEqual(chunk([], 500), []);
+  assert.deepEqual(chunk([1, 2, 3], 2), [[1, 2], [3]]);
+  assert.deepEqual(chunk([1, 2], 2), [[1, 2]]);
+  const big = Array.from({ length: 1201 }, (_, i) => i);
+  const parts = chunk(big, 500);
+  assert.deepEqual(parts.map((p) => p.length), [500, 500, 201]);
+  assert.deepEqual(parts.flat(), big); // no uid lost or duplicated
 });
 
 // ── Welfare edge cases ────────────────────────────────────────────────────────
