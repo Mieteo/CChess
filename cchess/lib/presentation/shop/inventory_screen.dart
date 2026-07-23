@@ -21,6 +21,14 @@ class InventoryScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final invAsync = ref.watch(inventoryProvider);
     final wallet = ref.watch(walletProvider).valueOrNull ?? const Wallet();
+    // Inventory docs only carry ids/payload keys — resolve pretty names from
+    // the shop catalog (backend → Hive cache, so offline still works).
+    final catalog =
+        ref.watch(shopCatalogProvider).valueOrNull ?? const <ShopItem>[];
+    final catalogNames = {
+      for (final s in catalog)
+        if (s.nameVi.isNotEmpty) s.id: s.nameVi,
+    };
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -68,6 +76,7 @@ class InventoryScreen extends ConsumerWidget {
                             kind: kind,
                             items: items.where((i) => i.kind == kind).toList(),
                             wallet: wallet,
+                            catalogNames: catalogNames,
                           ),
                       ],
                     ),
@@ -94,7 +103,13 @@ class _KindList extends StatelessWidget {
   final ShopItemKind kind;
   final List<InventoryItem> items;
   final Wallet wallet;
-  const _KindList({required this.kind, required this.items, required this.wallet});
+  final Map<String, String> catalogNames;
+  const _KindList({
+    required this.kind,
+    required this.items,
+    required this.wallet,
+    required this.catalogNames,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -108,7 +123,11 @@ class _KindList extends StatelessWidget {
       ),
       children: [
         for (final item in items)
-          _InventoryRow(item: item, equipped: item.itemId == equippedId),
+          _InventoryRow(
+            item: item,
+            equipped: item.itemId == equippedId,
+            catalogNames: catalogNames,
+          ),
       ],
     );
   }
@@ -117,7 +136,12 @@ class _KindList extends StatelessWidget {
 class _InventoryRow extends ConsumerStatefulWidget {
   final InventoryItem item;
   final bool equipped;
-  const _InventoryRow({required this.item, required this.equipped});
+  final Map<String, String> catalogNames;
+  const _InventoryRow({
+    required this.item,
+    required this.equipped,
+    required this.catalogNames,
+  });
 
   @override
   ConsumerState<_InventoryRow> createState() => _InventoryRowState();
@@ -217,9 +241,12 @@ class _InventoryRowState extends ConsumerState<_InventoryRow> {
     );
   }
 
-  /// The inventory doc carries the payloadKey but not the human name; for board
-  /// themes we can recover a nice label, otherwise fall back to the slot label.
+  /// Prefer the pretty catalog name (nameVi); the inventory doc itself only
+  /// carries ids. For board themes not in the catalog (e.g. crafted exclusives)
+  /// we can still recover a nice label, otherwise fall back to the slot label.
   String _displayName(InventoryItem item) {
+    final catalogName = widget.catalogNames[item.itemId];
+    if (catalogName != null) return catalogName;
     if (item.kind == ShopItemKind.boardTheme) {
       return 'Bàn ${_boardName(item.payloadKey)}';
     }
