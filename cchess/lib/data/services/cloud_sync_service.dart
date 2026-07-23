@@ -63,6 +63,7 @@ class CloudSyncService {
       }
       final merged = _mergeCloudIntoLocal(uid, cloud, localProfile);
       await local.save(merged);
+      _healCloudOnboarding(uid, cloud, localProfile);
       return CloudSyncResult(
         profile: merged,
         outcome: CloudSyncOutcome.pulledFromCloud,
@@ -107,6 +108,7 @@ class CloudSyncService {
 
       final merged = _mergeCloudIntoLocal(uid, cloud, localProfile);
       await local.save(merged);
+      _healCloudOnboarding(uid, cloud, localProfile);
       remote.touchLastActive(uid).ignore();
       return CloudSyncResult(
         profile: merged,
@@ -157,7 +159,13 @@ class CloudSyncService {
   ) {
     // Sprint 12 strategy (updated after Step A2 ELO):
     // - Whitelist fields (displayName, region, avatarUrl, onboardingCompleted):
-    //   cloud is source of truth (client writes via UserRemoteRepository).
+    //   cloud is source of truth (client writes via UserRemoteRepository) —
+    //   EXCEPT when local finished onboarding and cloud never heard about it.
+    //   The client push is fire-and-forget, so a force-stop right after
+    //   onboarding can kill it; in that case local is strictly newer, so we
+    //   keep local displayName/region and never regress onboardingCompleted
+    //   true → false (one-way latch). `_healCloudOnboarding` re-pushes the
+    //   flag so the cloud doc catches up.
     // - Ranked stats (eloChess, eloCup, totalGames, wins, losses, draws):
     //   cloud is source of truth — server backend updates these via Admin SDK
     //   after every ranked game ends (see cchess-backend/src/persistence.ts).
@@ -183,10 +191,19 @@ class CloudSyncService {
       return fallbackValue;
     }
 
+    final cloudOnboarded = cloud['onboardingCompleted'] as bool? ?? false;
+    // Local finished onboarding but the cloud doc missed the (fire-and-forget)
+    // push — e.g. force-stop ngay sau onboarding. Local whitelist là bản mới.
+    final localIsNewer = fallback.onboardingCompleted && !cloudOnboarded;
+
     return UserProfile(
       id: uid,
-      displayName: (cloud['displayName'] as String?) ?? fallback.displayName,
-      region: (cloud['region'] as String?) ?? fallback.region,
+      displayName: localIsNewer
+          ? fallback.displayName
+          : (cloud['displayName'] as String?) ?? fallback.displayName,
+      region: localIsNewer
+          ? fallback.region
+          : (cloud['region'] as String?) ?? fallback.region,
       avatarUrl: cloud['avatarUrl'] as String?,
       eloChess: asInt('eloChess', fallback.eloChess),
       eloCup: asInt('eloCup', fallback.eloCup),
@@ -206,9 +223,29 @@ class CloudSyncService {
       vipExpiresAt: fallback.vipExpiresAt,
       createdAt: asDate('createdAt', fallback.createdAt),
       lastActiveAt: asDate('lastActiveAt', fallback.lastActiveAt),
-      onboardingCompleted:
-          (cloud['onboardingCompleted'] as bool?) ?? fallback.onboardingCompleted,
+      onboardingCompleted: cloudOnboarded || fallback.onboardingCompleted,
     );
+  }
+
+  /// If local finished onboarding but the cloud doc never recorded it (the
+  /// fire-and-forget push in `ProfileController` died — e.g. force-stop right
+  /// after onboarding), re-push the whitelist fields so the cloud doc stops
+  /// dragging the user back to the onboarding screen on later syncs/devices.
+  void _healCloudOnboarding(
+    String uid,
+    Map<String, dynamic> cloud,
+    UserProfile localProfile,
+  ) {
+    final cloudOnboarded = cloud['onboardingCompleted'] as bool? ?? false;
+    if (cloudOnboarded || !localProfile.onboardingCompleted) return;
+    remote
+        .updateProfileFields(
+          uid,
+          displayName: localProfile.displayName,
+          region: localProfile.region,
+          onboardingCompleted: true,
+        )
+        .ignore();
   }
 }
 
