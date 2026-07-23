@@ -21,7 +21,8 @@ class ShopScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final catalogAsync = ref.watch(shopCatalogProvider);
     final wallet = ref.watch(walletProvider).valueOrNull;
-    final owned = ref.watch(inventoryProvider).valueOrNull ?? const <InventoryItem>[];
+    final owned =
+        ref.watch(inventoryProvider).valueOrNull ?? const <InventoryItem>[];
     final ownedIds = {for (final i in owned) i.itemId};
 
     return Scaffold(
@@ -153,7 +154,9 @@ class _ShopTile extends ConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(child: Center(child: ShopItemPreview(item: item, size: 56))),
+          Expanded(
+            child: Center(child: ShopItemPreview(item: item, size: 56)),
+          ),
           AppSpacing.vGapXs,
           Text(
             item.nameVi,
@@ -163,15 +166,25 @@ class _ShopTile extends ConsumerWidget {
           ),
           Text(
             item.rarity.labelVi,
-            style: AppTextStyles.captionSm.copyWith(color: accent, fontSize: 10),
+            style: AppTextStyles.captionSm.copyWith(
+              color: accent,
+              fontSize: 10,
+            ),
           ),
           AppSpacing.vGapXs,
           if (owned)
             Row(
               children: const [
-                Icon(Icons.check_circle, size: 14, color: AppColors.tealSuccess),
+                Icon(
+                  Icons.check_circle,
+                  size: 14,
+                  color: AppColors.tealSuccess,
+                ),
                 SizedBox(width: 4),
-                Text('Đã sở hữu', style: TextStyle(fontSize: 11, color: AppColors.tealSuccess)),
+                Text(
+                  'Đã sở hữu',
+                  style: TextStyle(fontSize: 11, color: AppColors.tealSuccess),
+                ),
               ],
             )
           else
@@ -180,9 +193,15 @@ class _ShopTile extends ConsumerWidget {
               runSpacing: 2,
               children: [
                 if (item.sellsForCoins)
-                  _PriceChip(amount: item.priceCoins, currency: CChessCurrency.coin),
+                  _PriceChip(
+                    amount: item.priceCoins,
+                    currency: CChessCurrency.coin,
+                  ),
                 if (item.sellsForGems)
-                  _PriceChip(amount: item.priceGems, currency: CChessCurrency.gem),
+                  _PriceChip(
+                    amount: item.priceGems,
+                    currency: CChessCurrency.gem,
+                  ),
               ],
             ),
         ],
@@ -212,7 +231,11 @@ class _PriceChip extends StatelessWidget {
   }
 }
 
-Future<void> _openPurchaseSheet(BuildContext context, WidgetRef ref, ShopItem item) {
+Future<void> _openPurchaseSheet(
+  BuildContext context,
+  WidgetRef ref,
+  ShopItem item,
+) {
   return showModalBottomSheet<void>(
     context: context,
     backgroundColor: AppColors.surfaceContainerHigh,
@@ -234,26 +257,44 @@ class _PurchaseSheet extends ConsumerStatefulWidget {
 
 class _PurchaseSheetState extends ConsumerState<_PurchaseSheet> {
   bool _busy = false;
+  // Shown INSIDE the sheet: a snackbar would render behind the modal barrier
+  // and the user would see no feedback at all (e.g. not enough coins).
+  String? _error;
 
   Future<void> _buy(String currency) async {
-    setState(() => _busy = true);
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
     final messenger = ScaffoldMessenger.of(context);
     final navigator = Navigator.of(context);
     try {
-      await ref.read(shopControllerProvider).purchase(widget.item, currency: currency);
+      await ref
+          .read(shopControllerProvider)
+          .purchase(widget.item, currency: currency);
+      // Success closes the sheet first, so this snackbar is actually visible.
       navigator.pop();
       messenger.showSnackBar(
-        SnackBar(content: Text('Đã mua "${widget.item.nameVi}"! Vào Balo để trang bị.')),
+        SnackBar(
+          content: Text(
+            'Đã mua "${widget.item.nameVi}"! Vào Balo để trang bị.',
+          ),
+        ),
       );
     } on ShopApiException catch (e) {
-      if (mounted) setState(() => _busy = false);
-      final msg = e.isInsufficientFunds
-          ? 'Không đủ ${currency == 'gems' ? 'ngọc' : 'xu'} để mua vật phẩm này.'
-          : e.message;
-      messenger.showSnackBar(SnackBar(content: Text(msg)));
+      if (!mounted) return;
+      setState(() {
+        _busy = false;
+        _error = e.isInsufficientFunds
+            ? 'Không đủ ${currency == 'gems' ? 'ngọc' : 'xu'} để mua vật phẩm này.'
+            : e.message;
+      });
     } catch (_) {
-      if (mounted) setState(() => _busy = false);
-      messenger.showSnackBar(const SnackBar(content: Text('Mua thất bại, thử lại sau.')));
+      if (!mounted) return;
+      setState(() {
+        _busy = false;
+        _error = 'Mua thất bại, thử lại sau.';
+      });
     }
   }
 
@@ -280,9 +321,12 @@ class _PurchaseSheetState extends ConsumerState<_PurchaseSheet> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(item.nameVi, style: AppTextStyles.titleLg),
-                    Text(item.rarity.labelVi,
-                        style: AppTextStyles.captionSm
-                            .copyWith(color: rarityColor(item.rarity))),
+                    Text(
+                      item.rarity.labelVi,
+                      style: AppTextStyles.captionSm.copyWith(
+                        color: rarityColor(item.rarity),
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -290,16 +334,53 @@ class _PurchaseSheetState extends ConsumerState<_PurchaseSheet> {
           ),
           if (item.descVi.isNotEmpty) ...[
             AppSpacing.vGapSm,
-            Text(item.descVi,
-                style: AppTextStyles.bodyMd
-                    .copyWith(color: AppColors.onSurfaceVariant)),
+            Text(
+              item.descVi,
+              style: AppTextStyles.bodyMd.copyWith(
+                color: AppColors.onSurfaceVariant,
+              ),
+            ),
           ],
           AppSpacing.vGapLg,
+          if (_error != null) ...[
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(AppSpacing.sm),
+              decoration: BoxDecoration(
+                color: AppColors.vermilionRed.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: AppColors.vermilionRed.withValues(alpha: 0.5),
+                ),
+              ),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.error_outline,
+                    size: 18,
+                    color: AppColors.vermilionRed,
+                  ),
+                  AppSpacing.hGapSm,
+                  Expanded(
+                    child: Text(
+                      _error!,
+                      style: AppTextStyles.captionSm.copyWith(
+                        color: AppColors.vermilionRed,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            AppSpacing.vGapSm,
+          ],
           if (_busy)
-            const Center(child: Padding(
-              padding: EdgeInsets.all(AppSpacing.sm),
-              child: BrushStrokeSpinner(),
-            ))
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.all(AppSpacing.sm),
+                child: BrushStrokeSpinner(),
+              ),
+            )
           else ...[
             if (item.sellsForCoins)
               CChessButton(
@@ -346,15 +427,26 @@ class _Message extends StatelessWidget {
           children: [
             Icon(icon, size: 56, color: AppColors.parchmentTan),
             AppSpacing.vGapMd,
-            Text(title, style: AppTextStyles.titleLg, textAlign: TextAlign.center),
+            Text(
+              title,
+              style: AppTextStyles.titleLg,
+              textAlign: TextAlign.center,
+            ),
             AppSpacing.vGapSm,
-            Text(detail,
-                style: AppTextStyles.bodyMd
-                    .copyWith(color: AppColors.onSurfaceVariant),
-                textAlign: TextAlign.center),
+            Text(
+              detail,
+              style: AppTextStyles.bodyMd.copyWith(
+                color: AppColors.onSurfaceVariant,
+              ),
+              textAlign: TextAlign.center,
+            ),
             if (onRetry != null) ...[
               AppSpacing.vGapMd,
-              CChessButton(label: 'Thử lại', icon: Icons.refresh, onPressed: onRetry),
+              CChessButton(
+                label: 'Thử lại',
+                icon: Icons.refresh,
+                onPressed: onRetry,
+              ),
             ],
           ],
         ),
