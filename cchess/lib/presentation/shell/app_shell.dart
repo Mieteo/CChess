@@ -1,15 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/constants/app_constants.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_spacing.dart';
 import '../../theme/app_text_styles.dart';
+import '../economy/economy_controller.dart';
 import 'cchess_app_bar.dart';
 import 'cchess_bottom_nav.dart';
 
 /// Top-level scaffold containing the persistent AppBar + bottom navigation
 /// that wraps the five main tabs.
-class AppShell extends StatelessWidget {
+class AppShell extends ConsumerWidget {
   final Widget child;
   final int currentIndex;
   final String currentLocation;
@@ -55,11 +58,19 @@ class AppShell extends StatelessWidget {
   ];
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    // Unread/unclaimed mail drives the bell badge (same count as the Explore
+    // hub tile). valueOrNull → 0 while loading/offline.
+    final unreadMail = ref.watch(unreadMailCountProvider);
     return Scaffold(
       extendBody: true,
       backgroundColor: AppColors.background,
-      appBar: const CChessAppBar(),
+      appBar: CChessAppBar(
+        notificationCount: unreadMail,
+        onAvatarTap: () => context.go(AppConstants.routeProfile),
+        onNotificationTap: () => context.push(AppConstants.routeMail),
+        onSettingsTap: () => context.push(AppConstants.routeSettings),
+      ),
       body: AnimatedSwitcher(
         duration: const Duration(milliseconds: 220),
         switchInCurve: Curves.easeOut,
@@ -74,10 +85,7 @@ class AppShell extends StatelessWidget {
             child: child,
           ),
         ),
-        child: KeyedSubtree(
-          key: ValueKey(currentLocation),
-          child: child,
-        ),
+        child: KeyedSubtree(key: ValueKey(currentLocation), child: child),
       ),
       bottomNavigationBar: CChessBottomNav(
         tabs: tabs,

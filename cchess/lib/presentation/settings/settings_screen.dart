@@ -28,14 +28,21 @@ class SettingsScreen extends ConsumerWidget {
         title: const Text('Cài Đặt'),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
-          onPressed: () => context.go(AppConstants.routeProfile),
+          // Pushed from the shell's gear button → pop back to whichever tab
+          // the user was on; entered via `go` (profile menu) → fall back.
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go(AppConstants.routeProfile);
+            }
+          },
         ),
       ),
       body: asyncSettings.when(
         loading: () => const Center(child: BrushStrokeSpinner()),
-        error: (e, _) => Center(
-          child: Text('Lỗi: $e', style: AppTextStyles.bodyMd),
-        ),
+        error: (e, _) =>
+            Center(child: Text('Lỗi: $e', style: AppTextStyles.bodyMd)),
         data: (settings) {
           return SafeArea(
             child: ListView(
@@ -148,7 +155,8 @@ class SettingsScreen extends ConsumerWidget {
                       _RowItem(
                         icon: Icons.cable,
                         label: 'Backend WebSocket test',
-                        onTap: () => context.push(AppConstants.routeBackendTest),
+                        onTap: () =>
+                            context.push(AppConstants.routeBackendTest),
                       ),
                     ],
                   ),
@@ -561,9 +569,7 @@ class _PikafishSectionState extends ConsumerState<_PikafishSection> {
             padding: const EdgeInsets.all(AppSpacing.base),
             child: Text(
               _error!,
-              style: AppTextStyles.captionSm.copyWith(
-                color: Colors.redAccent,
-              ),
+              style: AppTextStyles.captionSm.copyWith(color: Colors.redAccent),
             ),
           ),
         ],
@@ -602,8 +608,8 @@ class _PikafishSectionState extends ConsumerState<_PikafishSection> {
     }
 
     if (status.nnueInstalled) {
-      final sizeMb =
-          ((status.nnueSizeBytes ?? 0) / (1024 * 1024)).toStringAsFixed(0);
+      final sizeMb = ((status.nnueSizeBytes ?? 0) / (1024 * 1024))
+          .toStringAsFixed(0);
       return Column(
         children: [
           _RowItem(
@@ -706,7 +712,8 @@ class _AccountSectionState extends ConsumerState<_AccountSection> {
         setState(() {
           _error = _humanReadableAuthError(e);
           _credentialInUse =
-              e.code == 'credential-already-in-use' || e.code == 'email-already-in-use';
+              e.code == 'credential-already-in-use' ||
+              e.code == 'email-already-in-use';
         });
       }
     } catch (e) {
@@ -756,10 +763,7 @@ class _AccountSectionState extends ConsumerState<_AccountSection> {
         if (user == null) {
           return _SettingsCard(
             children: [
-              _RowItem(
-                icon: Icons.cloud_off_outlined,
-                label: 'Chưa đăng nhập',
-              ),
+              _RowItem(icon: Icons.cloud_off_outlined, label: 'Chưa đăng nhập'),
             ],
           );
         }
@@ -767,7 +771,9 @@ class _AccountSectionState extends ConsumerState<_AccountSection> {
         return _SettingsCard(
           children: [
             _RowItem(
-              icon: isAnon ? Icons.person_outline : Icons.verified_user_outlined,
+              icon: isAnon
+                  ? Icons.person_outline
+                  : Icons.verified_user_outlined,
               label: isAnon
                   ? 'Đăng nhập ẩn danh'
                   : (user.displayName ?? user.email ?? 'Tài khoản Google'),
