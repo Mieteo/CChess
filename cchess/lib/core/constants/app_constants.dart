@@ -33,6 +33,12 @@ class AppConstants {
   static const String routeExplore = '/explore';
   static const String routeShop = '/shop';
   static const String routeInventory = '/inventory';
+  // S16 economy extension: Hộp Thư (D4), Sự Kiện (D5), Phúc Lợi (D6),
+  // Đúc Bàn Cờ (D7).
+  static const String routeMail = '/mail';
+  static const String routeEvents = '/events';
+  static const String routeWelfare = '/welfare';
+  static const String routeCrafting = '/crafting';
   static const String routeAchievements = '/achievements';
   static const String routeHistory = '/history';
   static const String routeDailyQuests = '/daily-quests';
@@ -69,6 +75,10 @@ class AppConstants {
   // Offline cache of tournaments (S14 C4 — Giải Đấu): last-fetched list, so
   // Cộng Đồng → Giải Đấu still renders offline.
   static const String boxTournaments = 'cchess_tournaments';
+  // Offline cache of the S16 economy extension: last-fetched mailbox, events,
+  // welfare status and craft recipes, so those screens render offline
+  // (claims/crafts themselves always need the server).
+  static const String boxEconomy = 'cchess_economy';
 
   // Hint usage caps.
   static const int dailyHintLimitFree = 3;

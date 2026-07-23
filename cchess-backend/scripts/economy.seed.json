@@ -1,0 +1,48 @@
+{
+  "events": [
+    {
+      "id": "quoc-khanh-2026",
+      "title": "Mừng Quốc Khánh 2/9",
+      "descVi": "Nhận quà mừng ngày Quốc Khánh — đăng nhập là có!",
+      "startAtMs": 1788195600000,
+      "endAtMs": 1788800400000,
+      "sortOrder": 1,
+      "gifts": [
+        {
+          "id": "qua-quoc-khanh",
+          "title": "Quà Quốc Khánh",
+          "reward": { "coins": 290, "gems": 2 }
+        },
+        {
+          "id": "goi-goi-y",
+          "title": "Gói Gợi Ý mừng lễ",
+          "reward": {
+            "items": [
+              { "itemId": "hint-pack-5", "kind": "consumable", "payloadKey": "hint_pack", "qty": 5 }
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "recipes": [
+    {
+      "id": "ban-ngoc-bich",
+      "nameVi": "Đúc Bàn Ngọc Bích",
+      "descVi": "Ghép 3 Mảnh Ngọc + 200 Đồng thành bàn cờ Ngọc Bích độc bản.",
+      "ingredients": [{ "itemId": "manh-ngoc", "qty": 3 }],
+      "costCoins": 200,
+      "sortOrder": 1,
+      "output": { "itemId": "board-jade-crafted", "kind": "boardTheme", "payloadKey": "jade" }
+    },
+    {
+      "id": "ban-thuy-mac",
+      "nameVi": "Đúc Bàn Thủy Mặc",
+      "descVi": "Ghép 5 Giọt Mực + 150 Đồng thành bàn cờ Thủy Mặc.",
+      "ingredients": [{ "itemId": "giot-muc", "qty": 5 }],
+      "costCoins": 150,
+      "sortOrder": 2,
+      "output": { "itemId": "board-ink-crafted", "kind": "boardTheme", "payloadKey": "ink" }
+    }
+  ]
+}

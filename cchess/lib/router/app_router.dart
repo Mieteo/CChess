@@ -38,6 +38,10 @@ import '../presentation/quests/daily_quests_screen.dart';
 import '../presentation/replay/game_replay_screen.dart';
 import '../presentation/calibration/calibration_screen.dart';
 import '../presentation/settings/settings_screen.dart';
+import '../presentation/economy/crafting_screen.dart';
+import '../presentation/economy/events_screen.dart';
+import '../presentation/economy/mail_screen.dart';
+import '../presentation/economy/welfare_screen.dart';
 import '../presentation/shop/explore_screen.dart';
 import '../presentation/shop/inventory_screen.dart';
 import '../presentation/shop/shop_screen.dart';
@@ -163,6 +167,23 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppConstants.routeInventory,
         builder: (context, state) => const InventoryScreen(),
+      ),
+      // S16 economy extension: Hộp Thư / Sự Kiện / Phúc Lợi / Đúc Bàn Cờ.
+      GoRoute(
+        path: AppConstants.routeMail,
+        builder: (context, state) => const MailScreen(),
+      ),
+      GoRoute(
+        path: AppConstants.routeEvents,
+        builder: (context, state) => const EventsScreen(),
+      ),
+      GoRoute(
+        path: AppConstants.routeWelfare,
+        builder: (context, state) => const WelfareScreen(),
+      ),
+      GoRoute(
+        path: AppConstants.routeCrafting,
+        builder: (context, state) => const CraftingScreen(),
       ),
       GoRoute(
         path: AppConstants.routePuzzle,

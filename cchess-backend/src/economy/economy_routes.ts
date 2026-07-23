@@ -89,7 +89,11 @@ export function createEconomyApi(options: EconomyApiOptions = {}): EconomyApi {
         const result = await store.claimMail(user.uid, decodeURIComponent(segments[1]));
         return void sendJson(res, 200, result);
       }
-      if (method === 'DELETE' && segments.length === 2) {
+      // POST alias for DELETE — the Flutter transport only speaks GET/POST.
+      const isDelete =
+        (method === 'DELETE' && segments.length === 2) ||
+        (method === 'POST' && segments.length === 3 && segments[2] === 'delete');
+      if (isDelete) {
         const removed = await store.deleteMail(user.uid, decodeURIComponent(segments[1]));
         if (!removed) throw new HttpError(404, 'not-found', 'Mail not found');
         return void sendJson(res, 200, { removed: true });

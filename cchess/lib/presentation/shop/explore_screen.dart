@@ -7,11 +7,12 @@ import '../../theme/app_colors.dart';
 import '../../theme/app_spacing.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/common/common.dart';
+import '../economy/economy_controller.dart';
 import 'shop_controller.dart';
 
 /// Khám Phá (S16) — the discovery hub. A route (not a 6th tab) reached from
-/// Trang Chủ + Hồ Sơ; surfaces the Shop (Thương Thành) and Inventory (Balo),
-/// plus placeholders for the not-yet-built event/welfare/mail features.
+/// Trang Chủ + Hồ Sơ; surfaces the Shop (Thương Thành), Inventory (Balo) and
+/// the economy extension: Sự Kiện, Phúc Lợi, Hộp Thư, Đúc Bàn Cờ.
 class ExploreScreen extends ConsumerWidget {
   const ExploreScreen({super.key});
 
@@ -72,26 +73,37 @@ class ExploreScreen extends ConsumerWidget {
               color: AppColors.tertiary,
               onTap: () => context.push(AppConstants.routeInventory),
             ),
+            _FeatureTile(
+              title: 'Đúc Bàn Cờ',
+              subtitle: 'Ghép nguyên liệu thành bàn cờ độc bản',
+              icon: Icons.auto_awesome_outlined,
+              color: AppColors.accentGold,
+              onTap: () => context.push(AppConstants.routeCrafting),
+            ),
             AppSpacing.vGapLg,
-            const SectionHeader(title: 'Sắp Ra Mắt'),
+            const SectionHeader(title: 'Quà & Sự Kiện'),
             AppSpacing.vGapSm,
-            const _FeatureTile(
+            _FeatureTile(
               title: 'Sự Kiện',
               subtitle: 'Sự kiện theo mùa: Tết, 30/4, 2/9…',
               icon: Icons.celebration_outlined,
               color: AppColors.vermilionRed,
+              onTap: () => context.push(AppConstants.routeEvents),
             ),
-            const _FeatureTile(
+            _FeatureTile(
               title: 'Phúc Lợi',
               subtitle: 'Điểm danh hàng ngày, quà tân thủ',
               icon: Icons.card_giftcard_outlined,
               color: AppColors.tealSuccess,
+              onTap: () => context.push(AppConstants.routeWelfare),
             ),
-            const _FeatureTile(
+            _FeatureTile(
               title: 'Hộp Thư',
               subtitle: 'Nhận quà & thông báo từ hệ thống',
               icon: Icons.mail_outline,
               color: AppColors.parchmentTan,
+              badgeCount: ref.watch(unreadMailCountProvider),
+              onTap: () => context.push(AppConstants.routeMail),
             ),
           ],
         ),
@@ -150,12 +162,16 @@ class _FeatureTile extends StatelessWidget {
   final Color color;
   final VoidCallback? onTap;
 
+  /// Optional badge (e.g. unread mail count); hidden when 0.
+  final int badgeCount;
+
   const _FeatureTile({
     required this.title,
     required this.subtitle,
     required this.icon,
     required this.color,
     this.onTap,
+    this.badgeCount = 0,
   });
 
   @override
@@ -167,16 +183,42 @@ class _FeatureTile extends StatelessWidget {
         onTap: onTap,
         child: Row(
           children: [
-            Container(
-              width: 44,
-              height: 44,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.12),
-                shape: BoxShape.circle,
-                border: Border.all(color: color.withValues(alpha: 0.3)),
-              ),
-              child: Icon(icon, color: color, size: 22),
+            Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Container(
+                  width: 44,
+                  height: 44,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: color.withValues(alpha: 0.12),
+                    shape: BoxShape.circle,
+                    border: Border.all(color: color.withValues(alpha: 0.3)),
+                  ),
+                  child: Icon(icon, color: color, size: 22),
+                ),
+                if (badgeCount > 0)
+                  Positioned(
+                    top: -4,
+                    right: -4,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 5, vertical: 1),
+                      decoration: BoxDecoration(
+                        color: AppColors.vermilionRed,
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        '$badgeCount',
+                        style: AppTextStyles.captionSm.copyWith(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
             ),
             AppSpacing.hGapMd,
             Expanded(

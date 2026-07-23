@@ -15,6 +15,7 @@
     "puzzles:import": "tsx scripts/import_puzzles.ts",
     "puzzles:set-daily": "tsx scripts/set_daily.ts",
     "shop:import": "tsx scripts/import_shop.ts",
+    "economy:import": "tsx scripts/import_economy.ts",
     "lab": "tsx lab/runner.ts",
     "lab:check": "tsc --noEmit -p lab/tsconfig.json",
     "lab:dashboard": "tsx lab/control.ts",
