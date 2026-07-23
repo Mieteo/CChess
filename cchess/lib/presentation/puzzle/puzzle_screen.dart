@@ -76,7 +76,11 @@ class _PuzzleMessage extends StatelessWidget {
   final IconData icon;
   final String message;
   final VoidCallback? onRetry;
-  const _PuzzleMessage({required this.icon, required this.message, this.onRetry});
+  const _PuzzleMessage({
+    required this.icon,
+    required this.message,
+    this.onRetry,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -88,7 +92,11 @@ class _PuzzleMessage extends StatelessWidget {
           children: [
             Icon(icon, color: AppColors.onSurfaceVariant, size: 40),
             AppSpacing.vGapMd,
-            Text(message, style: AppTextStyles.bodyMd, textAlign: TextAlign.center),
+            Text(
+              message,
+              style: AppTextStyles.bodyMd,
+              textAlign: TextAlign.center,
+            ),
             if (onRetry != null) ...[
               AppSpacing.vGapMd,
               CChessButton(
@@ -251,8 +259,7 @@ class _PuzzleInfoPanel extends StatelessWidget {
                         decoration: BoxDecoration(
                           color: AppColors.tealSuccess.withValues(alpha: 0.18),
                           borderRadius: BorderRadius.circular(4),
-                          border:
-                              Border.all(color: AppColors.tealSuccess),
+                          border: Border.all(color: AppColors.tealSuccess),
                         ),
                         child: Text(
                           'KỶ LỤC ${state.progress.bestScore}',
@@ -272,7 +279,10 @@ class _PuzzleInfoPanel extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Text(
-                '${state.solutionStep ~/ 2}/${puzzle.solverMoveCount}',
+                // solutionStep counts plies (player + auto-replies); the
+                // player's own move count is ceil(step/2) — plain `~/ 2`
+                // showed "0/1" on a solved one-move puzzle.
+                '${(state.solutionStep + 1) ~/ 2}/${puzzle.solverMoveCount}',
                 style: AppTextStyles.monoTimer.copyWith(
                   fontSize: 16,
                   color: AppColors.accentGold,
@@ -300,37 +310,37 @@ class _PuzzleFeedbackPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final (icon, color, message) = switch (state.feedback) {
       PuzzleFeedback.idle => (
-          Icons.touch_app_outlined,
-          AppColors.onSurfaceVariant,
-          state.isPlayerTurn
-              ? 'Lượt của bạn — chọn nước tốt nhất.'
-              : 'Đợi đối thủ đi…',
-        ),
+        Icons.touch_app_outlined,
+        AppColors.onSurfaceVariant,
+        state.isPlayerTurn
+            ? 'Lượt của bạn — chọn nước tốt nhất.'
+            : 'Đợi đối thủ đi…',
+      ),
       PuzzleFeedback.correct => (
-          Icons.check_circle,
-          AppColors.tealSuccess,
-          'Đúng rồi! Tiếp tục…',
-        ),
+        Icons.check_circle,
+        AppColors.tealSuccess,
+        'Đúng rồi! Tiếp tục…',
+      ),
       PuzzleFeedback.wrong => (
-          Icons.cancel,
-          AppColors.error,
-          'Sai rồi — thử lại. (${3 - state.wrongAttempts} lần thử còn lại)',
-        ),
+        Icons.cancel,
+        AppColors.error,
+        'Sai rồi — thử lại. (${3 - state.wrongAttempts} lần thử còn lại)',
+      ),
       PuzzleFeedback.solved => (
-          Icons.emoji_events,
-          AppColors.accentGold,
-          'Hoàn thành! Điểm: ${state.lastScore ?? state.progress.bestScore}/100',
-        ),
+        Icons.emoji_events,
+        AppColors.accentGold,
+        'Hoàn thành! Điểm: ${state.lastScore ?? state.progress.bestScore}/100',
+      ),
       PuzzleFeedback.failedShownSolution => (
-          Icons.lightbulb_outline,
-          AppColors.accentGold,
-          'Đáp án đã được tô sáng. Hãy thử lại.',
-        ),
+        Icons.lightbulb_outline,
+        AppColors.accentGold,
+        'Đáp án đã được tô sáng. Hãy thử lại.',
+      ),
       PuzzleFeedback.hint => (
-          Icons.lightbulb,
-          AppColors.accentGold,
-          state.hintText ?? 'Gợi ý đã bật.',
-        ),
+        Icons.lightbulb,
+        AppColors.accentGold,
+        state.hintText ?? 'Gợi ý đã bật.',
+      ),
     };
 
     return AnimatedContainer(

@@ -55,7 +55,8 @@ class GameResultOverlay extends StatelessWidget {
     if (humanColor == null) {
       return status == GameStatus.redWin ? 'Đỏ Thắng!' : 'Đen Thắng!';
     }
-    final won = (status == GameStatus.redWin && humanColor == PieceColor.red) ||
+    final won =
+        (status == GameStatus.redWin && humanColor == PieceColor.red) ||
         (status == GameStatus.blackWin && humanColor == PieceColor.black);
     return won ? 'Bạn Thắng!' : 'Bạn Thua...';
   }
@@ -63,7 +64,8 @@ class GameResultOverlay extends StatelessWidget {
   IconData get _icon {
     if (status == GameStatus.draw) return Icons.handshake_outlined;
     if (humanColor == null) return Icons.emoji_events;
-    final won = (status == GameStatus.redWin && humanColor == PieceColor.red) ||
+    final won =
+        (status == GameStatus.redWin && humanColor == PieceColor.red) ||
         (status == GameStatus.blackWin && humanColor == PieceColor.black);
     return won ? Icons.emoji_events : Icons.sentiment_dissatisfied;
   }
@@ -71,7 +73,8 @@ class GameResultOverlay extends StatelessWidget {
   Color get _iconColor {
     if (status == GameStatus.draw) return AppColors.accentGold;
     if (humanColor == null) return AppColors.accentGold;
-    final won = (status == GameStatus.redWin && humanColor == PieceColor.red) ||
+    final won =
+        (status == GameStatus.redWin && humanColor == PieceColor.red) ||
         (status == GameStatus.blackWin && humanColor == PieceColor.black);
     return won ? AppColors.accentGold : AppColors.parchmentTan;
   }
@@ -135,7 +138,12 @@ class GameResultOverlay extends StatelessWidget {
                   child: Icon(_icon, color: _iconColor, size: 48),
                 ),
                 AppSpacing.vGapMd,
-                Text(_title, style: AppTextStyles.displayCalligraphy.copyWith(fontSize: 28)),
+                Text(
+                  _title,
+                  style: AppTextStyles.displayCalligraphy.copyWith(
+                    fontSize: 28,
+                  ),
+                ),
                 AppSpacing.vGapXs,
                 if (_reasonText.isNotEmpty)
                   Text(
@@ -185,32 +193,26 @@ class GameResultOverlay extends StatelessWidget {
                       valueColor: eloDelta > 0
                           ? AppColors.tealSuccess
                           : eloDelta < 0
-                              ? AppColors.error
-                              : null,
+                          ? AppColors.error
+                          : null,
                     ),
                   ],
                 ),
                 AppSpacing.vGapLg,
-                Row(
-                  children: [
-                    Expanded(
-                      child: CChessButton(
-                        label: 'Về trang chủ',
-                        variant: CChessButtonVariant.outline,
-                        fullWidth: true,
-                        onPressed: onClose,
-                      ),
-                    ),
-                    AppSpacing.hGapMd,
-                    Expanded(
-                      child: CChessButton(
-                        label: 'Chơi lại',
-                        icon: Icons.replay,
-                        fullWidth: true,
-                        onPressed: onPlayAgain,
-                      ),
-                    ),
-                  ],
+                // Stacked full-width buttons — side-by-side they ellipsized
+                // ("Về tran…" / "Chơi…") on phone widths.
+                CChessButton(
+                  label: 'Chơi lại',
+                  icon: Icons.replay,
+                  fullWidth: true,
+                  onPressed: onPlayAgain,
+                ),
+                AppSpacing.vGapSm,
+                CChessButton(
+                  label: 'Về trang chủ',
+                  variant: CChessButtonVariant.outline,
+                  fullWidth: true,
+                  onPressed: onClose,
                 ),
               ],
             ),
@@ -233,11 +235,7 @@ class _StatTile extends StatelessWidget {
   final String value;
   final Color? valueColor;
 
-  const _StatTile({
-    required this.label,
-    required this.value,
-    this.valueColor,
-  });
+  const _StatTile({required this.label, required this.value, this.valueColor});
 
   @override
   Widget build(BuildContext context) {

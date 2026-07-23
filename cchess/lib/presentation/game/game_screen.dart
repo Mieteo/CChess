@@ -481,19 +481,47 @@ class _GameScreenState extends ConsumerState<GameScreen> {
   void _onLeave() async {
     // Finished game → nothing at stake, leave without the scary confirm.
     if (_state.game.status.isOver) {
-      context.go(AppConstants.routeHome);
+      _exitGame();
       return;
     }
+
+    final state = _state;
+    // Bot game with moves on the board: leaving counts as a resignation, so
+    // the warning is real and quitting is not an ELO-dodge. A bot game with no
+    // moves yet, or a local/hotseat game, has nothing at stake — be honest.
+    final leavingResigns = state.isVsBot && state.game.history.isNotEmpty;
     final confirmed = await CChessDialog.confirm(
       context,
       title: 'Rời ván đấu?',
-      message: 'Bạn sẽ bị tính thua nếu rời ván.',
+      message: leavingResigns
+          ? 'Rời ván bây giờ sẽ bị tính là xin thua.'
+          : 'Ván đang chơi sẽ không được lưu.',
       confirmLabel: 'Rời ván',
       cancelLabel: 'Ở lại',
       icon: Icons.warning_amber,
     );
-    if (!mounted) return;
-    if (confirmed) context.go(AppConstants.routeHome);
+    if (!mounted || !confirmed) return;
+    if (leavingResigns) {
+      final loser = state.cpuColor == PieceColor.red
+          ? PieceColor.black
+          : PieceColor.red;
+      _controller.resign(loser);
+      // Persist before navigating — the build-listener that normally saves the
+      // result dies with this screen.
+      await _persistGameResult();
+      if (!mounted) return;
+    }
+    _exitGame();
+  }
+
+  /// Leave the game route: pop back to where it was pushed from (Home tab,
+  /// Đối Đầu tab or bot select), or Home when the game is the stack root.
+  void _exitGame() {
+    if (context.canPop()) {
+      context.pop();
+    } else {
+      context.go(AppConstants.routeHome);
+    }
   }
 
   void _onResign() async {
@@ -577,7 +605,9 @@ class _GameScreenState extends ConsumerState<GameScreen> {
         ? _botOpponentLabel(state.botDifficulty ?? BotDifficulty.medium)
         : 'Người Chơi 2';
     final opponentElo = state.botDifficulty?.estimatedElo ?? 1500;
-    final showOpponentElo = !_isStandardMatchmaking;
+    // Only bot opponents have a meaningful ELO to show ("Người Chơi 2" was
+    // getting a made-up 1500); matchmade bots stay hidden until the reveal.
+    final showOpponentElo = state.isVsBot && !_isStandardMatchmaking;
     // Bot matches show the player's bot-pool ELO (the ladder they're climbing).
     final profile = ref.watch(profileControllerProvider).valueOrNull;
     final playerElo =
@@ -655,8 +685,11 @@ class _GameScreenState extends ConsumerState<GameScreen> {
                     ),
                     AppSpacing.vGapSm,
                     PlayerInfoPanel(
-                      displayName: 'Bạn',
+                      // Hotseat: the bottom seat is just "player 1" — no fake
+                      // personal ELO on a shared-device game.
+                      displayName: state.isVsBot ? 'Bạn' : 'Người Chơi 1',
                       elo: playerElo,
+                      showElo: state.isVsBot,
                       color: state.boardFlipped
                           ? PieceColor.black
                           : PieceColor.red,
@@ -673,7 +706,12 @@ class _GameScreenState extends ConsumerState<GameScreen> {
                     ),
                     AppSpacing.vGapSm,
                     GameActionBar(
-                      canUndo: game.history.isNotEmpty && !state.cpuThinking,
+                      // No take-backs in ELO-rated matchmaking games; practice
+                      // modes (local / Cờ Úp / legacy tiers) keep undo.
+                      canUndo:
+                          game.history.isNotEmpty &&
+                          !state.cpuThinking &&
+                          !_isStandardMatchmaking,
                       canHint: state.acceptsInput && !state.isCup,
                       hintThinking: state.hintThinking,
                       soundOn: _soundOn,
