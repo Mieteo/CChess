@@ -90,8 +90,9 @@ class _GameScreenState extends ConsumerState<GameScreen> {
     _args = GameControllerArgs(
       mode: mode,
       cpuColor: isBot ? widget.cpuColor : null,
-      botDifficulty:
-          isBot ? (widget.botDifficulty ?? BotDifficulty.medium) : null,
+      botDifficulty: isBot
+          ? (widget.botDifficulty ?? BotDifficulty.medium)
+          : null,
       botElo: widget.botElo,
     );
     _redTime = _gameClock;
@@ -280,13 +281,13 @@ class _GameScreenState extends ConsumerState<GameScreen> {
           content: Text(
             quotaHit
                 ? (viaPikafish
-                    ? 'Đã hết lượt gợi ý server hôm nay — đang dùng Pikafish '
-                        'Offline trên máy bạn.'
-                    : 'Đã hết lượt gợi ý AI miễn phí hôm nay — đang dùng gợi ý '
-                        'cơ bản. Nâng cấp VIP để gợi ý Đại Sư không giới hạn.')
+                      ? 'Đã hết lượt gợi ý server hôm nay — đang dùng Pikafish '
+                            'Offline trên máy bạn.'
+                      : 'Đã hết lượt gợi ý AI miễn phí hôm nay — đang dùng gợi ý '
+                            'cơ bản. Nâng cấp VIP để gợi ý Đại Sư không giới hạn.')
                 : (viaPikafish
-                    ? 'Gợi ý bằng Pikafish Offline — máy chủ chưa sẵn sàng.'
-                    : 'Gợi ý offline (minimax) — máy chủ chưa sẵn sàng.'),
+                      ? 'Gợi ý bằng Pikafish Offline — máy chủ chưa sẵn sàng.'
+                      : 'Gợi ý offline (minimax) — máy chủ chưa sẵn sàng.'),
           ),
           duration: const Duration(seconds: 3),
         ),
@@ -348,8 +349,8 @@ class _GameScreenState extends ConsumerState<GameScreen> {
     final opponentLabel = _isStandardMatchmaking
         ? 'Bot ELO ${widget.botElo}'
         : state.isVsBot
-            ? _botOpponentLabel(state.botDifficulty ?? BotDifficulty.medium)
-            : 'Người Chơi 2';
+        ? _botOpponentLabel(state.botDifficulty ?? BotDifficulty.medium)
+        : 'Người Chơi 2';
     final duration = _gameStartedAt == null
         ? Duration.zero
         : DateTime.now().difference(_gameStartedAt!);
@@ -437,8 +438,9 @@ class _GameScreenState extends ConsumerState<GameScreen> {
       // Win streak not tracked yet — derive a crude approximation from
       // total wins / games ratio. Refine in Sprint 10.
       winStreak: totalWins > 0 ? 1 : 0,
-      eloChess:
-          profile.eloChess > profile.eloBot ? profile.eloChess : profile.eloBot,
+      eloChess: profile.eloChess > profile.eloBot
+          ? profile.eloChess
+          : profile.eloBot,
       puzzlesSolved: puzzlesSolved,
       loginStreak: 1,
     );
@@ -477,6 +479,11 @@ class _GameScreenState extends ConsumerState<GameScreen> {
   }
 
   void _onLeave() async {
+    // Finished game → nothing at stake, leave without the scary confirm.
+    if (_state.game.status.isOver) {
+      context.go(AppConstants.routeHome);
+      return;
+    }
     final confirmed = await CChessDialog.confirm(
       context,
       title: 'Rời ván đấu?',
@@ -567,155 +574,167 @@ class _GameScreenState extends ConsumerState<GameScreen> {
     final opponentLabel = _isStandardMatchmaking
         ? 'Bot'
         : state.isVsBot
-            ? _botOpponentLabel(state.botDifficulty ?? BotDifficulty.medium)
-            : 'Người Chơi 2';
+        ? _botOpponentLabel(state.botDifficulty ?? BotDifficulty.medium)
+        : 'Người Chơi 2';
     final opponentElo = state.botDifficulty?.estimatedElo ?? 1500;
     final showOpponentElo = !_isStandardMatchmaking;
     // Bot matches show the player's bot-pool ELO (the ladder they're climbing).
     final profile = ref.watch(profileControllerProvider).valueOrNull;
-    final playerElo = (_isStandardMatchmaking ? profile?.eloBot : profile?.eloChess) ??
+    final playerElo =
+        (_isStandardMatchmaking ? profile?.eloBot : profile?.eloChess) ??
         EloConstants.initialElo;
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.woodDark,
-        title: Text(_titleForMode(state.mode)),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: _onLeave,
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.flip_camera_android_outlined),
-            onPressed: _controller.toggleFlip,
+    // PopScope routes the SYSTEM back gesture through the same leave logic as
+    // the in-app back arrow. Without it the pop falls through to the OS (this
+    // route is the whole stack), backgrounding the app mid-game and losing the
+    // board on relaunch.
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        _onLeave();
+      },
+      child: Scaffold(
+        backgroundColor: AppColors.background,
+        appBar: AppBar(
+          backgroundColor: AppColors.woodDark,
+          title: Text(_titleForMode(state.mode)),
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back),
+            onPressed: _onLeave,
           ),
-        ],
-      ),
-      body: SafeArea(
-        child: Stack(
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(AppSpacing.sm),
-              child: Column(
-                children: [
-                  PlayerInfoPanel(
-                    displayName: opponentLabel,
-                    elo: opponentElo,
-                    showElo: showOpponentElo,
-                    color: state.boardFlipped
-                        ? PieceColor.red
-                        : PieceColor.black,
-                    isMyTurn:
-                        state.turn ==
-                        (state.boardFlipped
-                            ? PieceColor.red
-                            : PieceColor.black),
-                    timeLeft: state.boardFlipped ? _redTime : _blackTime,
-                    moveTimeLeft: _moveTime,
-                    capturedCount: state.boardFlipped
-                        ? captured.byBlack
-                        : captured.byRed,
-                    topAlign: true,
-                  ),
-                  AppSpacing.vGapSm,
-                  Expanded(
-                    child: AspectRatio(
-                      aspectRatio: 9 / 10,
-                      child: ChessBoard(
-                        board: game.board,
-                        selected: state.selected,
-                        validTargets: state.validTargets,
-                        lastMove: state.lastMove,
-                        hintMove: state.hintMove,
-                        checkedKing: checkedKing,
-                        hiddenPositions: hiddenPositions,
-                        flipped: state.boardFlipped,
-                        onTap: _onUserTap,
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.flip_camera_android_outlined),
+              onPressed: _controller.toggleFlip,
+            ),
+          ],
+        ),
+        body: SafeArea(
+          child: Stack(
+            children: [
+              Padding(
+                padding: const EdgeInsets.all(AppSpacing.sm),
+                child: Column(
+                  children: [
+                    PlayerInfoPanel(
+                      displayName: opponentLabel,
+                      elo: opponentElo,
+                      showElo: showOpponentElo,
+                      color: state.boardFlipped
+                          ? PieceColor.red
+                          : PieceColor.black,
+                      isMyTurn:
+                          state.turn ==
+                          (state.boardFlipped
+                              ? PieceColor.red
+                              : PieceColor.black),
+                      timeLeft: state.boardFlipped ? _redTime : _blackTime,
+                      moveTimeLeft: _moveTime,
+                      capturedCount: state.boardFlipped
+                          ? captured.byBlack
+                          : captured.byRed,
+                      topAlign: true,
+                    ),
+                    AppSpacing.vGapSm,
+                    Expanded(
+                      child: AspectRatio(
+                        aspectRatio: 9 / 10,
+                        child: ChessBoard(
+                          board: game.board,
+                          selected: state.selected,
+                          validTargets: state.validTargets,
+                          lastMove: state.lastMove,
+                          hintMove: state.hintMove,
+                          checkedKing: checkedKing,
+                          hiddenPositions: hiddenPositions,
+                          flipped: state.boardFlipped,
+                          onTap: _onUserTap,
+                        ),
+                      ),
+                    ),
+                    AppSpacing.vGapSm,
+                    PlayerInfoPanel(
+                      displayName: 'Bạn',
+                      elo: playerElo,
+                      color: state.boardFlipped
+                          ? PieceColor.black
+                          : PieceColor.red,
+                      isMyTurn:
+                          state.turn ==
+                          (state.boardFlipped
+                              ? PieceColor.black
+                              : PieceColor.red),
+                      timeLeft: state.boardFlipped ? _blackTime : _redTime,
+                      moveTimeLeft: _moveTime,
+                      capturedCount: state.boardFlipped
+                          ? captured.byRed
+                          : captured.byBlack,
+                    ),
+                    AppSpacing.vGapSm,
+                    GameActionBar(
+                      canUndo: game.history.isNotEmpty && !state.cpuThinking,
+                      canHint: state.acceptsInput && !state.isCup,
+                      hintThinking: state.hintThinking,
+                      soundOn: _soundOn,
+                      onLeave: _onLeave,
+                      onUndo: _controller.undo,
+                      onHint: _onHint,
+                      onDraw: _onDraw,
+                      onResign: _onResign,
+                      onToggleSound: () => setState(() => _soundOn = !_soundOn),
+                      onFlip: _controller.toggleFlip,
+                    ),
+                  ],
+                ),
+              ),
+              if (state.cpuThinking)
+                Positioned(
+                  top: 80,
+                  left: 0,
+                  right: 0,
+                  child: Center(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppSpacing.md,
+                        vertical: AppSpacing.sm,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppColors.charcoalDark.withValues(alpha: 0.92),
+                        borderRadius: AppRadius.chip,
+                        border: Border.all(color: AppColors.accentGold),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          SizedBox(
+                            width: 14,
+                            height: 14,
+                            child: BrushStrokeSpinner(size: 14),
+                          ),
+                          SizedBox(width: 8),
+                          Text('Bot đang suy nghĩ…'),
+                        ],
                       ),
                     ),
                   ),
-                  AppSpacing.vGapSm,
-                  PlayerInfoPanel(
-                    displayName: 'Bạn',
-                    elo: playerElo,
-                    color: state.boardFlipped
-                        ? PieceColor.black
-                        : PieceColor.red,
-                    isMyTurn:
-                        state.turn ==
-                        (state.boardFlipped
-                            ? PieceColor.black
-                            : PieceColor.red),
-                    timeLeft: state.boardFlipped ? _blackTime : _redTime,
-                    moveTimeLeft: _moveTime,
-                    capturedCount: state.boardFlipped
-                        ? captured.byRed
-                        : captured.byBlack,
-                  ),
-                  AppSpacing.vGapSm,
-                  GameActionBar(
-                    canUndo: game.history.isNotEmpty && !state.cpuThinking,
-                    canHint: state.acceptsInput && !state.isCup,
-                    hintThinking: state.hintThinking,
-                    soundOn: _soundOn,
-                    onLeave: _onLeave,
-                    onUndo: _controller.undo,
-                    onHint: _onHint,
-                    onDraw: _onDraw,
-                    onResign: _onResign,
-                    onToggleSound: () => setState(() => _soundOn = !_soundOn),
-                    onFlip: _controller.toggleFlip,
-                  ),
-                ],
-              ),
-            ),
-            if (state.cpuThinking)
-              Positioned(
-                top: 80,
-                left: 0,
-                right: 0,
-                child: Center(
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.md,
-                      vertical: AppSpacing.sm,
-                    ),
-                    decoration: BoxDecoration(
-                      color: AppColors.charcoalDark.withValues(alpha: 0.92),
-                      borderRadius: AppRadius.chip,
-                      border: Border.all(color: AppColors.accentGold),
-                    ),
-                    child: const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        SizedBox(
-                          width: 14,
-                          height: 14,
-                          child: BrushStrokeSpinner(size: 14),
-                        ),
-                        SizedBox(width: 8),
-                        Text('Bot đang suy nghĩ…'),
-                      ],
-                    ),
-                  ),
                 ),
-              ),
-            if (game.status.isOver)
-              GameResultOverlay(
-                status: game.status,
-                reason: game.endReason,
-                humanColor: humanColor,
-                eloDelta: _eloDeltaFor(humanColor, game.status),
-                botElo: _isStandardMatchmaking ? widget.botElo : null,
-                bracket: widget.bracket,
-                duration: _gameStartedAt == null
-                    ? Duration.zero
-                    : DateTime.now().difference(_gameStartedAt!),
-                onPlayAgain: _onNewGame,
-                onClose: () => context.go(AppConstants.routeHome),
-              ),
-          ],
+              if (game.status.isOver)
+                GameResultOverlay(
+                  status: game.status,
+                  reason: game.endReason,
+                  humanColor: humanColor,
+                  eloDelta: _eloDeltaFor(humanColor, game.status),
+                  botElo: _isStandardMatchmaking ? widget.botElo : null,
+                  bracket: widget.bracket,
+                  duration: _gameStartedAt == null
+                      ? Duration.zero
+                      : DateTime.now().difference(_gameStartedAt!),
+                  onPlayAgain: _onNewGame,
+                  onClose: () => context.go(AppConstants.routeHome),
+                ),
+            ],
+          ),
         ),
       ),
     );
