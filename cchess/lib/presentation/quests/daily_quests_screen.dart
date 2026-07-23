@@ -33,8 +33,7 @@ class DailyQuestsScreen extends ConsumerWidget {
           loading: () => const Center(child: BrushStrokeSpinner()),
           error: (e, _) => Center(child: Text('Lỗi: $e')),
           data: (state) {
-            final completedCount =
-                kDailyQuests.where(state.isComplete).length;
+            final completedCount = kDailyQuests.where(state.isComplete).length;
             return ListView(
               padding: const EdgeInsets.all(AppSpacing.base),
               children: [
@@ -83,16 +82,9 @@ class _Summary extends StatelessWidget {
         children: [
           Row(
             children: [
-              const Icon(
-                Icons.task_alt,
-                color: AppColors.accentGold,
-                size: 28,
-              ),
+              const Icon(Icons.task_alt, color: AppColors.accentGold, size: 28),
               AppSpacing.hGapSm,
-              Text(
-                'Tiến độ hôm nay',
-                style: AppTextStyles.headingMd,
-              ),
+              Text('Tiến độ hôm nay', style: AppTextStyles.headingMd),
               const Spacer(),
               Text(
                 '$completed / $total',
@@ -136,8 +128,8 @@ class _QuestCard extends ConsumerWidget {
       borderColor: claimed
           ? AppColors.tealSuccess.withValues(alpha: 0.5)
           : complete
-              ? AppColors.accentGold.withValues(alpha: 0.7)
-              : AppColors.outlineVariant,
+          ? AppColors.accentGold.withValues(alpha: 0.7)
+          : AppColors.outlineVariant,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -159,9 +151,7 @@ class _QuestCard extends ConsumerWidget {
                 ),
                 child: Icon(
                   claimed ? Icons.check : quest.kind.icon,
-                  color: claimed
-                      ? AppColors.tealSuccess
-                      : AppColors.primary,
+                  color: claimed ? AppColors.tealSuccess : AppColors.primary,
                 ),
               ),
               AppSpacing.hGapMd,
@@ -247,15 +237,17 @@ class _QuestCard extends ConsumerWidget {
                     // Apply reward to profile.
                     await ref
                         .read(profileControllerProvider.notifier)
-                        .update((p) => p.copyWith(
-                              coins: p.coins + rewards.coins,
-                              gems: p.gems + rewards.gems,
-                            ));
+                        .update(
+                          (p) => p.copyWith(
+                            coins: p.coins + rewards.coins,
+                            gems: p.gems + rewards.gems,
+                          ),
+                        );
                     if (!context.mounted) return;
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
                         content: Text(
-                          'Nhận thưởng: +${rewards.coins} đồng'
+                          'Nhận thưởng: +${rewards.coins} xu'
                           '${rewards.gems > 0 ? " +${rewards.gems} ngọc" : ""}',
                         ),
                       ),

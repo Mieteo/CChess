@@ -1,24 +1,50 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/datasources/remote/economy_api_source.dart';
 import '../../data/models/economy_models.dart';
+import '../../data/models/shop_item.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_spacing.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/common/common.dart';
+import '../shop/shop_controller.dart';
 
 /// Shared visual pieces of the S16 economy screens (mail / events / welfare /
 /// crafting): reward chips, claim snackbars and the standard empty/error body.
 
+/// Crafting materials never appear in the shop catalog, so they carry their
+/// own display names. Unknown ids fall back to the raw id.
+const kMaterialNamesVi = <String, String>{
+  'manh-ngoc': 'Mảnh Ngọc',
+  'giot-muc': 'Giọt Mực',
+};
+
+/// Pretty display names for item ids: shop catalog first (backend → Hive
+/// cache, offline-safe — same source Balo uses), then material names.
+final itemDisplayNamesProvider = Provider.autoDispose<Map<String, String>>((
+  ref,
+) {
+  final catalog =
+      ref.watch(shopCatalogProvider).valueOrNull ?? const <ShopItem>[];
+  return {
+    for (final s in catalog)
+      if (s.nameVi.isNotEmpty) s.id: s.nameVi,
+    ...kMaterialNamesVi,
+  };
+});
+
 /// Inline chips summarizing a [RewardBundle] (coins, gems, item grants).
-class RewardChips extends StatelessWidget {
+class RewardChips extends ConsumerWidget {
   final RewardBundle reward;
   final bool large;
 
   const RewardChips({super.key, required this.reward, this.large = false});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    // Reward payloads only carry ids ("hint_pack_5") — show catalog names.
+    final names = ref.watch(itemDisplayNamesProvider);
     return Wrap(
       spacing: AppSpacing.xs,
       runSpacing: AppSpacing.xs,
@@ -46,9 +72,10 @@ class RewardChips extends StatelessWidget {
               ),
             ),
             child: Text(
-              '${item.qty}× ${item.itemId}',
-              style: AppTextStyles.captionSm
-                  .copyWith(color: AppColors.tertiary),
+              '${item.qty}× ${names[item.itemId] ?? item.itemId}',
+              style: AppTextStyles.captionSm.copyWith(
+                color: AppColors.tertiary,
+              ),
             ),
           ),
       ],
@@ -56,10 +83,11 @@ class RewardChips extends StatelessWidget {
   }
 }
 
-/// Snackbar for a successful claim: "Đã nhận: +88 đồng, +2 ngọc…".
+/// Snackbar for a successful claim: "Đã nhận: +88 xu, +2 ngọc…". ("xu" is the
+/// coin label everywhere — the shop, wallet and check-in all say xu.)
 void showRewardSnack(BuildContext context, RewardBundle reward) {
   final parts = <String>[
-    if (reward.coins > 0) '+${reward.coins} đồng',
+    if (reward.coins > 0) '+${reward.coins} xu',
     if (reward.gems > 0) '+${reward.gems} ngọc',
     for (final item in reward.items) '+${item.qty} vật phẩm',
   ];
@@ -83,7 +111,7 @@ void showEconomyError(BuildContext context, Object error) {
       'already-claimed' => 'Bạn đã nhận phần quà này rồi.',
       'already-checked-in' => 'Hôm nay bạn đã điểm danh rồi.',
       'not-available' => 'Phần quà này chưa mở.',
-      'insufficient-funds' => 'Không đủ đồng để thực hiện.',
+      'insufficient-funds' => 'Không đủ xu để thực hiện.',
       'missing-ingredients' => 'Chưa đủ nguyên liệu.',
       'already-owned' => 'Bạn đã sở hữu vật phẩm này.',
       'missing-token' => 'Cần đăng nhập để dùng tính năng này.',
@@ -131,8 +159,9 @@ class EconomyMessage extends StatelessWidget {
             Text(
               detail,
               textAlign: TextAlign.center,
-              style: AppTextStyles.captionSm
-                  .copyWith(color: AppColors.onSurfaceVariant),
+              style: AppTextStyles.captionSm.copyWith(
+                color: AppColors.onSurfaceVariant,
+              ),
             ),
             if (onRetry != null) ...[
               AppSpacing.vGapMd,

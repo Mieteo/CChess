@@ -128,7 +128,11 @@ void main() {
         const MailMessage(id: 'm3', title: 'Bảo trì máy chủ', read: true),
       ];
       await tester.pumpWidget(_wrap(
-        [mailProvider.overrideWith((ref) async => messages)],
+        [
+          mailProvider.overrideWith((ref) async => messages),
+          // RewardChips resolves item names from the shop catalog.
+          shopCatalogProvider.overrideWith((ref) async => const <ShopItem>[]),
+        ],
         const MailScreen(),
       ));
       await tester.pumpAndSettle();
@@ -169,6 +173,7 @@ void main() {
         [
           eventsProvider.overrideWith((ref) async => events),
           eventClaimsProvider.overrideWith((ref) async => {'tet__lixi'}),
+          shopCatalogProvider.overrideWith((ref) async => const <ShopItem>[]),
         ],
         const EventsScreen(),
       ));
@@ -210,6 +215,9 @@ void main() {
             craftRecipesProvider.overrideWith((ref) async => recipes),
             walletProvider.overrideWith((ref) async => Wallet(coins: coins)),
             inventoryProvider.overrideWith((ref) async => owned),
+            // Ingredient chips resolve pretty names from the shop catalog;
+            // ids outside it (like 'shard') fall back to the raw id.
+            shopCatalogProvider.overrideWith((ref) async => const <ShopItem>[]),
           ],
           const CraftingScreen(),
         );
@@ -223,7 +231,7 @@ void main() {
 
       expect(find.text('Bàn Ngọc Bích'), findsOneWidget);
       expect(find.text('shard 4/3'), findsOneWidget);
-      expect(find.text('100 đồng'), findsOneWidget);
+      expect(find.text('100 xu'), findsOneWidget);
       expect(buttonWithText(tester, 'Đúc ngay').onPressed, isNotNull);
     });
 
@@ -240,7 +248,7 @@ void main() {
       await tester.pumpWidget(crafting(coins: 10, owned: [shard(3)]));
       await tester.pumpAndSettle();
 
-      expect(buttonWithText(tester, 'Chưa đủ đồng').onPressed, isNull);
+      expect(buttonWithText(tester, 'Chưa đủ xu').onPressed, isNull);
     });
 
     testWidgets('already-owned output shows Đã sở hữu + check', (tester) async {

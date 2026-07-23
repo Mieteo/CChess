@@ -34,9 +34,7 @@ class CraftingScreen extends ConsumerWidget {
           Padding(
             padding: const EdgeInsets.only(right: AppSpacing.sm),
             child: Row(
-              children: [
-                CChessCurrencyDisplay(amount: wallet?.coins ?? 0),
-              ],
+              children: [CChessCurrencyDisplay(amount: wallet?.coins ?? 0)],
             ),
           ),
         ],
@@ -98,8 +96,9 @@ class _RecipeCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final controller = ref.read(economyControllerProvider);
-    final haveAllIngredients = recipe.ingredients
-        .every((ing) => (ownedQty[ing.itemId] ?? 0) >= ing.qty);
+    final haveAllIngredients = recipe.ingredients.every(
+      (ing) => (ownedQty[ing.itemId] ?? 0) >= ing.qty,
+    );
     final haveCoins = coins >= recipe.costCoins;
     final canCraft = haveAllIngredients && haveCoins && !alreadyOwned;
 
@@ -111,8 +110,11 @@ class _RecipeCard extends ConsumerWidget {
           children: [
             Row(
               children: [
-                const Icon(Icons.auto_awesome,
-                    color: AppColors.accentGold, size: 20),
+                const Icon(
+                  Icons.auto_awesome,
+                  color: AppColors.accentGold,
+                  size: 20,
+                ),
                 AppSpacing.hGapSm,
                 Expanded(
                   child: Text(recipe.nameVi, style: AppTextStyles.headingMd),
@@ -125,8 +127,9 @@ class _RecipeCard extends ConsumerWidget {
               AppSpacing.vGapXs,
               Text(
                 recipe.descVi,
-                style: AppTextStyles.captionSm
-                    .copyWith(color: AppColors.onSurfaceVariant),
+                style: AppTextStyles.captionSm.copyWith(
+                  color: AppColors.onSurfaceVariant,
+                ),
               ),
             ],
             AppSpacing.vGapSm,
@@ -138,6 +141,9 @@ class _RecipeCard extends ConsumerWidget {
                   _IngredientChip(
                     ingredient: ing,
                     have: ownedQty[ing.itemId] ?? 0,
+                    displayName:
+                        ref.watch(itemDisplayNamesProvider)[ing.itemId] ??
+                        ing.itemId,
                   ),
                 if (recipe.costCoins > 0)
                   _CostChip(cost: recipe.costCoins, enough: haveCoins),
@@ -160,10 +166,10 @@ class _RecipeCard extends ConsumerWidget {
                   alreadyOwned
                       ? 'Đã sở hữu'
                       : !haveAllIngredients
-                          ? 'Chưa đủ nguyên liệu'
-                          : !haveCoins
-                              ? 'Chưa đủ đồng'
-                              : 'Đúc ngay',
+                      ? 'Chưa đủ nguyên liệu'
+                      : !haveCoins
+                      ? 'Chưa đủ xu'
+                      : 'Đúc ngay',
                 ),
                 onPressed: !canCraft
                     ? null
@@ -201,7 +207,15 @@ class _RecipeCard extends ConsumerWidget {
 class _IngredientChip extends StatelessWidget {
   final CraftIngredient ingredient;
   final int have;
-  const _IngredientChip({required this.ingredient, required this.have});
+
+  /// Pretty name resolved by the caller (raw ids like "manh-ngoc" read badly).
+  final String displayName;
+
+  const _IngredientChip({
+    required this.ingredient,
+    required this.have,
+    required this.displayName,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -218,7 +232,7 @@ class _IngredientChip extends StatelessWidget {
         border: Border.all(color: color.withValues(alpha: 0.35)),
       ),
       child: Text(
-        '${ingredient.itemId} $have/${ingredient.qty}',
+        '$displayName $have/${ingredient.qty}',
         style: AppTextStyles.captionSm.copyWith(color: color),
       ),
     );
@@ -244,7 +258,7 @@ class _CostChip extends StatelessWidget {
         border: Border.all(color: color.withValues(alpha: 0.35)),
       ),
       child: Text(
-        '$cost đồng',
+        '$cost xu',
         style: AppTextStyles.captionSm.copyWith(color: color),
       ),
     );
