@@ -156,16 +156,22 @@ class FakeEconomyStore implements EconomyStore {
   }
 
   async sendMail(input: SendMailInput): Promise<number> {
+    let sent = 0;
     for (const uid of input.uids) {
+      // Mirrors Firestore create(): a dedupe-keyed mail keeps its doc id and
+      // refuses to overwrite, so re-broadcasts skip users who have it.
+      const id = input.dedupeKey === null ? `m${++this.seq}` : `dk_${input.dedupeKey}`;
+      if (input.dedupeKey !== null && this.user(uid).mail.has(id)) continue;
       this.seedMail(uid, {
-        id: `m${++this.seq}`,
+        id,
         title: input.title,
         body: input.body,
         reward: input.reward,
         expiresAtMs: input.expiresAtMs,
       });
+      sent += 1;
     }
-    return input.uids.length;
+    return sent;
   }
 
   // ── Events ──
@@ -382,6 +388,60 @@ test('validateSendMailInput merges uid + uids, dedupes, requires title', () => {
   assert.equal(input.reward?.coins, 5);
   assert.throws(() => validateSendMailInput({ title: 'x' }), hasCode('invalid-uids'));
   assert.throws(() => validateSendMailInput({ uid: 'a' }), hasCode('invalid-title'));
+});
+
+test('validateSendMailInput dedupeKey: optional, doc-id-safe, else 400', () => {
+  const base = { uid: 'a', title: 'x' };
+  assert.equal(validateSendMailInput(base).dedupeKey, null);
+  assert.equal(validateSendMailInput({ ...base, dedupeKey: '  ' }).dedupeKey, null);
+  assert.equal(
+    validateSendMailInput({ ...base, dedupeKey: 'welcome_2026-07' }).dedupeKey,
+    'welcome_2026-07',
+  );
+  assert.throws(
+    () => validateSendMailInput({ ...base, dedupeKey: 'has/slash' }),
+    hasCode('invalid-dedupe-key'),
+  );
+  assert.throws(
+    () => validateSendMailInput({ ...base, dedupeKey: 'x'.repeat(65) }),
+    hasCode('invalid-dedupe-key'),
+  );
+});
+
+test('sendMail with dedupeKey is idempotent per user and preserves claim state', async () => {
+  const store = new FakeEconomyStore();
+  const input = validateSendMailInput({
+    uids: ['u1', 'u2'],
+    title: 'Chào mừng',
+    reward: { coins: 68, gems: 1 },
+    dedupeKey: 'welcome-v1',
+  });
+  assert.equal(await store.sendMail(input), 2);
+  // Re-running the same broadcast (script fired twice) creates nothing new.
+  assert.equal(await store.sendMail(input), 0);
+  assert.equal((await store.listMail('u1')).length, 1);
+
+  // u1 claims; a later re-broadcast must not resurrect the reward.
+  await store.claimMail('u1', 'dk_welcome-v1');
+  assert.equal(await store.sendMail(input), 0);
+  const mail = (await store.listMail('u1'))[0];
+  assert.equal(mail.claimed, true);
+
+  // A NEW user joining later still receives the mail on the next run.
+  const wider = validateSendMailInput({
+    uids: ['u1', 'u2', 'u3'],
+    title: 'Chào mừng',
+    reward: { coins: 68, gems: 1 },
+    dedupeKey: 'welcome-v1',
+  });
+  assert.equal(await store.sendMail(wider), 1);
+  assert.equal((await store.listMail('u3')).length, 1);
+
+  // No dedupeKey → legacy behaviour, every send appends.
+  const legacy = validateSendMailInput({ uid: 'u1', title: 'Tin' });
+  await store.sendMail(legacy);
+  await store.sendMail(legacy);
+  assert.equal((await store.listMail('u1')).length, 3);
 });
 
 test('validateEventInput checks window, gifts, duplicate ids', () => {

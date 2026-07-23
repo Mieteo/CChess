@@ -189,6 +189,38 @@ export class FirestoreEconomyStore implements EconomyStore {
   async sendMail(input: SendMailInput): Promise<number> {
     const db = this.getDb();
     const now = this.now();
+    const doc = {
+      title: input.title,
+      body: input.body,
+      reward: input.reward,
+      read: false,
+      claimed: false,
+      createdAt: now,
+      expiresAt: input.expiresAtMs === null ? null : new Date(input.expiresAtMs),
+    };
+
+    // Idempotent broadcast: a dedupeKey pins the mail's doc id, and create()
+    // refuses to overwrite — re-running the same blast (e.g. the welcome mail
+    // script fired twice) skips users who already have it instead of stacking
+    // duplicates. create() can't ride in a batch (one existing doc would fail
+    // the whole chunk), so these go out as individual creates with bounded
+    // concurrency.
+    if (input.dedupeKey !== null) {
+      const docId = `dk_${input.dedupeKey}`;
+      let sent = 0;
+      for (const uids of chunk(input.uids, MAX_BATCH_OPS)) {
+        const results = await Promise.allSettled(
+          uids.map((uid) =>
+            db.collection(USERS).doc(uid).collection(MAIL).doc(docId).create(doc),
+          ),
+        );
+        for (const r of results) {
+          if (r.status === 'fulfilled') sent += 1;
+        }
+      }
+      return sent;
+    }
+
     // Batched fan-out (admin-triggered, uids list is validated + deduped).
     // Firestore caps a batch at 500 ops, so server-wide blasts go out in
     // sequential chunks.
@@ -196,15 +228,7 @@ export class FirestoreEconomyStore implements EconomyStore {
       const batch = db.batch();
       for (const uid of uids) {
         const ref = db.collection(USERS).doc(uid).collection(MAIL).doc();
-        batch.set(ref, {
-          title: input.title,
-          body: input.body,
-          reward: input.reward,
-          read: false,
-          claimed: false,
-          createdAt: now,
-          expiresAt: input.expiresAtMs === null ? null : new Date(input.expiresAtMs),
-        });
+        batch.set(ref, doc);
       }
       await batch.commit();
     }

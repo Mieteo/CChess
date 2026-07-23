@@ -71,6 +71,10 @@ export interface SendMailInput {
   body: string;
   reward: RewardBundle | null;
   expiresAtMs: number | null;
+  /// Optional idempotency key: re-running the same broadcast (same key) skips
+  /// users who already have that mail instead of duplicating it. Null → every
+  /// send creates a fresh mail (legacy behaviour).
+  dedupeKey: string | null;
 }
 
 // ── Events (D5) ──────────────────────────────────────────────────────────────
@@ -288,8 +292,11 @@ export function validateRewardItem(raw: unknown): RewardItem {
   return { itemId, kind: obj.kind, payloadKey, qty: Math.max(1, asNonNegInt(obj.qty) || 1) };
 }
 
+/// Doc-id-safe dedupe key: short, no slashes or Firestore-special names.
+const DEDUPE_KEY_RE = /^[A-Za-z0-9_-]{1,64}$/;
+
 /// Validate the admin send-mail body: `{ uid | uids[], title, body?, reward?,
-/// expiresAtMs? }`.
+/// expiresAtMs?, dedupeKey? }`.
 export function validateSendMailInput(raw: unknown): SendMailInput {
   if (typeof raw !== 'object' || raw === null) {
     throw new EconomyError(400, 'invalid-request', 'Body must be a JSON object');
@@ -311,12 +318,21 @@ export function validateSendMailInput(raw: unknown): SendMailInput {
   if (title.length === 0) {
     throw new EconomyError(400, 'invalid-title', 'title is required');
   }
+  const dedupeKey = asTrimmedString(obj.dedupeKey);
+  if (dedupeKey.length > 0 && !DEDUPE_KEY_RE.test(dedupeKey)) {
+    throw new EconomyError(
+      400,
+      'invalid-dedupe-key',
+      'dedupeKey must match [A-Za-z0-9_-]{1,64}',
+    );
+  }
   return {
     uids: [...new Set(uids)],
     title,
     body: asTrimmedString(obj.body),
     reward: validateReward(obj.reward),
     expiresAtMs: asMs(obj.expiresAtMs),
+    dedupeKey: dedupeKey.length > 0 ? dedupeKey : null,
   };
 }
 
