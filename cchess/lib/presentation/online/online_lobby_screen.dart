@@ -1,4 +1,5 @@
 import 'package:collection/collection.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -96,11 +97,16 @@ class _OnlineLobbyScreenState extends ConsumerState<OnlineLobbyScreen> {
       if (tournamentId != null && matchId != null) {
         await _run(() async {
           if (!await _connectAndWaitAuthed() || !mounted) return;
-          final matches = await ref.read(tournamentsApiSourceProvider).listMatches(tournamentId);
+          final matches = await ref
+              .read(tournamentsApiSourceProvider)
+              .listMatches(tournamentId);
           final match = matches.where((m) => m.id == matchId).firstOrNull;
           if (!mounted) return;
           if (match == null) {
-            throw const TournamentApiException(code: 'not-found', message: 'Không tìm thấy trận đấu');
+            throw const TournamentApiException(
+              code: 'not-found',
+              message: 'Không tìm thấy trận đấu',
+            );
           }
           if (match.roomId != null) {
             _ctrl.joinRoom(match.roomId!);
@@ -118,11 +124,18 @@ class _OnlineLobbyScreenState extends ConsumerState<OnlineLobbyScreen> {
       // Probe storage first — avoid touching network if no saved state.
       final store = ref.read(reconnectStoreProvider);
       final saved = await store.readFresh();
-      if (saved == null || !mounted) return;
-      await _run(() async {
-        if (!await _connectAndWaitAuthed() || !mounted) return;
-        _ctrl.reconnectRoom(saved);
-      });
+      if (!mounted) return;
+      if (saved != null) {
+        await _run(() async {
+          if (!await _connectAndWaitAuthed() || !mounted) return;
+          _ctrl.reconnectRoom(saved);
+        });
+        return;
+      }
+
+      // Nothing special going on → connect + sign in right away so the user
+      // lands on the ready lobby instead of a manual "Kết nối" step.
+      await _connect();
     });
   }
 
@@ -275,18 +288,27 @@ class _OnlineLobbyScreenState extends ConsumerState<OnlineLobbyScreen> {
               AppSpacing.vGapBase,
               if (state.phase == OnlineMatchPhase.idle ||
                   state.phase == OnlineMatchPhase.error) ...[
-                TextField(
-                  controller: _urlCtrl,
-                  decoration: const InputDecoration(
-                    labelText: 'Backend URL',
-                    helperText: 'default từ AppConstants.defaultBackendWsUrl',
-                    prefixIcon: Icon(Icons.link),
+                // The lobby auto-connects on open; the URL override is a dev
+                // tool and only appears in debug builds.
+                if (kDebugMode) ...[
+                  TextField(
+                    controller: _urlCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'Backend URL (debug)',
+                      helperText:
+                          'Chỉ hiện ở bản debug — đổi để test server khác',
+                      prefixIcon: Icon(Icons.link),
+                    ),
                   ),
-                ),
-                AppSpacing.vGapBase,
+                  AppSpacing.vGapBase,
+                ],
                 ElevatedButton.icon(
-                  icon: const Icon(Icons.cable),
-                  label: const Text('Kết nối + Đăng nhập'),
+                  icon: const Icon(Icons.refresh),
+                  label: Text(
+                    state.phase == OnlineMatchPhase.error
+                        ? 'Kết nối lại'
+                        : 'Kết nối',
+                  ),
                   onPressed: _busy ? null : _connect,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.woodDark,
