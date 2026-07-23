@@ -2,9 +2,12 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../core/constants/app_constants.dart';
+import '../../data/models/achievement.dart';
 import '../../data/models/user_profile.dart';
+import '../../data/repositories/achievement_repository.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_spacing.dart';
 import '../../theme/app_text_styles.dart';
@@ -22,7 +25,8 @@ class ProfileScreen extends ConsumerWidget {
 
     return asyncProfile.when(
       loading: () => const Center(child: BrushStrokeSpinner()),
-      error: (e, _) => Center(child: Text('Lỗi: $e', style: AppTextStyles.bodyMd)),
+      error: (e, _) =>
+          Center(child: Text('Lỗi: $e', style: AppTextStyles.bodyMd)),
       data: (profile) {
         final wallet = ref.watch(walletProvider).valueOrNull;
         return ListView(
@@ -50,7 +54,7 @@ class ProfileScreen extends ConsumerWidget {
             SectionHeader(
               title: 'Huy Chương',
               actionLabel: 'Xem tất cả',
-              onActionPressed: () {},
+              onActionPressed: () => context.go(AppConstants.routeAchievements),
             ),
             AppSpacing.vGapMd,
             const _AchievementGrid(),
@@ -118,7 +122,8 @@ class _ProfileHeader extends StatelessWidget {
                 ),
               ),
               IconButton(
-                onPressed: () => context.go('${AppConstants.routeProfile}/edit'),
+                onPressed: () =>
+                    context.go('${AppConstants.routeProfile}/edit'),
                 icon: const Icon(Icons.edit_outlined),
                 color: AppColors.accentGold,
               ),
@@ -128,10 +133,7 @@ class _ProfileHeader extends StatelessWidget {
           Row(
             children: [
               Expanded(
-                child: CChessCurrencyDisplay(
-                  amount: coins,
-                  large: true,
-                ),
+                child: CChessCurrencyDisplay(amount: coins, large: true),
               ),
               AppSpacing.hGapSm,
               Expanded(
@@ -330,35 +332,43 @@ class _WinLossBar extends StatelessWidget {
   }
 
   Widget _legend(String label, Color c) => Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 10,
-            height: 10,
-            decoration: BoxDecoration(color: c, shape: BoxShape.circle),
-          ),
-          AppSpacing.hGapXs,
-          Text(label, style: AppTextStyles.captionSm),
-        ],
-      );
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      Container(
+        width: 10,
+        height: 10,
+        decoration: BoxDecoration(color: c, shape: BoxShape.circle),
+      ),
+      AppSpacing.hGapXs,
+      Text(label, style: AppTextStyles.captionSm),
+    ],
+  );
 }
 
-class _AchievementGrid extends StatelessWidget {
+/// Real unlock state for the profile preview grid.
+final _achievementProgressProvider =
+    FutureProvider.autoDispose<Map<String, AchievementProgress>>((ref) {
+      return ref.watch(achievementRepositoryProvider).getAllProgress();
+    });
+
+class _AchievementGrid extends ConsumerWidget {
   const _AchievementGrid();
 
-  static const _achievements = <(IconData, String, bool)>[
-    (Icons.emoji_events, 'Bách Thắng', false),
-    (Icons.flag, 'Tân Thủ', true),
-    (Icons.local_fire_department, 'Ngũ Liên', false),
-    (Icons.shield, 'Phòng Thủ', false),
-    (Icons.bolt, 'Tốc Chiến', false),
-    (Icons.psychology, 'Học Giả', false),
-    (Icons.diamond, 'Kỳ Vương', false),
-    (Icons.star, 'Bí Ẩn', false),
-  ];
-
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    // Real definitions + unlock state (the grid used to be a hard-coded
+    // sample with "Tân Thủ" permanently lit). Unlocked first, capped at 8 —
+    // "Xem tất cả" has the full list.
+    final defs = ref.watch(achievementRepositoryProvider).all();
+    final progress =
+        ref.watch(_achievementProgressProvider).valueOrNull ??
+        const <String, AchievementProgress>{};
+    bool isUnlocked(Achievement a) => progress[a.id]?.unlocked ?? false;
+    final shown = [
+      ...defs.where(isUnlocked),
+      ...defs.where((a) => !isUnlocked(a)),
+    ].take(8).toList();
+
     return GridView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
@@ -368,9 +378,12 @@ class _AchievementGrid extends StatelessWidget {
         crossAxisSpacing: AppSpacing.sm,
         childAspectRatio: 0.9,
       ),
-      itemCount: _achievements.length,
+      itemCount: shown.length,
       itemBuilder: (_, i) {
-        final (icon, name, unlocked) = _achievements[i];
+        final achievement = shown[i];
+        final icon = achievement.icon;
+        final name = achievement.nameVi;
+        final unlocked = isUnlocked(achievement);
         return Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
@@ -421,11 +434,14 @@ class _ProfileMenu extends StatelessWidget {
       _MenuEntry(
         icon: Icons.workspace_premium,
         label: 'Hội Viên VIP',
-        trailingBadge: 'Vàng',
+        // No fake "Vàng" tier while VIP doesn't exist yet.
+        trailingBadge: 'Sắp có',
         isVip: true,
         onTap: () {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('VIP sẽ có ở Sprint 9.')),
+            const SnackBar(
+              content: Text('Hội viên VIP đang được phát triển — sắp ra mắt.'),
+            ),
           );
         },
       ),
@@ -457,12 +473,12 @@ class _ProfileMenu extends StatelessWidget {
       _MenuEntry(
         icon: Icons.help_outline,
         label: 'Trợ Giúp & Phản Hồi',
-        onTap: () {},
+        onTap: () => _showHelpDialog(context),
       ),
       _MenuEntry(
         icon: Icons.share_outlined,
         label: 'Giới Thiệu Bạn Bè',
-        onTap: () {},
+        onTap: () => _shareApp(),
       ),
       _MenuEntry(
         icon: Icons.info_outline,
@@ -503,6 +519,64 @@ class _MenuEntry {
   });
 }
 
+/// Quick in-app help: where things live + how to send feedback.
+void _showHelpDialog(BuildContext context) {
+  showDialog<void>(
+    context: context,
+    builder: (context) => AlertDialog(
+      backgroundColor: AppColors.surfaceContainerLow,
+      title: Text(
+        'Trợ giúp & phản hồi',
+        style: AppTextStyles.bodyMd.copyWith(
+          color: AppColors.accentGold,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+      content: SingleChildScrollView(
+        child: SelectableText(
+          '• Học Tập: khóa vỡ lòng, bài tập tàn cục, khai cuộc và Gia Sư AI.\n'
+          '• Đối Đầu: đấu bot theo ELO, đấu tại chỗ, Cờ Úp và xếp hạng '
+          'online.\n'
+          '• Khám Phá (Hồ Sơ → Khám Phá): cửa hàng, balo, hộp thư, điểm '
+          'danh.\n\n'
+          'Gặp lỗi hoặc có góp ý? Gửi email tới:\n'
+          'lehongthaidtbk@gmail.com\n'
+          '(kèm mô tả và ảnh chụp màn hình nếu có).',
+          style: AppTextStyles.captionSm.copyWith(
+            color: AppColors.onSurfaceVariant,
+            height: 1.5,
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(
+            'Đóng',
+            style: AppTextStyles.bodyMd.copyWith(color: AppColors.accentGold),
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+/// Share the app with friends via the system share sheet.
+Future<void> _shareApp() async {
+  try {
+    await SharePlus.instance.share(
+      ShareParams(
+        subject: 'Mời chơi ${AppConstants.appNameVi}',
+        text:
+            'Mình đang chơi ${AppConstants.appNameVi} — học cờ tướng, luyện '
+            'bot theo thang ELO và đấu online miễn phí. Hẹn gặp trên bàn cờ!',
+      ),
+    );
+  } catch (_) {
+    // Share sheet unavailable (rare) — nothing sensible to do.
+  }
+}
+
 class _MenuRow extends StatelessWidget {
   final _MenuEntry entry;
   const _MenuRow({required this.entry});
@@ -533,10 +607,7 @@ class _MenuRow extends StatelessWidget {
             ),
             if (entry.trailingBadge != null) ...[
               Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 8,
-                  vertical: 2,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                 decoration: BoxDecoration(
                   color: entry.isVip
                       ? AppColors.accentGold

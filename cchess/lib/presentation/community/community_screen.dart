@@ -108,6 +108,15 @@ class CommunityScreen extends ConsumerWidget {
                 onActionPressed: () =>
                     context.go(AppConstants.routeCommunityFriends),
               ),
+              AppSpacing.vGapXs,
+              // Friends run on seeded sample data until S14 ships the real
+              // social backend — say so instead of showing fake people as real.
+              Text(
+                'Dữ liệu minh họa — kết bạn thật sẽ mở ở bản cập nhật tới.',
+                style: AppTextStyles.captionSm.copyWith(
+                  color: AppColors.parchmentTan,
+                ),
+              ),
               AppSpacing.vGapMd,
               _FriendSnapshot(friends: data.friends, requests: data.requests),
               AppSpacing.vGapLg,

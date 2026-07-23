@@ -76,7 +76,7 @@ class _FriendsScreenState extends ConsumerState<FriendsScreen> {
           children: [
             const CommunityPageHeader(
               title: 'Bạn Bè',
-              subtitle: 'Tìm kỳ thủ, nhận lời mời và rủ bạn đấu casual',
+              subtitle: 'Dữ liệu minh họa — kết bạn thật mở ở bản cập nhật tới',
               icon: Icons.people_outline,
               showBack: true,
             ),
