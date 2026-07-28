@@ -58,8 +58,10 @@ class BoardPainter extends CustomPainter {
   }
 
   /// Returns the diameter to use for piece widgets at this canvas size.
+  // Slightly larger than the original 0.86-cell token: at typical cell sizes
+  // this adds roughly 1–2 physical pixels without crowding neighbouring pieces.
   static double pieceDiameter(Size size) =>
-      _BoardGeometry.fromSize(size).cellSize * 0.86;
+      _BoardGeometry.fromSize(size).cellSize * 0.90;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -144,27 +146,11 @@ class BoardPainter extends CustomPainter {
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.4;
     // Black palace top: (0,3)-(2,5)
-    canvas.drawLine(
-      geom.intersection(0, 3),
-      geom.intersection(2, 5),
-      paint,
-    );
-    canvas.drawLine(
-      geom.intersection(0, 5),
-      geom.intersection(2, 3),
-      paint,
-    );
+    canvas.drawLine(geom.intersection(0, 3), geom.intersection(2, 5), paint);
+    canvas.drawLine(geom.intersection(0, 5), geom.intersection(2, 3), paint);
     // Red palace bottom: (7,3)-(9,5)
-    canvas.drawLine(
-      geom.intersection(7, 3),
-      geom.intersection(9, 5),
-      paint,
-    );
-    canvas.drawLine(
-      geom.intersection(7, 5),
-      geom.intersection(9, 3),
-      paint,
-    );
+    canvas.drawLine(geom.intersection(7, 3), geom.intersection(9, 5), paint);
+    canvas.drawLine(geom.intersection(7, 5), geom.intersection(9, 3), paint);
   }
 
   void _paintRiver(Canvas canvas, _BoardGeometry geom) {
@@ -184,10 +170,7 @@ class BoardPainter extends CustomPainter {
     )..layout();
     left.paint(
       canvas,
-      Offset(
-        geom.gridLeft + geom.cellSize * 1.0,
-        midY - left.height / 2,
-      ),
+      Offset(geom.gridLeft + geom.cellSize * 1.0, midY - left.height / 2),
     );
 
     final right = TextPainter(
@@ -214,7 +197,12 @@ class BoardPainter extends CustomPainter {
     final tickLen = geom.cellSize * 0.18;
     const gap = 3.0;
 
-    void drawTicks(int row, int col, {bool leftSide = true, bool rightSide = true}) {
+    void drawTicks(
+      int row,
+      int col, {
+      bool leftSide = true,
+      bool rightSide = true,
+    }) {
       final center = geom.intersection(row, col);
       // Top-left tick group
       if (leftSide) {
@@ -287,12 +275,7 @@ class BoardPainter extends CustomPainter {
       (6, 6),
       (6, 8),
     ]) {
-      drawTicks(
-        row,
-        col,
-        leftSide: col != 0,
-        rightSide: col != 8,
-      );
+      drawTicks(row, col, leftSide: col != 0, rightSide: col != 8);
     }
   }
 
@@ -301,9 +284,7 @@ class BoardPainter extends CustomPainter {
       begin: Alignment.topCenter,
       end: Alignment.bottomCenter,
       colors: woodGradient,
-    ).createShader(
-      Rect.fromLTWH(0, 0, geom.size.width, geom.size.height),
-    );
+    ).createShader(Rect.fromLTWH(0, 0, geom.size.width, geom.size.height));
   }
 
   @override
@@ -325,13 +306,9 @@ class _BoardGeometry {
   final double gridRight;
   final double gridBottom;
 
-  _BoardGeometry._(
-    this.size,
-    this.cellSize,
-    this.gridLeft,
-    this.gridTop,
-  )   : gridRight = gridLeft + cellSize * 8,
-        gridBottom = gridTop + cellSize * 9;
+  _BoardGeometry._(this.size, this.cellSize, this.gridLeft, this.gridTop)
+    : gridRight = gridLeft + cellSize * 8,
+      gridBottom = gridTop + cellSize * 9;
 
   factory _BoardGeometry.fromSize(Size size) {
     // Reserve padding around the grid so pieces near the edge are still
@@ -344,15 +321,15 @@ class _BoardGeometry {
         : maxCellFromHeight;
     final boardW = cellSize * (8 + BoardPainter.edgePadCells * 2);
     final boardH = cellSize * (9 + BoardPainter.edgePadCells * 2);
-    final left = (size.width - boardW) / 2 + cellSize * BoardPainter.edgePadCells;
-    final top = (size.height - boardH) / 2 + cellSize * BoardPainter.edgePadCells;
+    final left =
+        (size.width - boardW) / 2 + cellSize * BoardPainter.edgePadCells;
+    final top =
+        (size.height - boardH) / 2 + cellSize * BoardPainter.edgePadCells;
     // padFactor isn't used directly but documents intent — silence linter.
     assert(padFactor > 1);
     return _BoardGeometry._(size, cellSize, left, top);
   }
 
-  Offset intersection(int row, int col) => Offset(
-        gridLeft + col * cellSize,
-        gridTop + row * cellSize,
-      );
+  Offset intersection(int row, int col) =>
+      Offset(gridLeft + col * cellSize, gridTop + row * cellSize);
 }
